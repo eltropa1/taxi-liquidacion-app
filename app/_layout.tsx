@@ -1,24 +1,36 @@
-import { DarkTheme, DefaultTheme, ThemeProvider } from '@react-navigation/native';
 import { Stack } from 'expo-router';
-import { StatusBar } from 'expo-status-bar';
-import 'react-native-reanimated';
+import { useEffect, useState } from 'react';
+import { ActivityIndicator, View } from 'react-native';
+import { runMigrations } from '../src/database/migrations';
 
-import { useColorScheme } from '@/hooks/use-color-scheme';
-
-export const unstable_settings = {
-  anchor: '(tabs)',
-};
-
+/**
+ * Layout raíz de la aplicación.
+ * No renderiza la app hasta que la base de datos está lista.
+ */
 export default function RootLayout() {
-  const colorScheme = useColorScheme();
+  const [dbReady, setDbReady] = useState(false);
 
-  return (
-    <ThemeProvider value={colorScheme === 'dark' ? DarkTheme : DefaultTheme}>
-      <Stack>
-        <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
-        <Stack.Screen name="modal" options={{ presentation: 'modal', title: 'Modal' }} />
-      </Stack>
-      <StatusBar style="auto" />
-    </ThemeProvider>
-  );
+  useEffect(() => {
+    async function prepareDatabase() {
+      try {
+        await runMigrations();
+        setDbReady(true);
+      } catch (error) {
+        console.error('Error preparando la base de datos', error);
+      }
+    }
+
+    prepareDatabase();
+  }, []);
+
+  // Mientras la BD no esté lista, mostramos un loader
+  if (!dbReady) {
+    return (
+      <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center' }}>
+        <ActivityIndicator size="large" />
+      </View>
+    );
+  }
+
+  return <Stack screenOptions={{ headerShown: false }} />;
 }
