@@ -1,9 +1,24 @@
-import * as SQLite from 'expo-sqlite';
+import * as SQLite from "expo-sqlite";
 
 /**
- * Abre (o crea) la base de datos SQLite usando la API moderna.
- * Esta API SÍ está soportada por Expo actualmente.
+ * Instancia única de la base de datos SQLite.
+ * IMPORTANTE:
+ * - Se abre una sola vez
+ * - Siempre con el mismo nombre
+ * - Usamos la API moderna de Expo SDK 54
  */
-export async function getDatabase() {
-  return await SQLite.openDatabaseAsync('taxi_liquidation.db');
+let db: SQLite.SQLiteDatabase | null = null;
+
+/**
+ * Devuelve la base de datos SQLite (singleton).
+ */
+export function getDatabase(): SQLite.SQLiteDatabase {
+  if (db) {
+    return db;
+  }
+
+  // ⚠️ API correcta en Expo SDK 54
+  db = SQLite.openDatabaseSync("taxi_liquidation.db");
+
+  return db;
 }
