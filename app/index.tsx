@@ -480,10 +480,13 @@ const monthlyStatus = getStatus(monthlyProgress);
 
 
 
-<Text>
-  Te faltan:{" "}
-  {Math.max(goals.daily - totalToday, 0).toFixed(2)} € hoy
-</Text>
+<View style={styles.card}>
+  <Text>
+    Te faltan:{" "}
+    {Math.max(goals.daily - totalToday, 0).toFixed(2)} € hoy
+  </Text>
+</View>
+
 
 <Button title="Editar metas" onPress={() => router.push("/goals")} />
 
