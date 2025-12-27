@@ -159,11 +159,26 @@ const [showGoals, setShowGoals] = useState(false);
       endOfMonth(selectedDate)
     );
     setMonthlySummary(monthSummary);
+
+    const workday = await TripService.getActiveWorkday();
+setActiveWorkday(workday);
+
   };
 
   useEffect(() => {
     refresh().catch(console.error);
   }, [selectedDate]);
+
+/**---------------------------
+ * ESTADO DÍA DE TRABAJO
+ * ---------------------------
+ */
+
+const [activeWorkday, setActiveWorkday] = useState<{
+  id: number;
+  startTime: string;
+} | null>(null);
+
 
  /**
  * Recarga las metas cada vez que esta pantalla
@@ -307,6 +322,50 @@ const monthlyStatus = getStatus(monthlyProgress);
   return (
     <SafeAreaView style={styles.container} edges={["bottom"]}>
       <Text style={styles.title}>Taxi · Liquidación diaria</Text>
+
+      {/* ===========================
+    CONTROL DÍA DE TRABAJO
+=========================== */}
+<View style={styles.card}>
+  {activeWorkday ? (
+    <>
+      <Text style={{ fontWeight: "600" }}>
+        Día de trabajo abierto
+      </Text>
+      <Text>
+        Inicio: {new Date(activeWorkday.startTime).toLocaleString()}
+      </Text>
+
+      <View style={{ marginTop: 10 }}>
+        <Button
+          title="Cerrar día de trabajo"
+          color="#cc3333"
+          onPress={async () => {
+            await TripService.closeActiveWorkday();
+            await refresh();
+          }}
+        />
+      </View>
+    </>
+  ) : (
+    <>
+      <Text style={{ fontWeight: "600" }}>
+        No hay día de trabajo abierto
+      </Text>
+
+      <View style={{ marginTop: 10 }}>
+        <Button
+          title="Abrir día de trabajo"
+          onPress={async () => {
+            await TripService.openWorkday();
+            await refresh();
+          }}
+        />
+      </View>
+    </>
+  )}
+</View>
+
 
       {/* Selector de fecha */}
       <View style={styles.dateSelector}>
@@ -530,11 +589,18 @@ const monthlyStatus = getStatus(monthlyProgress);
       )}
 
       {/* Botón principal */}
-      {!activeTripId ? (
-        <Button title="Iniciar viaje" onPress={handleStartTrip} />
-      ) : (
-        <Button title="Finalizar viaje" onPress={handleOpenFinish} />
-      )}
+      {activeWorkday ? (
+  !activeTripId ? (
+    <Button title="Iniciar viaje" onPress={handleStartTrip} />
+  ) : (
+    <Button title="Finalizar viaje" onPress={handleOpenFinish} />
+  )
+) : (
+  <Text style={{ textAlign: "center", color: "#777", marginBottom: 10 }}>
+    Abre un día de trabajo para empezar a registrar viajes
+  </Text>
+)}
+
 
       {/* Lista de viajes */}
       <FlatList
