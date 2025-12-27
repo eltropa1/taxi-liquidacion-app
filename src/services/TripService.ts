@@ -357,4 +357,46 @@ export class TripService {
 
     return result ?? null;
   }
+
+/**
+ * Devuelve información formateada del día de trabajo
+ * al que pertenece una fecha.
+ */
+static async getWorkdayInfoForDate(date: Date): Promise<{
+  id: number;
+  startTime: string;
+  endTime: string | null;
+  isClosed: boolean;
+} | null> {
+  const db = await getDatabase();
+  const iso = date.toISOString();
+
+  return await db.getFirstAsync<{
+    id: number;
+    startTime: string;
+    endTime: string | null;
+    isClosed: number;
+  }>(
+    `
+    SELECT id, startTime, endTime, isClosed
+    FROM workdays
+    WHERE startTime <= ?
+      AND (endTime >= ? OR endTime IS NULL)
+    ORDER BY startTime DESC
+    LIMIT 1
+    `,
+    [iso, iso]
+  ).then((row) =>
+    row
+      ? {
+          id: row.id,
+          startTime: row.startTime,
+          endTime: row.endTime,
+          isClosed: row.isClosed === 1,
+        }
+      : null
+  );
+}
+
+
 }

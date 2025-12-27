@@ -129,13 +129,32 @@ export default function TodayScreen() {
   const [showDailySummary, setShowDailySummary] = useState(true);
 
   const [goals, setGoals] = useState<{
-  daily: number;
-  weekly: number;
-  monthly: number;
-}>({ daily: 0, weekly: 0, monthly: 0 });
+    daily: number;
+    weekly: number;
+    monthly: number;
+  }>({ daily: 0, weekly: 0, monthly: 0 });
 
-const [showGoals, setShowGoals] = useState(false);
+  const [showGoals, setShowGoals] = useState(false);
 
+  /**
+   * Info del día de trabajo asociado a selectedDate.
+   * - Si la fecha pertenece a un día de trabajo real: startTime / endTime / isClosed vendrán de BD.
+   * - Si no pertenece a ninguno: vendrá null (y mostraremos un "día natural" virtual en UI).
+   */
+  const [workdayInfo, setWorkdayInfo] = useState<{
+    startTime: string;
+    endTime: string | null;
+    isClosed: boolean;
+  } | null>(null);
+
+  /**---------------------------
+   * ESTADO DÍA DE TRABAJO (ACTIVO)
+   * ---------------------------
+   */
+  const [activeWorkday, setActiveWorkday] = useState<{
+    id: number;
+    startTime: string;
+  } | null>(null);
 
   // ---------------------------
   // CARGA DE DATOS
@@ -161,34 +180,23 @@ const [showGoals, setShowGoals] = useState(false);
     setMonthlySummary(monthSummary);
 
     const workday = await TripService.getActiveWorkday();
-setActiveWorkday(workday);
+    setActiveWorkday(workday);
 
+    const wd = await TripService.getWorkdayInfoForDate(selectedDate);
+    setWorkdayInfo(wd);
   };
 
   useEffect(() => {
     refresh().catch(console.error);
   }, [selectedDate]);
 
-/**---------------------------
- * ESTADO DÍA DE TRABAJO
- * ---------------------------
- */
-
-const [activeWorkday, setActiveWorkday] = useState<{
-  id: number;
-  startTime: string;
-} | null>(null);
-
-
- /**
- * Recarga las metas cada vez que esta pantalla
- * vuelve a estar activa (por ejemplo, al volver de /goals)
- */
-useFocusEffect(() => {
-  GoalService.getGoals().then(setGoals);
-});
-
-
+  /**
+   * Recarga las metas cada vez que esta pantalla
+   * vuelve a estar activa (por ejemplo, al volver de /goals)
+   */
+  useFocusEffect(() => {
+    GoalService.getGoals().then(setGoals);
+  });
 
   // ---------------------------
   // ACCIONES
@@ -237,27 +245,73 @@ useFocusEffect(() => {
   // CÁLCULOS
   // ---------------------------
 
+  /**
+   * Determina si la fecha seleccionada es "hoy" (día natural).
+   * Se usa SOLO para UI: el Bloque B debe salir únicamente en días anteriores.
+   */
+  const isToday =
+    selectedDate.toDateString() === new Date().toDateString();
+
+  /**
+   * Información de día de trabajo "resuelta" para UI en días anteriores:
+   * - Si existe workdayInfo real → se usa tal cual.
+   * - Si NO existe → creamos un "día natural" (00:00–23:59) para evitar sensación de fallo.
+   */
+  const resolvedWorkdayInfo: {
+    startTime: string;
+    endTime: string | null;
+    isClosed: boolean;
+    isVirtual: boolean;
+  } = workdayInfo
+    ? {
+        startTime: workdayInfo.startTime,
+        endTime: workdayInfo.endTime,
+        isClosed: workdayInfo.isClosed,
+        isVirtual: false,
+      }
+    : {
+        startTime: new Date(
+          selectedDate.getFullYear(),
+          selectedDate.getMonth(),
+          selectedDate.getDate(),
+          0,
+          0,
+          0
+        ).toISOString(),
+        endTime: new Date(
+          selectedDate.getFullYear(),
+          selectedDate.getMonth(),
+          selectedDate.getDate(),
+          23,
+          59,
+          59
+        ).toISOString(),
+        isClosed: true,
+        isVirtual: true,
+      };
+
   const totalToday = useMemo(
     () => trips.reduce((acc, t) => acc + (t.amount ?? 0), 0),
     [trips]
   );
+
   /**
- * Diferencia respecto a metas
- * - Si la meta es 0 → no se muestra
- * - Nunca valores negativos
- */
-const remainingDaily =
-  goals.daily > 0 ? Math.max(goals.daily - totalToday, 0) : null;
+   * Diferencia respecto a metas
+   * - Si la meta es 0 → no se muestra
+   * - Nunca valores negativos
+   */
+  const remainingDaily =
+    goals.daily > 0 ? Math.max(goals.daily - totalToday, 0) : null;
 
-const remainingWeekly =
-  goals.weekly > 0 && weeklySummary
-    ? Math.max(goals.weekly - weeklySummary.total, 0)
-    : null;
+  const remainingWeekly =
+    goals.weekly > 0 && weeklySummary
+      ? Math.max(goals.weekly - weeklySummary.total, 0)
+      : null;
 
-const remainingMonthly =
-  goals.monthly > 0 && monthlySummary
-    ? Math.max(goals.monthly - monthlySummary.total, 0)
-    : null;
+  const remainingMonthly =
+    goals.monthly > 0 && monthlySummary
+      ? Math.max(goals.monthly - monthlySummary.total, 0)
+      : null;
 
   /**
    * Totales por plataforma (Taxi / Uber / Cabify)
@@ -296,24 +350,21 @@ const remainingMonthly =
 
     return { efectivo, tarjeta };
   }, [trips]);
-  
+
   // Progreso diario
-const dailyProgress = getProgress(totalToday, goals.daily);
-const dailyStatus = getStatus(dailyProgress);
+  const dailyProgress = getProgress(totalToday, goals.daily);
+  const dailyStatus = getStatus(dailyProgress);
 
-// Progreso semanal
-const weeklyProgress = getProgress(
-  weeklySummary?.total ?? 0,
-  goals.weekly
-);
-const weeklyStatus = getStatus(weeklyProgress);
+  // Progreso semanal
+  const weeklyProgress = getProgress(weeklySummary?.total ?? 0, goals.weekly);
+  const weeklyStatus = getStatus(weeklyProgress);
 
-// Progreso mensual
-const monthlyProgress = getProgress(
-  monthlySummary?.total ?? 0,
-  goals.monthly
-);
-const monthlyStatus = getStatus(monthlyProgress);
+  // Progreso mensual
+  const monthlyProgress = getProgress(
+    monthlySummary?.total ?? 0,
+    goals.monthly
+  );
+  const monthlyStatus = getStatus(monthlyProgress);
 
   // ---------------------------
   // RENDER
@@ -324,48 +375,47 @@ const monthlyStatus = getStatus(monthlyProgress);
       <Text style={styles.title}>Taxi · Liquidación diaria</Text>
 
       {/* ===========================
-    CONTROL DÍA DE TRABAJO
-=========================== */}
-<View style={styles.card}>
-  {activeWorkday ? (
-    <>
-      <Text style={{ fontWeight: "600" }}>
-        Día de trabajo abierto
-      </Text>
-      <Text>
-        Inicio: {new Date(activeWorkday.startTime).toLocaleString()}
-      </Text>
+          BLOQUE A - CONTROL DÍA DE TRABAJO (HOY)
+          - Este bloque es el ÚNICO interactivo (abrir/cerrar).
+          - Se mantiene exactamente como estaba funcionando.
+      =========================== */}
+      <View style={styles.card}>
+        {activeWorkday ? (
+          <>
+            <Text style={{ fontWeight: "600" }}>Día de trabajo abierto</Text>
+            <Text>
+              Inicio: {new Date(activeWorkday.startTime).toLocaleString()}
+            </Text>
 
-      <View style={{ marginTop: 10 }}>
-        <Button
-          title="Cerrar día de trabajo"
-          color="#cc3333"
-          onPress={async () => {
-            await TripService.closeActiveWorkday();
-            await refresh();
-          }}
-        />
+            <View style={{ marginTop: 10 }}>
+              <Button
+                title="Cerrar día de trabajo"
+                color="#cc3333"
+                onPress={async () => {
+                  await TripService.closeActiveWorkday();
+                  await refresh();
+                }}
+              />
+            </View>
+          </>
+        ) : (
+          <>
+            <Text style={{ fontWeight: "600" }}>
+              No hay día de trabajo abierto
+            </Text>
+
+            <View style={{ marginTop: 10 }}>
+              <Button
+                title="Abrir día de trabajo"
+                onPress={async () => {
+                  await TripService.openWorkday();
+                  await refresh();
+                }}
+              />
+            </View>
+          </>
+        )}
       </View>
-    </>
-  ) : (
-    <>
-      <Text style={{ fontWeight: "600" }}>
-        No hay día de trabajo abierto
-      </Text>
-
-      <View style={{ marginTop: 10 }}>
-        <Button
-          title="Abrir día de trabajo"
-          onPress={async () => {
-            await TripService.openWorkday();
-            await refresh();
-          }}
-        />
-      </View>
-    </>
-  )}
-</View>
-
 
       {/* Selector de fecha */}
       <View style={styles.dateSelector}>
@@ -392,6 +442,41 @@ const monthlyStatus = getStatus(monthlyProgress);
         </Pressable>
       </View>
 
+      {/* ===========================
+          BLOQUE B - INFO DÍA DE TRABAJO (SOLO DÍAS ANTERIORES)
+          - No duplica Bloque A en "hoy".
+          - En días anteriores SIEMPRE se muestra.
+          - Si no hay workday real, se muestra día natural virtual (00:00–23:59).
+      =========================== */}
+      {!isToday && (
+        <View style={[styles.card, { backgroundColor: "#f5f7fa" }]}>
+          <Text style={{ fontWeight: "600" }}>🚕 Día de trabajo</Text>
+
+          <Text>
+            Inicio: {new Date(resolvedWorkdayInfo.startTime).toLocaleString()}
+          </Text>
+
+          <Text>
+            Fin:{" "}
+            {resolvedWorkdayInfo.endTime
+              ? new Date(resolvedWorkdayInfo.endTime).toLocaleString()
+              : "En curso"}
+          </Text>
+
+          {!resolvedWorkdayInfo.isClosed && (
+            <Text style={{ color: "#2ecc71", marginTop: 4 }}>
+              ● Día de trabajo abierto
+            </Text>
+          )}
+
+          {resolvedWorkdayInfo.isVirtual && (
+            <Text style={{ color: "#999", marginTop: 4 }}>
+              Día natural (sin cierre registrado)
+            </Text>
+          )}
+        </View>
+      )}
+
       {/* Total del día */}
       <View style={styles.card}>
         <Text>Total del día</Text>
@@ -399,33 +484,33 @@ const monthlyStatus = getStatus(monthlyProgress);
       </View>
 
       {/* Indiciador diario */}
-          {dailyStatus && (
-  <View style={[styles.card, { borderLeftWidth: 6, borderLeftColor: dailyStatus.color }]}>
-    <Text style={{ fontWeight: "600" }}>
-      {dailyStatus.label}
-    </Text>
+      {dailyStatus && (
+        <View
+          style={[
+            styles.card,
+            { borderLeftWidth: 6, borderLeftColor: dailyStatus.color },
+          ]}
+        >
+          <Text style={{ fontWeight: "600" }}>{dailyStatus.label}</Text>
 
-    <Text>
-      Progreso: {dailyProgress?.toFixed(0)} %
-    </Text>
+          <Text>Progreso: {dailyProgress?.toFixed(0)} %</Text>
 
-    <ProgressBar
-  percent={dailyProgress}
-  color={dailyStatus.color}
-/>
+          <ProgressBar percent={dailyProgress} color={dailyStatus.color} />
 
-    <Text>
-      Te faltan: {Math.max(goals.daily - totalToday, 0).toFixed(2)} €
-    </Text>
-  </View>
-)}
-// TODO UI:
-// Los indicadores semanal y mensual ocupan demasiado espacio en móvil.
-// Propuesta futura:
-// - Unificarlos en una sola tarjeta compacta
-// - Añadir botón desplegar/ocultar
-// - Mantener solo barras finas + texto
-{/*
+          <Text>
+            Te faltan: {Math.max(goals.daily - totalToday, 0).toFixed(2)} €
+          </Text>
+        </View>
+      )}
+
+      {/* TODO UI:
+          Los indicadores semanal y mensual ocupan demasiado espacio en móvil.
+          Propuesta futura:
+          - Unificarlos en una sola tarjeta compacta
+          - Añadir botón desplegar/ocultar
+          - Mantener solo barras finas + texto
+      */}
+      {/*
  Indicador semanal 
 {weeklyStatus && (
   <View style={[styles.card, { borderLeftWidth: 6, borderLeftColor: weeklyStatus.color }]}>
@@ -455,6 +540,7 @@ const monthlyStatus = getStatus(monthlyProgress);
   </View>
 )}
 */}
+
       {/* Toggle resumen diario */}
       <Pressable
         onPress={() => setShowDailySummary(!showDailySummary)}
@@ -497,58 +583,52 @@ const monthlyStatus = getStatus(monthlyProgress);
         </View>
       )}
 
-
       {/* Toggle metas */}
-<Pressable
-  onPress={() => setShowGoals(!showGoals)}
-  style={styles.summaryToggle}
->
-  <Text style={styles.summaryToggleText}>
-    {showGoals ? "Ocultar metas" : "Ver metas"}
-  </Text>
-</Pressable>
+      <Pressable
+        onPress={() => setShowGoals(!showGoals)}
+        style={styles.summaryToggle}
+      >
+        <Text style={styles.summaryToggleText}>
+          {showGoals ? "Ocultar metas" : "Ver metas"}
+        </Text>
+      </Pressable>
 
-{showGoals && (
-  <View style={styles.card}>
-    <Text style={styles.sectionTitle}>Metas</Text>
+      {showGoals && (
+        <View style={styles.card}>
+          <Text style={styles.sectionTitle}>Metas</Text>
 
-    <Text>
-      Día: {totalToday.toFixed(2)} € / {goals.daily.toFixed(2)} €
-    </Text>
-    {remainingDaily !== null && (
-      <Text>Te faltan {remainingDaily.toFixed(2)} € hoy</Text>
-    )}
+          <Text>
+            Día: {totalToday.toFixed(2)} € / {goals.daily.toFixed(2)} €
+          </Text>
+          {remainingDaily !== null && (
+            <Text>Te faltan {remainingDaily.toFixed(2)} € hoy</Text>
+          )}
 
-    <Text style={{ marginTop: 6 }}>
-      Semana: {weeklySummary?.total.toFixed(2)} € /{" "}
-      {goals.weekly.toFixed(2)} €
-    </Text>
-    {remainingWeekly !== null && (
-      <Text>Te faltan {remainingWeekly.toFixed(2)} € esta semana</Text>
-    )}
+          <Text style={{ marginTop: 6 }}>
+            Semana: {weeklySummary?.total.toFixed(2)} € /{" "}
+            {goals.weekly.toFixed(2)} €
+          </Text>
+          {remainingWeekly !== null && (
+            <Text>Te faltan {remainingWeekly.toFixed(2)} € esta semana</Text>
+          )}
 
-    <Text style={{ marginTop: 6 }}>
-      Mes: {monthlySummary?.total.toFixed(2)} € /{" "}
-      {goals.monthly.toFixed(2)} €
-    </Text>
-    {remainingMonthly !== null && (
-      <Text>Te faltan {remainingMonthly.toFixed(2)} € este mes</Text>
-    )}
-  </View>
-)}
+          <Text style={{ marginTop: 6 }}>
+            Mes: {monthlySummary?.total.toFixed(2)} € /{" "}
+            {goals.monthly.toFixed(2)} €
+          </Text>
+          {remainingMonthly !== null && (
+            <Text>Te faltan {remainingMonthly.toFixed(2)} € este mes</Text>
+          )}
+        </View>
+      )}
 
+      <View style={styles.card}>
+        <Text>
+          Te faltan: {Math.max(goals.daily - totalToday, 0).toFixed(2)} € hoy
+        </Text>
+      </View>
 
-
-<View style={styles.card}>
-  <Text>
-    Te faltan:{" "}
-    {Math.max(goals.daily - totalToday, 0).toFixed(2)} € hoy
-  </Text>
-</View>
-
-
-<Button title="Editar metas" onPress={() => router.push("/goals")} />
-
+      <Button title="Editar metas" onPress={() => router.push("/goals")} />
 
       {/* Toggle resumen */}
       <Pressable
@@ -565,11 +645,10 @@ const monthlyStatus = getStatus(monthlyProgress);
         <View style={styles.card}>
           <Text style={styles.sectionTitle}>Resumen</Text>
           <View style={[styles.tableRow, { marginBottom: 6 }]}>
-  <Text style={{ fontWeight: "600" }}></Text>
-  <Text style={{ fontWeight: "600" }}>Semana</Text>
-  <Text style={{ fontWeight: "600" }}>Mes</Text>
-</View>
-
+            <Text style={{ fontWeight: "600" }}></Text>
+            <Text style={{ fontWeight: "600" }}>Semana</Text>
+            <Text style={{ fontWeight: "600" }}>Mes</Text>
+          </View>
 
           {[
             ["Total", "total"],
@@ -590,17 +669,16 @@ const monthlyStatus = getStatus(monthlyProgress);
 
       {/* Botón principal */}
       {activeWorkday ? (
-  !activeTripId ? (
-    <Button title="Iniciar viaje" onPress={handleStartTrip} />
-  ) : (
-    <Button title="Finalizar viaje" onPress={handleOpenFinish} />
-  )
-) : (
-  <Text style={{ textAlign: "center", color: "#777", marginBottom: 10 }}>
-    Abre un día de trabajo para empezar a registrar viajes
-  </Text>
-)}
-
+        !activeTripId ? (
+          <Button title="Iniciar viaje" onPress={handleStartTrip} />
+        ) : (
+          <Button title="Finalizar viaje" onPress={handleOpenFinish} />
+        )
+      ) : (
+        <Text style={{ textAlign: "center", color: "#777", marginBottom: 10 }}>
+          Abre un día de trabajo para empezar a registrar viajes
+        </Text>
+      )}
 
       {/* Lista de viajes */}
       <FlatList
@@ -633,88 +711,80 @@ const monthlyStatus = getStatus(monthlyProgress);
         onPress={() => ExportService.exportTripsToCSV()}
       />
 
-     
       {/* ===========================
-    MODAL FINALIZAR / EDITAR VIAJE
-   =========================== */}
-<Modal visible={showFinishModal} transparent animationType="slide">
-  <View style={styles.modalOverlay}>
-    <View style={styles.modalCard}>
-      <Text style={styles.modalTitle}>
-        {editingTrip ? "Editar viaje" : "Finalizar viaje"}
-      </Text>
+          MODAL FINALIZAR / EDITAR VIAJE
+      =========================== */}
+      <Modal visible={showFinishModal} transparent animationType="slide">
+        <View style={styles.modalOverlay}>
+          <View style={styles.modalCard}>
+            <Text style={styles.modalTitle}>
+              {editingTrip ? "Editar viaje" : "Finalizar viaje"}
+            </Text>
 
-      {/* IMPORTE */}
-      <Text>Importe (€)</Text>
-      <TextInput
-        value={amountInput}
-        onChangeText={setAmountInput}
-        keyboardType="decimal-pad"
-        placeholder="0,00"
-        autoFocus
-        style={styles.input}
-      />
+            {/* IMPORTE */}
+            <Text>Importe (€)</Text>
+            <TextInput
+              value={amountInput}
+              onChangeText={setAmountInput}
+              keyboardType="decimal-pad"
+              placeholder="0,00"
+              autoFocus
+              style={styles.input}
+            />
 
-      {/* FORMA DE PAGO */}
-      <Text style={{ marginTop: 10 }}>Forma de pago</Text>
-      <View style={styles.row}>
-        {[PaymentType.CASH, PaymentType.CARD, PaymentType.APP].map((p) => (
-          <Pressable
-            key={p}
-            onPress={() => setPayment(p)}
-            style={[
-              styles.chip,
-              payment === p && styles.chipActive,
-            ]}
-          >
-            <Text>{p}</Text>
-          </Pressable>
-        ))}
-      </View>
+            {/* FORMA DE PAGO */}
+            <Text style={{ marginTop: 10 }}>Forma de pago</Text>
+            <View style={styles.row}>
+              {[PaymentType.CASH, PaymentType.CARD, PaymentType.APP].map(
+                (p) => (
+                  <Pressable
+                    key={p}
+                    onPress={() => setPayment(p)}
+                    style={[styles.chip, payment === p && styles.chipActive]}
+                  >
+                    <Text>{p}</Text>
+                  </Pressable>
+                )
+              )}
+            </View>
 
-      {/* TIPO DE VIAJE */}
-      <Text style={{ marginTop: 10 }}>Tipo de viaje</Text>
-      <View style={styles.row}>
-        {[TripSource.TAXI, TripSource.UBER, TripSource.CABIFY].map((s) => (
-          <Pressable
-            key={s}
-            onPress={() => setSource(s)}
-            style={[
-              styles.chip,
-              source === s && styles.chipActive,
-            ]}
-          >
-            <Text>{s}</Text>
-          </Pressable>
-        ))}
-      </View>
+            {/* TIPO DE VIAJE */}
+            <Text style={{ marginTop: 10 }}>Tipo de viaje</Text>
+            <View style={styles.row}>
+              {[TripSource.TAXI, TripSource.UBER, TripSource.CABIFY].map(
+                (s) => (
+                  <Pressable
+                    key={s}
+                    onPress={() => setSource(s)}
+                    style={[styles.chip, source === s && styles.chipActive]}
+                  >
+                    <Text>{s}</Text>
+                  </Pressable>
+                )
+              )}
+            </View>
 
-      {/* BOTONES */}
-      <View style={styles.modalButtons}>
-        <Button
-          title="Cancelar"
-          onPress={() => {
-            setEditingTrip(null);
-            setShowFinishModal(false);
-          }}
-        />
-        <Button title="Guardar" onPress={handleSave} />
-      </View>
+            {/* BOTONES */}
+            <View style={styles.modalButtons}>
+              <Button
+                title="Cancelar"
+                onPress={() => {
+                  setEditingTrip(null);
+                  setShowFinishModal(false);
+                }}
+              />
+              <Button title="Guardar" onPress={handleSave} />
+            </View>
 
-      {/* BORRAR SOLO SI EDITAMOS */}
-      {editingTrip && (
-        <View style={{ marginTop: 10 }}>
-          <Button
-            title="Borrar viaje"
-            color="red"
-            onPress={handleDelete}
-          />
+            {/* BORRAR SOLO SI EDITAMOS */}
+            {editingTrip && (
+              <View style={{ marginTop: 10 }}>
+                <Button title="Borrar viaje" color="red" onPress={handleDelete} />
+              </View>
+            )}
+          </View>
         </View>
-      )}
-    </View>
-  </View>
-</Modal>
-
+      </Modal>
     </SafeAreaView>
   );
 }
@@ -765,30 +835,29 @@ const styles = StyleSheet.create({
     marginTop: 10,
   },
   row: {
-  flexDirection: "row",
-  gap: 8,
-  marginVertical: 8,
-},
-chip: {
-  paddingVertical: 12,
-  paddingHorizontal: 16,
-  backgroundColor: "#eee",
-  borderRadius: 22,
-},
-chipActive: {
-  backgroundColor: "#4da6ff",
-},
+    flexDirection: "row",
+    gap: 8,
+    marginVertical: 8,
+  },
+  chip: {
+    paddingVertical: 12,
+    paddingHorizontal: 16,
+    backgroundColor: "#eee",
+    borderRadius: 22,
+  },
+  chipActive: {
+    backgroundColor: "#4da6ff",
+  },
 
-progressContainer: {
-  height: 10,
-  backgroundColor: "#ddd",
-  borderRadius: 5,
-  overflow: "hidden",
-  marginVertical: 6,
-},
-progressFill: {
-  height: "100%",
-  borderRadius: 5,
-},
-
+  progressContainer: {
+    height: 10,
+    backgroundColor: "#ddd",
+    borderRadius: 5,
+    overflow: "hidden",
+    marginVertical: 6,
+  },
+  progressFill: {
+    height: "100%",
+    borderRadius: 5,
+  },
 });
