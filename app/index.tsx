@@ -121,6 +121,8 @@ export default function TodayScreen() {
 
   const [selectedDate, setSelectedDate] = useState<Date>(new Date());
 
+  const [refreshKey, setRefreshKey] = useState(0);
+
   const [weeklySummary, setWeeklySummary] = useState<any>(null);
   const [monthlySummary, setMonthlySummary] = useState<any>(null);
 
@@ -188,7 +190,7 @@ export default function TodayScreen() {
 
   useEffect(() => {
     refresh().catch(console.error);
-  }, [selectedDate]);
+  }, [selectedDate, refreshKey]);
 
   /**
    * Recarga las metas cada vez que esta pantalla
@@ -204,6 +206,7 @@ export default function TodayScreen() {
 
   const handleStartTrip = async () => {
     await TripService.startTrip();
+    setRefreshKey((k) => k + 1);   
     await refresh();
   };
 
@@ -230,6 +233,9 @@ export default function TodayScreen() {
     setEditingTrip(null);
     setShowFinishModal(false);
     setAmountInput("");
+
+    setRefreshKey((k) => k + 1);
+
     await refresh();
   };
 
@@ -238,6 +244,8 @@ export default function TodayScreen() {
     await TripService.deleteTrip(editingTrip.id);
     setEditingTrip(null);
     setShowFinishModal(false);
+
+    setRefreshKey((k) => k + 1);
     await refresh();
   };
 
@@ -393,6 +401,7 @@ export default function TodayScreen() {
                 color="#cc3333"
                 onPress={async () => {
                   await TripService.closeActiveWorkday();
+                  setRefreshKey((k) => k + 1);
                   await refresh();
                 }}
               />
@@ -409,6 +418,7 @@ export default function TodayScreen() {
                 title="Abrir día de trabajo"
                 onPress={async () => {
                   await TripService.openWorkday();
+                  setRefreshKey((k) => k + 1);
                   await refresh();
                 }}
               />
