@@ -91,4 +91,18 @@ export async function runMigrations() {
       ALTER TABLE trips ADD COLUMN workdayId INTEGER;
     `);
   }
+    // =====================================================
+  // NUEVO: añadir customSource a trips (si no existe)
+  // =====================================================
+
+  const hasCustomSource = columns.some(
+    (column) => column.name === "customSource"
+  );
+
+  if (!hasCustomSource) {
+    await db.execAsync(`
+      ALTER TABLE trips ADD COLUMN customSource TEXT;
+    `);
+  }
+
 }

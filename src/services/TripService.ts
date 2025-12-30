@@ -65,7 +65,8 @@ export class TripService {
   static async finishActiveTripWithData(
     amount: number,
     payment: PaymentType,
-    source: TripSource
+    source: TripSource,
+    customSource?: string
   ): Promise<void> {
     const db = await getDatabase();
 
@@ -86,10 +87,15 @@ export class TripService {
     await db.runAsync(
       `
       UPDATE trips
-      SET endTime = ?, amount = ?, payment = ?, source = ?
+      SET endTime = ?, amount = ?, payment = ?, source = ?, customSource = ?
       WHERE id = ?
       `,
-      [endTime, amount, payment, source, active.id]
+      [endTime,
+        amount, 
+        payment, 
+        source, 
+        customSource ?? null,
+        active.id]
     );
   }
 
@@ -100,17 +106,18 @@ export class TripService {
     id: number,
     amount: number,
     payment: PaymentType,
-    source: TripSource
+    source: TripSource,
+    customSource?: string
   ): Promise<void> {
     const db = await getDatabase();
 
     await db.runAsync(
       `
       UPDATE trips
-      SET amount = ?, payment = ?, source = ?
+      SET amount = ?, payment = ?, source = ?, customSource = ?
       WHERE id = ?
       `,
-      [amount, payment, source, id]
+      [amount, payment, source, customSource ?? null, id]
     );
   }
 
@@ -215,8 +222,10 @@ export class TripService {
     taxi: number;
     uber: number;
     cabify: number;
+    freeNow: number;
     efectivo: number;
     tarjeta: number;
+    app: number;
   }> {
     const db = await getDatabase();
 
@@ -244,25 +253,94 @@ export class TripService {
     let taxi = 0;
     let uber = 0;
     let cabify = 0;
+    let freeNow = 0;
     let efectivo = 0;
     let tarjeta = 0;
+    let app = 0;
 
     for (const t of rows) {
       const amount = t.amount ?? 0;
       total += amount;
 
+      // --- Plataforma origen ---
       if (t.source === TripSource.TAXI) taxi += amount;
       if (t.source === TripSource.UBER) uber += amount;
       if (t.source === TripSource.CABIFY) cabify += amount;
+      if (t.source === TripSource.FREE_NOW) freeNow += amount; // FreeNow por separado
 
+      // --- Forma de pago ---
       if (t.payment === PaymentType.CASH) efectivo += amount;
-      if (t.payment === PaymentType.CARD || t.payment === PaymentType.APP) {
-        tarjeta += amount;
-      }
+      if (t.payment === PaymentType.CARD) tarjeta += amount;
+      if (t.payment === PaymentType.APP) app += amount;
     }
 
-    return { total, taxi, uber, cabify, efectivo, tarjeta };
+    return { total, taxi, uber, cabify, freeNow, efectivo, tarjeta, app };
+  }  
+
+
+
+/**
+ * Devuelve un resumen para un día de trabajo concreto.
+ * Esta es la forma CORRECTA de calcular totales diarios.
+ * En este resumen, FreeNow se muestra por separado.
+ * efectivo y tarjeta se calculan por separado.
+ */
+static async getSummaryForWorkday(
+  workdayId: number
+): Promise<{
+  total: number;
+  taxi: number;
+  uber: number;
+  cabify: number;
+  freeNow: number;
+  efectivo: number;
+  tarjeta: number;
+  app: number;
+}> {
+  const db = await getDatabase();
+
+  const rows = await db.getAllAsync<{
+    amount: number | null;
+    source: TripSource;
+    payment: PaymentType | null;
+  }>(
+    `
+    SELECT amount, source, payment
+    FROM trips
+    WHERE workdayId = ?
+    `,
+    [workdayId]
+  );
+
+  let total = 0;
+  let taxi = 0;
+  let uber = 0;
+  let cabify = 0;
+  let freeNow = 0;
+  let efectivo = 0;
+  let tarjeta = 0;
+  let app = 0;
+
+  for (const t of rows) {
+    const amount = t.amount ?? 0;
+    total += amount;
+
+    // --- Plataforma origen ---
+    if (t.source === TripSource.TAXI) taxi += amount;
+    if (t.source === TripSource.UBER) uber += amount;
+    if (t.source === TripSource.CABIFY) cabify += amount;
+    if (t.source === TripSource.FREE_NOW) freeNow += amount; // FreeNow por separado
+
+    // --- Forma de pago ---
+    if (t.payment === PaymentType.CASH) efectivo += amount;
+    if (t.payment === PaymentType.CARD) tarjeta += amount;
+    if (t.payment === PaymentType.APP) app += amount;
   }
+
+  return { total, taxi, uber, cabify, freeNow, efectivo, tarjeta, app };
+}
+
+
 
   // ===================================================
   // DÍAS DE TRABAJO
@@ -359,8 +437,8 @@ export class TripService {
   }
 
 /**
- * Devuelve información formateada del día de trabajo
- * al que pertenece una fecha.
+ * Devuelve información del día de trabajo
+ * al que pertenece una fecha (por solape de día natural).
  */
 static async getWorkdayInfoForDate(date: Date): Promise<{
   id: number;
@@ -369,9 +447,27 @@ static async getWorkdayInfoForDate(date: Date): Promise<{
   isClosed: boolean;
 } | null> {
   const db = await getDatabase();
-  const iso = date.toISOString();
 
-  return await db.getFirstAsync<{
+  // Inicio y fin del día natural seleccionado
+  const dayStart = new Date(
+    date.getFullYear(),
+    date.getMonth(),
+    date.getDate(),
+    0,
+    0,
+    0
+  ).toISOString();
+
+  const dayEnd = new Date(
+    date.getFullYear(),
+    date.getMonth(),
+    date.getDate(),
+    23,
+    59,
+    59
+  ).toISOString();
+
+  const row = await db.getFirstAsync<{
     id: number;
     startTime: string;
     endTime: string | null;
@@ -385,18 +481,60 @@ static async getWorkdayInfoForDate(date: Date): Promise<{
     ORDER BY startTime DESC
     LIMIT 1
     `,
-    [iso, iso]
-  ).then((row) =>
-    row
-      ? {
-          id: row.id,
-          startTime: row.startTime,
-          endTime: row.endTime,
-          isClosed: row.isClosed === 1,
-        }
-      : null
+    [dayEnd, dayStart]
   );
+
+  return row
+    ? {
+        id: row.id,
+        startTime: row.startTime,
+        endTime: row.endTime,
+        isClosed: row.isClosed === 1,
+      }
+    : null;
 }
 
 
+/**
+ * Crea un viaje manual completo.
+ * No depende de startTrip / finishTrip.
+ */
+static async createManualTrip(params: {
+  startTime: Date;
+  endTime: Date;
+  amount: number;
+  payment: PaymentType;
+  source: TripSource;
+}) {
+  const db = await getDatabase();
+
+  const workday = await this.getWorkdayForDate(params.startTime);
+  if (!workday) {
+    throw new Error("No existe día de trabajo para esa fecha");
+  }
+
+  await db.runAsync(
+    `
+    INSERT INTO trips (
+      startTime,
+      endTime,
+      amount,
+      payment,
+      source,
+      createdAt,
+      workdayId
+    )
+    VALUES (?, ?, ?, ?, ?, ?, ?)
+    `,
+    [
+      params.startTime.toISOString(),
+      params.endTime.toISOString(),
+      params.amount,
+      params.payment,
+      params.source,
+      new Date().toISOString(),
+      workday.id,
+    ]
+  );
+}
 }

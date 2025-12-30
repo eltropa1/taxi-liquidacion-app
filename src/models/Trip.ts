@@ -20,4 +20,6 @@ export interface Trip {
   createdAt: string;
   ticketPhotoUri?: string | null;
   notes?: string | null;
+  customSource?: string | null;
+
 }

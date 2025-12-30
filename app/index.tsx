@@ -8,6 +8,7 @@ import {
   Text,
   TextInput,
   View,
+  Alert,
 } from "react-native";
 
 import { router, useFocusEffect } from "expo-router";
@@ -138,6 +139,9 @@ export default function TodayScreen() {
 
   const [showGoals, setShowGoals] = useState(false);
 
+  // Texto libre para tipo de viaje personalizado (CUSTOM)
+  const [customSource, setCustomSource] = useState("");
+
   /**
    * Info del día de trabajo asociado a selectedDate.
    * - Si la fecha pertenece a un día de trabajo real: startTime / endTime / isClosed vendrán de BD.
@@ -156,6 +160,21 @@ export default function TodayScreen() {
   const [activeWorkday, setActiveWorkday] = useState<{
     id: number;
     startTime: string;
+  } | null>(null);
+
+  /**
+   * Resumen DIARIO por workdayId (clave para que al cerrar el día no "se pierdan" viajes en los totales)
+   * OJO: el nombre del campo es "freenow" porque así lo estás usando en UI.
+   */
+  const [dailySummary, setDailySummary] = useState<{
+    total: number;
+    taxi: number;
+    uber: number;
+    cabify: number;
+    freeNow: number;
+    efectivo: number;
+    tarjeta: number;
+    app: number;
   } | null>(null);
 
   // ---------------------------
@@ -186,6 +205,14 @@ export default function TodayScreen() {
 
     const wd = await TripService.getWorkdayInfoForDate(selectedDate);
     setWorkdayInfo(wd);
+
+    // ✅ CLAVE: el resumen diario debe calcularse POR workdayId
+    if (wd) {
+      const summary = await TripService.getSummaryForWorkday(wd.id);
+      setDailySummary(summary);
+    } else {
+      setDailySummary(null);
+    }
   };
 
   useEffect(() => {
@@ -206,7 +233,7 @@ export default function TodayScreen() {
 
   const handleStartTrip = async () => {
     await TripService.startTrip();
-    setRefreshKey((k) => k + 1);   
+    setRefreshKey((k) => k + 1);
     await refresh();
   };
 
@@ -214,6 +241,7 @@ export default function TodayScreen() {
     setEditingTrip(null);
     setPayment(lastPayment);
     setSource(lastSource);
+    setCustomSource("");
     setAmountInput("");
     setShowFinishModal(true);
   };
@@ -222,20 +250,59 @@ export default function TodayScreen() {
     const amount = Number(amountInput.replace(",", "."));
     if (isNaN(amount)) return;
 
-    if (editingTrip) {
-      await TripService.updateTrip(editingTrip.id, amount, payment, source);
-    } else {
-      await TripService.finishActiveTripWithData(amount, payment, source);
+    // ============================
+    // RESOLVER TIPO DE VIAJE FINAL
+    // ============================
+    const finalSource =
+      source === TripSource.CUSTOM && customSource.trim()
+        ? customSource.trim()
+        : source;
+
+    // ============================
+    // VIAJE MANUAL
+    // ============================
+    if (editingTrip && editingTrip.id === -1) {
+      await TripService.createManualTrip({
+        startTime: new Date(editingTrip.startTime),
+        endTime: new Date(editingTrip.endTime ?? editingTrip.startTime),
+        amount,
+        payment,
+        source: finalSource as any,
+      });
+    }
+    // ============================
+    // EDICIÓN NORMAL
+    // ============================
+    else if (editingTrip) {
+      await TripService.updateTrip(
+        editingTrip.id,
+        amount,
+        payment,
+        finalSource as any
+      );
+    }
+    // ============================
+    // FINALIZAR VIAJE ACTIVO
+    // ============================
+    else {
+      await TripService.finishActiveTripWithData(
+        amount,
+        payment,
+        finalSource as any
+      );
       setLastPayment(payment);
       setLastSource(source);
     }
 
+    // ============================
+    // LIMPIEZA Y REFRESH
+    // ============================
     setEditingTrip(null);
     setShowFinishModal(false);
     setAmountInput("");
+    setCustomSource("");
 
     setRefreshKey((k) => k + 1);
-
     await refresh();
   };
 
@@ -257,8 +324,7 @@ export default function TodayScreen() {
    * Determina si la fecha seleccionada es "hoy" (día natural).
    * Se usa SOLO para UI: el Bloque B debe salir únicamente en días anteriores.
    */
-  const isToday =
-    selectedDate.toDateString() === new Date().toDateString();
+  const isToday = selectedDate.toDateString() === new Date().toDateString();
 
   /**
    * Información de día de trabajo "resuelta" para UI en días anteriores:
@@ -298,10 +364,14 @@ export default function TodayScreen() {
         isVirtual: true,
       };
 
-  const totalToday = useMemo(
-    () => trips.reduce((acc, t) => acc + (t.amount ?? 0), 0),
-    [trips]
-  );
+  /**
+   * Total del día (POR WORKDAY).
+   * Si por lo que sea dailySummary aún no llegó, hacemos fallback a los viajes cargados.
+   */
+  const totalToday = useMemo(() => {
+    if (dailySummary) return dailySummary.total;
+    return trips.reduce((acc, t) => acc + (t.amount ?? 0), 0);
+  }, [dailySummary, trips]);
 
   /**
    * Diferencia respecto a metas
@@ -384,8 +454,6 @@ export default function TodayScreen() {
 
       {/* ===========================
           BLOQUE A - CONTROL DÍA DE TRABAJO (HOY)
-          - Este bloque es el ÚNICO interactivo (abrir/cerrar).
-          - Se mantiene exactamente como estaba funcionando.
       =========================== */}
       <View style={styles.card}>
         {activeWorkday ? (
@@ -399,10 +467,23 @@ export default function TodayScreen() {
               <Button
                 title="Cerrar día de trabajo"
                 color="#cc3333"
-                onPress={async () => {
-                  await TripService.closeActiveWorkday();
-                  setRefreshKey((k) => k + 1);
-                  await refresh();
+                onPress={() => {
+                  Alert.alert(
+                    "Cerrar día de trabajo",
+                    "Una vez cerrado no podrás añadir más viajes a este día.\n\n¿Deseas continuar?",
+                    [
+                      { text: "Cancelar", style: "cancel" },
+                      {
+                        text: "Cerrar día",
+                        style: "destructive",
+                        onPress: async () => {
+                          await TripService.closeActiveWorkday();
+                          setRefreshKey((k) => k + 1);
+                          await refresh();
+                        },
+                      },
+                    ]
+                  );
                 }}
               />
             </View>
@@ -416,10 +497,22 @@ export default function TodayScreen() {
             <View style={{ marginTop: 10 }}>
               <Button
                 title="Abrir día de trabajo"
-                onPress={async () => {
-                  await TripService.openWorkday();
-                  setRefreshKey((k) => k + 1);
-                  await refresh();
+                onPress={() => {
+                  Alert.alert(
+                    "Abrir día de trabajo",
+                    "¿Seguro que quieres abrir un nuevo día de trabajo?",
+                    [
+                      { text: "Cancelar", style: "cancel" },
+                      {
+                        text: "Abrir",
+                        onPress: async () => {
+                          await TripService.openWorkday();
+                          setRefreshKey((k) => k + 1);
+                          await refresh();
+                        },
+                      },
+                    ]
+                  );
                 }}
               />
             </View>
@@ -428,7 +521,7 @@ export default function TodayScreen() {
       </View>
 
       {/* Selector de fecha */}
-      <View style={styles.dateSelector}>
+      <View style={styles.dateSelectorCompact}>
         <Pressable
           onPress={() =>
             setSelectedDate(
@@ -436,10 +529,12 @@ export default function TodayScreen() {
             )
           }
         >
-          <Text style={styles.dateButton}>◀</Text>
+          <Text style={styles.dateArrow}>‹</Text>
         </Pressable>
 
-        <Text style={styles.dateText}>{selectedDate.toLocaleDateString()}</Text>
+        <Text style={styles.dateTextCompact}>
+          {selectedDate.toLocaleDateString()}
+        </Text>
 
         <Pressable
           onPress={() =>
@@ -448,15 +543,12 @@ export default function TodayScreen() {
             )
           }
         >
-          <Text style={styles.dateButton}>▶</Text>
+          <Text style={styles.dateArrow}>›</Text>
         </Pressable>
       </View>
 
       {/* ===========================
           BLOQUE B - INFO DÍA DE TRABAJO (SOLO DÍAS ANTERIORES)
-          - No duplica Bloque A en "hoy".
-          - En días anteriores SIEMPRE se muestra.
-          - Si no hay workday real, se muestra día natural virtual (00:00–23:59).
       =========================== */}
       {!isToday && (
         <View style={[styles.card, { backgroundColor: "#f5f7fa" }]}>
@@ -487,69 +579,33 @@ export default function TodayScreen() {
         </View>
       )}
 
-      {/* Total del día */}
-      <View style={styles.card}>
-        <Text>Total del día</Text>
-        <Text style={styles.amount}>{totalToday.toFixed(2)} €</Text>
-      </View>
-
-      {/* Indiciador diario */}
-      {dailyStatus && (
-        <View
-          style={[
-            styles.card,
-            { borderLeftWidth: 6, borderLeftColor: dailyStatus.color },
-          ]}
-        >
-          <Text style={{ fontWeight: "600" }}>{dailyStatus.label}</Text>
-
-          <Text>Progreso: {dailyProgress?.toFixed(0)} %</Text>
-
-          <ProgressBar percent={dailyProgress} color={dailyStatus.color} />
-
-          <Text>
-            Te faltan: {Math.max(goals.daily - totalToday, 0).toFixed(2)} €
-          </Text>
+      {/* ===========================
+          FILA ESTADO DEL DÍA
+      =========================== */}
+      <View style={styles.dayStatusRow}>
+        <View style={[styles.card, styles.cardToday, styles.cardCompact]}>
+          <Text style={styles.smallLabel}>Hoy</Text>
+          <Text style={styles.amount}>{totalToday.toFixed(2)} €</Text>
         </View>
-      )}
 
-      {/* TODO UI:
-          Los indicadores semanal y mensual ocupan demasiado espacio en móvil.
-          Propuesta futura:
-          - Unificarlos en una sola tarjeta compacta
-          - Añadir botón desplegar/ocultar
-          - Mantener solo barras finas + texto
-      */}
-      {/*
- Indicador semanal 
-{weeklyStatus && (
-  <View style={[styles.card, { borderLeftWidth: 6, borderLeftColor: weeklyStatus.color }]}>
-    <Text style={{ fontWeight: "600" }}>{weeklyStatus.label} (Semana)</Text>
+        {dailyStatus && (
+          <View
+            style={[
+              styles.card,
+              styles.cardProgress,
+              styles.cardCompact,
+              { borderLeftWidth: 4, borderLeftColor: dailyStatus.color },
+            ]}
+          >
+            <Text style={styles.progressLine}>
+              {dailyStatus.label} · {dailyProgress?.toFixed(0)}% · faltan{" "}
+              {Math.max(goals.daily - totalToday, 0).toFixed(2)} €
+            </Text>
 
-    <Text>Progreso: {weeklyProgress?.toFixed(0)} %</Text>
-
-    <ProgressBar percent={weeklyProgress} color={weeklyStatus.color} />
-
-    {remainingWeekly !== null && (
-      <Text>Te faltan {remainingWeekly.toFixed(2)} € esta semana</Text>
-    )}
-  </View>
-)}
-{/* Indicador mensual *
-{monthlyStatus && (
-  <View style={[styles.card, { borderLeftWidth: 6, borderLeftColor: monthlyStatus.color }]}>
-    <Text style={{ fontWeight: "600" }}>{monthlyStatus.label} (Mes)</Text>
-
-    <Text>Progreso: {monthlyProgress?.toFixed(0)} %</Text>
-
-    <ProgressBar percent={monthlyProgress} color={monthlyStatus.color} />
-
-    {remainingMonthly !== null && (
-      <Text>Te faltan {remainingMonthly.toFixed(2)} € este mes</Text>
-    )}
-  </View>
-)}
-*/}
+            <ProgressBar percent={dailyProgress} color={dailyStatus.color} />
+          </View>
+        )}
+      </View>
 
       {/* Toggle resumen diario */}
       <Pressable
@@ -568,27 +624,37 @@ export default function TodayScreen() {
 
           <View style={styles.tableRow}>
             <Text>Taxi</Text>
-            <Text>{totalsBySource.taxi.toFixed(2)} €</Text>
+            <Text>{(dailySummary?.taxi ?? 0).toFixed(2)} €</Text>
           </View>
 
           <View style={styles.tableRow}>
             <Text>Uber</Text>
-            <Text>{totalsBySource.uber.toFixed(2)} €</Text>
+            <Text>{(dailySummary?.uber ?? 0).toFixed(2)} €</Text>
           </View>
 
           <View style={styles.tableRow}>
             <Text>Cabify</Text>
-            <Text>{totalsBySource.cabify.toFixed(2)} €</Text>
+            <Text>{(dailySummary?.cabify ?? 0).toFixed(2)} €</Text>
+          </View>
+
+          <View style={styles.tableRow}>
+            <Text>FreeNow</Text>
+            <Text>{(dailySummary?.freeNow ?? 0).toFixed(2)} €</Text>
           </View>
 
           <View style={styles.tableRow}>
             <Text>Efectivo (tú)</Text>
-            <Text>{totalsByPayment.efectivo.toFixed(2)} €</Text>
+            <Text>{(dailySummary?.efectivo ?? 0).toFixed(2)} €</Text>
           </View>
 
           <View style={styles.tableRow}>
-            <Text>Tarjeta / App</Text>
-            <Text>{totalsByPayment.tarjeta.toFixed(2)} €</Text>
+            <Text>Tarjeta</Text>
+            <Text>{(dailySummary?.tarjeta ?? 0).toFixed(2)} €</Text>
+          </View>
+
+          <View style={styles.tableRow}>
+            <Text>App</Text>
+            <Text>{(dailySummary?.app ?? 0).toFixed(2)} €</Text>
           </View>
         </View>
       )}
@@ -632,12 +698,6 @@ export default function TodayScreen() {
         </View>
       )}
 
-      <View style={styles.card}>
-        <Text>
-          Te faltan: {Math.max(goals.daily - totalToday, 0).toFixed(2)} € hoy
-        </Text>
-      </View>
-
       <Button title="Editar metas" onPress={() => router.push("/goals")} />
 
       {/* Toggle resumen */}
@@ -665,8 +725,10 @@ export default function TodayScreen() {
             ["Taxi", "taxi"],
             ["Uber", "uber"],
             ["Cabify", "cabify"],
+            ["FreeNow", "freeNow"],
             ["Efectivo", "efectivo"],
-            ["Tarjeta / App", "tarjeta"],
+            ["Tarjeta", "tarjeta"],
+            ["App", "app"],
           ].map(([label, key]) => (
             <View key={key} style={styles.tableRow}>
               <Text>{label}</Text>
@@ -689,6 +751,24 @@ export default function TodayScreen() {
           Abre un día de trabajo para empezar a registrar viajes
         </Text>
       )}
+
+      <Button
+        title="Añadir viaje manual"
+        onPress={() => {
+          setEditingTrip({
+            id: -1, // id ficticio para identificar manual
+            startTime: new Date().toISOString(),
+            endTime: new Date().toISOString(),
+            amount: null,
+            payment: PaymentType.CASH,
+            source: TripSource.TAXI,
+          } as any);
+          setAmountInput("");
+          setPayment(PaymentType.CASH);
+          setSource(TripSource.TAXI);
+          setShowFinishModal(true);
+        }}
+      />
 
       {/* Lista de viajes */}
       <FlatList
@@ -761,17 +841,20 @@ export default function TodayScreen() {
             {/* TIPO DE VIAJE */}
             <Text style={{ marginTop: 10 }}>Tipo de viaje</Text>
             <View style={styles.row}>
-              {[TripSource.TAXI, TripSource.UBER, TripSource.CABIFY].map(
-                (s) => (
-                  <Pressable
-                    key={s}
-                    onPress={() => setSource(s)}
-                    style={[styles.chip, source === s && styles.chipActive]}
-                  >
-                    <Text>{s}</Text>
-                  </Pressable>
-                )
-              )}
+              {[
+                TripSource.TAXI,
+                TripSource.UBER,
+                TripSource.CABIFY,
+                TripSource.FREE_NOW,
+              ].map((s) => (
+                <Pressable
+                  key={s}
+                  onPress={() => setSource(s)}
+                  style={[styles.chip, source === s && styles.chipActive]}
+                >
+                  <Text>{s}</Text>
+                </Pressable>
+              ))}
             </View>
 
             {/* BOTONES */}
@@ -789,7 +872,24 @@ export default function TodayScreen() {
             {/* BORRAR SOLO SI EDITAMOS */}
             {editingTrip && (
               <View style={{ marginTop: 10 }}>
-                <Button title="Borrar viaje" color="red" onPress={handleDelete} />
+                <Button
+                  title="Borrar viaje"
+                  color="red"
+                  onPress={() => {
+                    Alert.alert(
+                      "Borrar viaje",
+                      "Esta acción no se puede deshacer.\n\n¿Seguro que quieres borrar este viaje?",
+                      [
+                        { text: "Cancelar", style: "cancel" },
+                        {
+                          text: "Borrar",
+                          style: "destructive",
+                          onPress: handleDelete,
+                        },
+                      ]
+                    );
+                  }}
+                />
               </View>
             )}
           </View>
@@ -806,6 +906,7 @@ export default function TodayScreen() {
 const styles = StyleSheet.create({
   container: { flex: 1, padding: 20, paddingTop: 60 },
   title: { fontSize: 22, fontWeight: "bold", textAlign: "center" },
+
   dateSelector: {
     flexDirection: "row",
     justifyContent: "center",
@@ -814,22 +915,27 @@ const styles = StyleSheet.create({
   },
   dateButton: { fontSize: 22, paddingHorizontal: 20 },
   dateText: { fontWeight: "600" },
+
   card: {
     backgroundColor: "#eee",
     padding: 16,
     borderRadius: 8,
     marginBottom: 12,
   },
-  amount: { fontSize: 24, fontWeight: "bold" },
+  amount: { fontSize: 23, fontWeight: "bold" },
+
   sectionTitle: { fontWeight: "600", marginBottom: 6 },
   summaryToggle: { alignSelf: "center", marginBottom: 10 },
   summaryToggleText: { color: "#0066cc", fontWeight: "600" },
+
   tableRow: {
     flexDirection: "row",
     justifyContent: "space-between",
     marginVertical: 2,
   },
+
   tripText: { paddingVertical: 6 },
+
   modalOverlay: {
     flex: 1,
     backgroundColor: "rgba(0,0,0,0.4)",
@@ -848,6 +954,7 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     gap: 8,
     marginVertical: 8,
+    flexWrap: "wrap",
   },
   chip: {
     paddingVertical: 12,
@@ -869,5 +976,68 @@ const styles = StyleSheet.create({
   progressFill: {
     height: "100%",
     borderRadius: 5,
+  },
+
+  dailyCompact: {
+    borderLeftWidth: 4,
+    paddingVertical: 10,
+  },
+
+  dailyCompactText: {
+    fontWeight: "600",
+    marginBottom: 6,
+  },
+
+  dateSelectorCompact: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    marginBottom: 6,
+  },
+
+  dateArrow: {
+    fontSize: 20,
+    paddingHorizontal: 12,
+    color: "#333",
+  },
+
+  dateTextCompact: {
+    fontWeight: "600",
+    fontSize: 14,
+    minWidth: 110,
+    textAlign: "center",
+  },
+
+  dayStatusRow: {
+    flexDirection: "row",
+    gap: 10,
+  },
+
+  cardToday: {
+    flex: 0.33, // ~33%
+    paddingVertical: 12,
+  },
+
+  cardProgress: {
+    flex: 0.67, // ~67%
+    paddingVertical: 12,
+  },
+
+  smallLabel: {
+    fontSize: 12,
+    color: "#555",
+    marginBottom: 2,
+  },
+
+  progressLine: {
+    fontSize: 12,
+    fontWeight: "600",
+    marginBottom: 4,
+  },
+
+  cardCompact: {
+    paddingVertical: 8,
+    paddingHorizontal: 12,
+    marginBottom: 8,
   },
 });
