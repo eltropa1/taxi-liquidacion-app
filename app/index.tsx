@@ -17,6 +17,7 @@ import { PaymentType, TripSource } from "../src/constants/enums";
 import { ExportService } from "../src/services/ExportService";
 import { GoalService } from "../src/services/GoalService";
 import { TripService } from "../src/services/TripService";
+import { SummaryService } from "../src/services/SummaryService";
 
 /**
  * Tipo de fila para mostrar viajes
@@ -30,28 +31,6 @@ type TripRow = {
   payment: PaymentType | null;
 };
 
-// ===================================================
-// FUNCIONES AUXILIARES DE FECHAS (FUERA DEL COMPONENTE)
-// ===================================================
-
-const startOfWeek = (date: Date) => {
-  const d = new Date(date);
-  const day = d.getDay() || 7; // lunes
-  d.setDate(d.getDate() - day + 1);
-  return d;
-};
-
-const endOfWeek = (date: Date) => {
-  const d = startOfWeek(date);
-  d.setDate(d.getDate() + 6);
-  return d;
-};
-
-const startOfMonth = (date: Date) =>
-  new Date(date.getFullYear(), date.getMonth(), 1);
-
-const endOfMonth = (date: Date) =>
-  new Date(date.getFullYear(), date.getMonth() + 1, 0);
 
 /**
  * Calcula porcentaje de progreso respecto a una meta
@@ -188,17 +167,14 @@ export default function TodayScreen() {
     const tripsForDate = await TripService.getTripsForDate(selectedDate);
     setTrips(tripsForDate as TripRow[]);
 
-    const weekSummary = await TripService.getSummaryBetweenDates(
-      startOfWeek(selectedDate),
-      endOfWeek(selectedDate)
-    );
-    setWeeklySummary(weekSummary);
+    // Resumen semanal: lunes-domingo recortado al mes (lógica centralizada)
+const weekSummary = await SummaryService.getWeekSummary();
+setWeeklySummary(weekSummary);
 
-    const monthSummary = await TripService.getSummaryBetweenDates(
-      startOfMonth(selectedDate),
-      endOfMonth(selectedDate)
-    );
-    setMonthlySummary(monthSummary);
+// Resumen mensual: desde día 1 hasta hoy
+const monthSummary = await SummaryService.getMonthSummary();
+setMonthlySummary(monthSummary);
+
 
     const workday = await TripService.getActiveWorkday();
     setActiveWorkday(workday);
