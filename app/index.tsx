@@ -157,6 +157,8 @@ export default function TodayScreen() {
     efectivo: number;
     tarjeta: number;
     app: number;
+    propinaTarjeta: number;
+    propinaEfectivo: number;
   } | null>(null);
 
   // ---------------------------
@@ -642,6 +644,38 @@ export default function TodayScreen() {
             <Text>App</Text>
             <Text>{(dailySummary?.app ?? 0).toFixed(2)} €</Text>
           </View>
+
+{/* ---------------------------
+    PROPINA (NO CUENTA COMO RECAUDACIÓN)
+---------------------------- */}
+<View
+  style={{
+    marginTop: 8,
+    paddingTop: 8,
+    borderTopWidth: 1,
+    borderTopColor: "#ccc",
+  }}
+>
+  <Text style={{ fontWeight: "600", marginBottom: 4 }}>
+    Propinas
+  </Text>
+
+  <View style={styles.tableRow}>
+    <Text>Tarjeta</Text>
+    <Text>
+      {(dailySummary?.propinaTarjeta ?? 0).toFixed(2)} €
+    </Text>
+  </View>
+
+  <View style={styles.tableRow}>
+    <Text>Efectivo</Text>
+    <Text>
+      {(dailySummary?.propinaEfectivo ?? 0).toFixed(2)} €
+    </Text>
+  </View>
+</View>
+
+
         </View>
       )}
 

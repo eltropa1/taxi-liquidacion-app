@@ -124,5 +124,19 @@ if (!hasCustomSource) {
   `);
 }
 
+// =====================================================
+// NUEVO: añadir cashTip a trips (si no existe)
+// =====================================================
+
+const hasCashTip = columns.some(
+  (column) => column.name === "cashTip"
+);
+
+if (!hasCashTip) {
+  await db.execAsync(`
+    ALTER TABLE trips ADD COLUMN cashTip REAL;
+  `);
+}
+
 
 }

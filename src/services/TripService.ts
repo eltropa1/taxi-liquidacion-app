@@ -67,7 +67,8 @@ export class TripService {
     payment: PaymentType,
     source: TripSource,
     customSource?: string,
-    chargedAmount?: number
+    chargedAmount?: number,
+    cashTip?: number
   ): Promise<void> {
     const db = await getDatabase();
 
@@ -97,11 +98,13 @@ const finalChargedAmount =
     await db.runAsync(
       `
       UPDATE trips
-      SET endTime = ?, amount = ?, payment = ?, source = ?, customSource = ?
+      SET endTime = ?, amount = ?, chargedAmount =?, cashTip =?, payment = ?, source = ?, customSource = ?
       WHERE id = ?
       `,
       [endTime,
         amount, 
+        finalChargedAmount,
+        cashTip ?? null,
         payment, 
         source, 
         customSource ?? null,
@@ -306,17 +309,20 @@ static async getSummaryForWorkday(
   efectivo: number;
   tarjeta: number;
   app: number;
+  propinaTarjeta: number;
+  propinaEfectivo: number;
 }> {
   const db = await getDatabase();
 
   const rows = await db.getAllAsync<{
     amount: number | null;
     chargedAmount: number | null;
+    cashTip: number | null,
     source: TripSource;
     payment: PaymentType | null;
   }>(
     `
-    SELECT amount, chargedAmount, source, payment
+    SELECT amount, chargedAmount, cashTip, source, payment
     FROM trips
     WHERE workdayId = ?
     `,
@@ -331,6 +337,8 @@ static async getSummaryForWorkday(
   let efectivo = 0;
   let tarjeta = 0;
   let app = 0;
+  let propinaTarjeta = 0;
+  let propinaEfectivo = 0;
 
   for (const t of rows) {
     const amount = t.amount ?? 0;
@@ -352,9 +360,20 @@ static async getSummaryForWorkday(
     if (t.payment === PaymentType.CASH) efectivo += amount;
     if (t.payment === PaymentType.CARD) tarjeta += charged; //lo realmente cobrado
     if (t.payment === PaymentType.APP) app += amount; //las apps ya vienen limpias y separadas
+
+    // --- Propinas ---
+if (t.payment === PaymentType.CARD) {
+  propinaTarjeta += Math.max(charged - amount, 0);
+}
+
+if (t.payment === PaymentType.CASH) {
+  propinaEfectivo += t.cashTip ?? 0;
+}
+
+
   }
 
-  return { total, taxi, uber, cabify, freeNow, efectivo, tarjeta, app };
+  return { total, taxi, uber, cabify, freeNow, efectivo, tarjeta, app, propinaTarjeta, propinaEfectivo, };
 }
 
 
