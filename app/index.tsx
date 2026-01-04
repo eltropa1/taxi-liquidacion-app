@@ -31,7 +31,6 @@ type TripRow = {
   payment: PaymentType | null;
 };
 
-
 /**
  * Calcula porcentaje de progreso respecto a una meta
  */
@@ -121,6 +120,10 @@ export default function TodayScreen() {
   // Texto libre para tipo de viaje personalizado (CUSTOM)
   const [customSource, setCustomSource] = useState("");
 
+  // Importe realmente cobrado por tarjeta (solo CARD)
+  // Si es null, se asume igual al importe del servicio
+  const [chargedAmountInput, setChargedAmountInput] = useState("");
+
   /**
    * Info del día de trabajo asociado a selectedDate.
    * - Si la fecha pertenece a un día de trabajo real: startTime / endTime / isClosed vendrán de BD.
@@ -168,13 +171,12 @@ export default function TodayScreen() {
     setTrips(tripsForDate as TripRow[]);
 
     // Resumen semanal: lunes-domingo recortado al mes (lógica centralizada)
-const weekSummary = await SummaryService.getWeekSummary();
-setWeeklySummary(weekSummary);
+    const weekSummary = await SummaryService.getWeekSummary();
+    setWeeklySummary(weekSummary);
 
-// Resumen mensual: desde día 1 hasta hoy
-const monthSummary = await SummaryService.getMonthSummary();
-setMonthlySummary(monthSummary);
-
+    // Resumen mensual: desde día 1 hasta hoy
+    const monthSummary = await SummaryService.getMonthSummary();
+    setMonthlySummary(monthSummary);
 
     const workday = await TripService.getActiveWorkday();
     setActiveWorkday(workday);
@@ -220,11 +222,18 @@ setMonthlySummary(monthSummary);
     setCustomSource("");
     setAmountInput("");
     setShowFinishModal(true);
+    setChargedAmountInput("");
   };
 
   const handleSave = async () => {
     const amount = Number(amountInput.replace(",", "."));
     if (isNaN(amount)) return;
+
+    const chargedAmountValue =
+  payment === PaymentType.CARD && chargedAmountInput.trim() !== ""
+    ? Number(chargedAmountInput.replace(",", "."))
+    : amount;
+    if (isNaN(chargedAmountValue)) return;
 
     // ============================
     // RESOLVER TIPO DE VIAJE FINAL
@@ -264,7 +273,8 @@ setMonthlySummary(monthSummary);
       await TripService.finishActiveTripWithData(
         amount,
         payment,
-        finalSource as any
+        finalSource as any,
+        chargedAmountValue.toString()
       );
       setLastPayment(payment);
       setLastSource(source);
@@ -797,6 +807,20 @@ setMonthlySummary(monthSummary);
               autoFocus
               style={styles.input}
             />
+
+            {/* IMPORTE COBRADO (SOLO TARJETA) */}
+            {payment === PaymentType.CARD && (
+              <>
+                <Text style={{ marginTop: 10 }}>Importe cobrado (€)</Text>
+                <TextInput
+                  value={chargedAmountInput}
+                  onChangeText={setChargedAmountInput}
+                  keyboardType="decimal-pad"
+                  placeholder={amountInput || "0,00"}
+                  style={styles.input}
+                />
+              </>
+            )}
 
             {/* FORMA DE PAGO */}
             <Text style={{ marginTop: 10 }}>Forma de pago</Text>

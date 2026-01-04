@@ -78,31 +78,51 @@ export async function runMigrations() {
   // NUEVO: añadir workdayId a trips (si no existe)
   // =====================================================
 
-  // 1. Comprobamos columnas existentes en trips
-  const columns = await db.getAllAsync<{ name: string }>(
-    `PRAGMA table_info(trips);`
-  );
-
-  const hasWorkdayId = columns.some((column) => column.name === "workdayId");
-
-  // 2. Si no existe, la añadimos
-  if (!hasWorkdayId) {
-    await db.execAsync(`
-      ALTER TABLE trips ADD COLUMN workdayId INTEGER;
-    `);
-  }
-    // =====================================================
-  // NUEVO: añadir customSource a trips (si no existe)
   // =====================================================
+// COMPROBAMOS COLUMNAS EXISTENTES EN trips
+// =====================================================
+const columns = await db.getAllAsync<{ name: string }>(
+  `PRAGMA table_info(trips);`
+);
 
-  const hasCustomSource = columns.some(
-    (column) => column.name === "customSource"
-  );
+// =====================================================
+// NUEVO: chargedAmount
+// =====================================================
+const hasChargedAmount = columns.some(
+  (column) => column.name === "chargedAmount"
+);
 
-  if (!hasCustomSource) {
-    await db.execAsync(`
-      ALTER TABLE trips ADD COLUMN customSource TEXT;
-    `);
-  }
+if (!hasChargedAmount) {
+  await db.execAsync(`
+    ALTER TABLE trips ADD COLUMN chargedAmount REAL;
+  `);
+}
+
+// =====================================================
+// NUEVO: workdayId
+// =====================================================
+const hasWorkdayId = columns.some(
+  (column) => column.name === "workdayId"
+);
+
+if (!hasWorkdayId) {
+  await db.execAsync(`
+    ALTER TABLE trips ADD COLUMN workdayId INTEGER;
+  `);
+}
+
+// =====================================================
+// NUEVO: customSource
+// =====================================================
+const hasCustomSource = columns.some(
+  (column) => column.name === "customSource"
+);
+
+if (!hasCustomSource) {
+  await db.execAsync(`
+    ALTER TABLE trips ADD COLUMN customSource TEXT;
+  `);
+}
+
 
 }

@@ -66,7 +66,8 @@ export class TripService {
     amount: number,
     payment: PaymentType,
     source: TripSource,
-    customSource?: string
+    customSource?: string,
+    chargedAmount?: number
   ): Promise<void> {
     const db = await getDatabase();
 
@@ -83,6 +84,15 @@ export class TripService {
     if (!active) return;
 
     const endTime = new Date().toISOString();
+
+    // Importe realmente cobrado por tarjeta:
+// - si viene informado → se usa
+// - si no → se asume igual al importe del servicio
+const finalChargedAmount =
+  payment === PaymentType.CARD && typeof chargedAmount === "number"
+    ? chargedAmount
+    : amount;
+
 
     await db.runAsync(
       `
@@ -301,11 +311,12 @@ static async getSummaryForWorkday(
 
   const rows = await db.getAllAsync<{
     amount: number | null;
+    chargedAmount: number | null;
     source: TripSource;
     payment: PaymentType | null;
   }>(
     `
-    SELECT amount, source, payment
+    SELECT amount, chargedAmount, source, payment
     FROM trips
     WHERE workdayId = ?
     `,
@@ -323,6 +334,12 @@ static async getSummaryForWorkday(
 
   for (const t of rows) {
     const amount = t.amount ?? 0;
+
+  // Si no existe chargedAmount (viajes antiguos),
+  // asumimos que es igual al importe del servicio
+    const charged = t.chargedAmount ?? amount;
+
+    //Recaudacion real
     total += amount;
 
     // --- Plataforma origen ---
@@ -333,8 +350,8 @@ static async getSummaryForWorkday(
 
     // --- Forma de pago ---
     if (t.payment === PaymentType.CASH) efectivo += amount;
-    if (t.payment === PaymentType.CARD) tarjeta += amount;
-    if (t.payment === PaymentType.APP) app += amount;
+    if (t.payment === PaymentType.CARD) tarjeta += charged; //lo realmente cobrado
+    if (t.payment === PaymentType.APP) app += amount; //las apps ya vienen limpias y separadas
   }
 
   return { total, taxi, uber, cabify, freeNow, efectivo, tarjeta, app };
