@@ -142,7 +142,7 @@ export default function TodayScreen() {
   const [activeWorkday, setActiveWorkday] = useState<{
     id: number;
     startTime: string;
-  } | null>(null);
+  } | null | undefined>(null);
 
   /**
    * Resumen DIARIO por workdayId (clave para que al cerrar el día no "se pierdan" viajes en los totales)
@@ -161,43 +161,57 @@ export default function TodayScreen() {
     propinaEfectivo: number;
   } | null>(null);
 
+  // Propina en efectivo (opcional)
+const [cashTipInput, setCashTipInput] = useState("");
+
+
+
   // ---------------------------
   // CARGA DE DATOS
   // ---------------------------
 
-  const refresh = async () => {
-    const active = await TripService.getActiveTrip();
-    setActiveTripId(active ? active.id : null);
+ const refresh = async () => {
+  // Viaje activo
+  const active = await TripService.getActiveTrip();
+  setActiveTripId(active ? active.id : null);
 
+  // Resúmenes globales (independientes del día)
+  const weekSummary = await SummaryService.getWeekSummary();
+  setWeeklySummary(weekSummary);
+
+  const monthSummary = await SummaryService.getMonthSummary();
+  setMonthlySummary(monthSummary);
+
+  // Día de trabajo activo (HOY)
+  const workday = await TripService.getActiveWorkday();
+  setActiveWorkday(workday);
+
+  // Día de trabajo asociado a la fecha seleccionada
+  const wd = await TripService.getWorkdayInfoForDate(selectedDate);
+  setWorkdayInfo(wd);
+
+  if (wd) {
+    // ✅ SOLO aquí se cargan viajes
     const tripsForDate = await TripService.getTripsForDate(selectedDate);
     setTrips(tripsForDate as TripRow[]);
 
-    // Resumen semanal: lunes-domingo recortado al mes (lógica centralizada)
-    const weekSummary = await SummaryService.getWeekSummary();
-    setWeeklySummary(weekSummary);
+    const summary = await TripService.getSummaryForWorkday(wd.id);
+    setDailySummary(summary);
+  } else {
+    // ✅ Día sin trabajo → estado limpio
+    setTrips([]);
+    setDailySummary(null);
+  }
+};
 
-    // Resumen mensual: desde día 1 hasta hoy
-    const monthSummary = await SummaryService.getMonthSummary();
-    setMonthlySummary(monthSummary);
-
-    const workday = await TripService.getActiveWorkday();
-    setActiveWorkday(workday);
-
-    const wd = await TripService.getWorkdayInfoForDate(selectedDate);
-    setWorkdayInfo(wd);
-
-    // ✅ CLAVE: el resumen diario debe calcularse POR workdayId
-    if (wd) {
-      const summary = await TripService.getSummaryForWorkday(wd.id);
-      setDailySummary(summary);
-    } else {
-      setDailySummary(null);
-    }
-  };
 
   useEffect(() => {
-    refresh().catch(console.error);
-  }, [selectedDate, refreshKey]);
+  // Evita carga en frío sin estado de día de trabajo resuelto
+  if (activeWorkday === undefined) return;
+
+  refresh().catch(console.error);
+}, [selectedDate, refreshKey, activeWorkday]);
+
 
   /**
    * Recarga las metas cada vez que esta pantalla
@@ -225,17 +239,32 @@ export default function TodayScreen() {
     setAmountInput("");
     setShowFinishModal(true);
     setChargedAmountInput("");
+    setCashTipInput("");
   };
 
   const handleSave = async () => {
     const amount = Number(amountInput.replace(",", "."));
     if (isNaN(amount)) return;
 
-    const chargedAmountValue =
-  payment === PaymentType.CARD && chargedAmountInput.trim() !== ""
-    ? Number(chargedAmountInput.replace(",", "."))
-    : amount;
-    if (isNaN(chargedAmountValue)) return;
+    let chargedAmountValue: number | undefined = undefined;
+
+if (payment === PaymentType.CARD && chargedAmountInput.trim() !== "") {
+  chargedAmountValue = Number(chargedAmountInput.replace(",", "."));
+  if (isNaN(chargedAmountValue)) return;
+}
+
+let cashTip: number | undefined = undefined;
+
+if (payment === PaymentType.CASH && cashTipInput.trim() !== "") {
+  const totalCobrado = Number(cashTipInput.replace(",", "."));
+  if (isNaN(totalCobrado)) return;
+
+ // Blindaje: la propina nunca puede ser negativa
+  const diff = totalCobrado - amount;
+  cashTip = diff > 0 ? diff : 0;
+}
+
+
 
     // ============================
     // RESOLVER TIPO DE VIAJE FINAL
@@ -276,7 +305,9 @@ export default function TodayScreen() {
         amount,
         payment,
         finalSource as any,
-        chargedAmountValue.toString()
+        undefined,
+        chargedAmountValue,
+        cashTip
       );
       setLastPayment(payment);
       setLastSource(source);
@@ -357,9 +388,10 @@ export default function TodayScreen() {
    * Si por lo que sea dailySummary aún no llegó, hacemos fallback a los viajes cargados.
    */
   const totalToday = useMemo(() => {
+    if (!workdayInfo) return 0; // ⬅️ blindaje lógico
     if (dailySummary) return dailySummary.total;
     return trips.reduce((acc, t) => acc + (t.amount ?? 0), 0);
-  }, [dailySummary, trips]);
+  }, [dailySummary, trips, workdayInfo]);
 
   /**
    * Diferencia respecto a metas
@@ -832,7 +864,7 @@ export default function TodayScreen() {
             </Text>
 
             {/* IMPORTE */}
-            <Text>Importe (€)</Text>
+            <Text>Importe del Viaje(€)</Text>
             <TextInput
               value={amountInput}
               onChangeText={setAmountInput}
@@ -855,6 +887,21 @@ export default function TodayScreen() {
                 />
               </>
             )}
+
+            {/* PROPINA EFECTIVO (SOLO CASH) */}
+{payment === PaymentType.CASH && (
+  <>
+    <Text style={{ marginTop: 10 }}>Importe cobrado (€)</Text>
+    <TextInput
+      value={cashTipInput}
+      onChangeText={setCashTipInput}
+      keyboardType="decimal-pad"
+      placeholder="0,00"
+      style={styles.input}
+    />
+  </>
+)}
+
 
             {/* FORMA DE PAGO */}
             <Text style={{ marginTop: 10 }}>Forma de pago</Text>

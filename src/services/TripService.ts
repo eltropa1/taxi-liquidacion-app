@@ -361,14 +361,17 @@ static async getSummaryForWorkday(
     if (t.payment === PaymentType.CARD) tarjeta += charged; //lo realmente cobrado
     if (t.payment === PaymentType.APP) app += amount; //las apps ya vienen limpias y separadas
 
-    // --- Propinas ---
+   // --- Propinas (blindadas) ---
 if (t.payment === PaymentType.CARD) {
-  propinaTarjeta += Math.max(charged - amount, 0);
+  const diff = charged - amount;
+  if (diff > 0) propinaTarjeta += diff;
 }
 
 if (t.payment === PaymentType.CASH) {
-  propinaEfectivo += t.cashTip ?? 0;
+  const tip = t.cashTip ?? 0;
+  if (tip > 0) propinaEfectivo += tip;
 }
+
 
 
   }
@@ -445,36 +448,65 @@ if (t.payment === PaymentType.CASH) {
    * Devuelve el día de trabajo al que pertenece una fecha dada.
    * Si el día no está cerrado, se considera hasta el momento actual.
    */
-  static async getWorkdayForDate(date: Date): Promise<{
-    id: number;
-    startTime: string;
-    endTime: string | null;
-  } | null> {
-    const db = await getDatabase();
-    const iso = date.toISOString();
+  /**
+ * Devuelve el workday asociado a una fecha concreta.
+ * IMPORTANTE:
+ * - Si la fecha es HOY y hay un día activo, ese ES el workday válido,
+ *   aunque esté abierto.
+ * - La lectura de viajes NUNCA debe depender de si el día está cerrado.
+ */
+static async getWorkdayForDate(date: Date) {
+  const today = new Date();
+  const isToday =
+    date.toDateString() === today.toDateString();
 
-    const result = await db.getFirstAsync<{
-      id: number;
-      startTime: string;
-      endTime: string | null;
-    }>(
-      `
-      SELECT id, startTime, endTime
-      FROM workdays
-      WHERE startTime <= ?
-        AND (endTime >= ? OR endTime IS NULL)
-      ORDER BY startTime DESC
-      LIMIT 1
-      `,
-      [iso, iso]
-    );
-
-    return result ?? null;
+  // 1️⃣ Si es hoy, intentamos usar el día activo
+  if (isToday) {
+    const active = await this.getActiveWorkday();
+    if (active) {
+      return active;
+    }
   }
+
+  // 2️⃣ Si no, buscamos en BD por fecha (abierto o cerrado)
+  const startOfDay = new Date(
+    date.getFullYear(),
+    date.getMonth(),
+    date.getDate(),
+    0, 0, 0
+  ).toISOString();
+
+  const endOfDay = new Date(
+    date.getFullYear(),
+    date.getMonth(),
+    date.getDate(),
+    23, 59, 59
+  ).toISOString();
+
+  const db = await getDatabase();
+
+  const result = await db.getFirstAsync<any>(
+    `
+    SELECT *
+    FROM workdays
+    WHERE startTime BETWEEN ? AND ?
+    ORDER BY startTime DESC
+    LIMIT 1
+    `,
+    [startOfDay, endOfDay]
+  );
+
+  return result ?? null;
+}
+
 
 /**
  * Devuelve información del día de trabajo
- * al que pertenece una fecha (por solape de día natural).
+ * asociado EXACTAMENTE a una fecha natural.
+ *
+ * IMPORTANTE:
+ * - Solo devuelve workday si EMPIEZA ese día.
+ * - No devuelve el último día trabajado anterior.
  */
 static async getWorkdayInfoForDate(date: Date): Promise<{
   id: number;
@@ -484,23 +516,18 @@ static async getWorkdayInfoForDate(date: Date): Promise<{
 } | null> {
   const db = await getDatabase();
 
-  // Inicio y fin del día natural seleccionado
   const dayStart = new Date(
     date.getFullYear(),
     date.getMonth(),
     date.getDate(),
-    0,
-    0,
-    0
+    0, 0, 0
   ).toISOString();
 
   const dayEnd = new Date(
     date.getFullYear(),
     date.getMonth(),
     date.getDate(),
-    23,
-    59,
-    59
+    23, 59, 59
   ).toISOString();
 
   const row = await db.getFirstAsync<{
@@ -512,12 +539,11 @@ static async getWorkdayInfoForDate(date: Date): Promise<{
     `
     SELECT id, startTime, endTime, isClosed
     FROM workdays
-    WHERE startTime <= ?
-      AND (endTime >= ? OR endTime IS NULL)
-    ORDER BY startTime DESC
+    WHERE startTime BETWEEN ? AND ?
+    ORDER BY startTime ASC
     LIMIT 1
     `,
-    [dayEnd, dayStart]
+    [dayStart, dayEnd]
   );
 
   return row
@@ -529,6 +555,7 @@ static async getWorkdayInfoForDate(date: Date): Promise<{
       }
     : null;
 }
+
 
 
 /**
