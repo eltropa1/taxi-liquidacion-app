@@ -1,6 +1,24 @@
 import { PaymentType, TripSource } from "../constants/enums";
 import { getDatabase } from "../database/database";
 
+import { GeoLocationFactory } from "../geo-location";
+import { GeoContext } from "../geo";
+import { GeoServiceFactory } from "../geo";
+
+import { TripGeoSnapshot } from "../models/TripGeoSnapshot";
+import { TripGeoSnapshotRepository } from "../database/repositories/TripGeoSnapshotRepository";
+
+
+/**
+ * Servicio GEO (stateless, reutilizable)
+ */
+const geoService = GeoServiceFactory.create();
+
+/**
+ * Servicio de localización GPS
+ */
+const geoLocationService = GeoLocationFactory.create();
+
 /**
  * Servicio de viajes.
  * Contiene la lógica de negocio relacionada con los viajes y los días de trabajo.
@@ -33,6 +51,61 @@ export class TripService {
       [startTime, TripSource.TAXI, createdAt, workday.id]
     );
   }
+
+  /**
+ * Inicia un nuevo viaje capturando GPS y evaluando GEO.
+ * NO sustituye a startTrip(): lo complementa.
+ */
+static async startTripWithLocation(): Promise<void> {
+  const db = await getDatabase();
+
+  // 1️⃣ Obtener GPS
+  const location = await geoLocationService.getCurrentLocation();
+
+  const startTime = location.timestamp;
+  const createdAt = new Date().toISOString();
+
+  const workday = await this.getActiveWorkday();
+  if (!workday) {
+    throw new Error("No hay un día de trabajo abierto");
+  }
+
+  // 2️⃣ Crear viaje
+  const result = await db.runAsync(
+    `
+    INSERT INTO trips (startTime, source, createdAt, workdayId)
+    VALUES (?, ?, ?, ?)
+    `,
+    [startTime, TripSource.TAXI, createdAt, workday.id]
+  );
+
+  const tripId = result.lastInsertRowId as number;
+
+  // 3️⃣ Evaluar GEO
+  const geoContext: GeoContext = {
+    point: {
+      latitude: location.latitude,
+      longitude: location.longitude,
+    },
+    timestamp: new Date(location.timestamp),
+  };
+
+  const zone = geoService.findFirstMatchingZone(geoContext);
+
+  // 4️⃣ Crear snapshot START
+  const snapshot: TripGeoSnapshot = {
+    tripId,
+    type: "START",
+    latitude: location.latitude,
+    longitude: location.longitude,
+    timestamp: location.timestamp,
+    zoneId: zone?.id ?? null,
+    createdAt: createdAt,
+  };
+
+  await TripGeoSnapshotRepository.insert(snapshot);
+}
+
 
   /**
    * Devuelve el viaje activo (sin endTime), si existe.
@@ -87,8 +160,8 @@ export class TripService {
     const endTime = new Date().toISOString();
 
     // Importe realmente cobrado por tarjeta:
-// - si viene informado → se usa
-// - si no → se asume igual al importe del servicio
+   // - si viene informado → se usa
+   // - si no → se asume igual al importe del servicio
 const finalChargedAmount =
   payment === PaymentType.CARD && typeof chargedAmount === "number"
     ? chargedAmount
@@ -111,6 +184,86 @@ const finalChargedAmount =
         active.id]
     );
   }
+
+  /**
+ * Finaliza el viaje activo capturando GPS y evaluando GEO.
+ * Complementa a finishActiveTripWithData.
+ */
+static async finishActiveTripWithLocation(
+  amount: number,
+  payment: PaymentType,
+  source: TripSource,
+  customSource?: string,
+  chargedAmount?: number,
+  cashTip?: number
+): Promise<void> {
+  const db = await getDatabase();
+
+  const active = await db.getFirstAsync<{ id: number }>(
+    `
+    SELECT id
+    FROM trips
+    WHERE endTime IS NULL
+    ORDER BY startTime DESC
+    LIMIT 1
+    `
+  );
+
+  if (!active) return;
+
+  // 1️⃣ GPS
+  const location = await geoLocationService.getCurrentLocation();
+  const endTime = location.timestamp;
+
+  // 2️⃣ Cerrar viaje (lógica existente)
+  const finalChargedAmount =
+    payment === PaymentType.CARD && typeof chargedAmount === "number"
+      ? chargedAmount
+      : amount;
+
+  await db.runAsync(
+    `
+    UPDATE trips
+    SET endTime = ?, amount = ?, chargedAmount = ?, cashTip = ?, payment = ?, source = ?, customSource = ?
+    WHERE id = ?
+    `,
+    [
+      endTime,
+      amount,
+      finalChargedAmount,
+      cashTip ?? null,
+      payment,
+      source,
+      customSource ?? null,
+      active.id,
+    ]
+  );
+
+  // 3️⃣ Evaluar GEO
+  const geoContext: GeoContext = {
+    point: {
+      latitude: location.latitude,
+      longitude: location.longitude,
+    },
+    timestamp: new Date(location.timestamp),
+  };
+
+  const zone = geoService.findFirstMatchingZone(geoContext);
+
+  // 4️⃣ Snapshot END
+  const snapshot: TripGeoSnapshot = {
+    tripId: active.id,
+    type: "END",
+    latitude: location.latitude,
+    longitude: location.longitude,
+    timestamp: location.timestamp,
+    zoneId: zone?.id ?? null,
+    createdAt: new Date().toISOString(),
+  };
+
+  await TripGeoSnapshotRepository.insert(snapshot);
+}
+
 
   /**
    * Actualiza los datos de un viaje existente.
