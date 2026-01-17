@@ -182,3 +182,24 @@ Dependen de geolocalización + km + tiempo.
 - [ ] Integración con viajes
 - [ ] Explotación en estadísticas y metas
 - [ ] Edición manual controlada
+
+y el git commit que he hecho es: 
+Se completa y blinda el motor de geolocalización (src/geo):
+
+- Implementada evaluación AND estricta de reglas por zona
+- Zonas sin reglas se consideran inválidas (fail-safe)
+- Reglas desconocidas invalidan la zona
+- Contrato explícito GeoRuleEvaluator con supportedType
+- Orquestación correcta de evaluadores en GeoZoneEvaluator
+- Añadida tolerancia GPS controlada en reglas circulares
+
+Tests añadidos:
+- CircleRuleEvaluator (dentro / fuera / borde)
+- GeoZoneEvaluator (regla válida, inválida, AND, fallo parcial,
+  regla desconocida, zona vacía)
+
+Resultado:
+- Motor GEO aislado, extensible y matemáticamente coherente
+- Lógica protegida por tests reales
+- Bloque GEO cerrado y listo para integración futura
+

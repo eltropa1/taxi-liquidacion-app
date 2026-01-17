@@ -1,51 +1,26 @@
-/**
- * TripGeoSnapshot
- * ----------------
- * Snapshot técnico de geolocalización asociado a un viaje.
- *
- * Representa una captura puntual de GPS en un momento concreto
- * del ciclo de vida del viaje (inicio o fin).
- *
- * NO contiene lógica.
- * NO evalúa zonas.
- * NO conoce el dominio del taxi.
- */
-export interface TripGeoSnapshot {
-  /**
-   * Identificador único del snapshot
-   */
-  id?: number;
+import { GeoAddressSnapshot } from "../geo/geocoding/models";
 
-  /**
-   * Viaje al que pertenece el snapshot
-   */
+/**
+ * Snapshot GEO asociado a un viaje
+ * (inicio o fin).
+ *
+ * - No guarda GPS crudo
+ * - Guarda resolución administrativa completa
+ */
+export type TripGeoSnapshot = {
+  id?: number;
   tripId: number;
 
   /**
-   * Tipo de snapshot (inicio o fin)
+   * START | END
    */
-  type: "START" | "END";
+  kind: "START" | "END";
 
   /**
-   * Coordenadas GPS
+   * Snapshot administrativo completo
+   * (barrio, distrito, zona especial, etc.)
    */
-  latitude: number;
-  longitude: number;
+  snapshot: GeoAddressSnapshot;
 
-  /**
-   * Timestamp exacto de la medición
-   */
-  timestamp: string;
-
-  /**
-   * Zona GEO evaluada a partir de este snapshot
-   * (dato derivado, puede ser null)
-   */
-  zoneId?: string | null;
-
-  /**
-   * Fecha de creación del snapshot
-   * (auditoría)
-   */
   createdAt: string;
-}
+};

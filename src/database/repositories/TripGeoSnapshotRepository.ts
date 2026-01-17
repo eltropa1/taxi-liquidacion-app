@@ -1,56 +1,93 @@
 import { getDatabase } from "../database";
 import { TripGeoSnapshot } from "../../models/TripGeoSnapshot";
-import {
-  TRIP_GEO_SNAPSHOTS_TABLE,
-} from "../schema";
+import { TRIP_GEO_SNAPSHOTS_TABLE } from "../schema";
+import { GeoAddressSnapshot } from "../../geo/geocoding/models";
 
-/**
- * TripGeoSnapshotRepository
- * -------------------------
- * Acceso a datos para snapshots geográficos de viajes.
- *
- * Responsabilidad única:
- * - Persistencia SQLite
- * - Sin lógica de negocio
- */
 export class TripGeoSnapshotRepository {
-  /**
-   * Inserta un nuevo snapshot GEO
-   */
   static async insert(snapshot: TripGeoSnapshot): Promise<void> {
     const db = await getDatabase();
 
-    const query = `
+    await db.runAsync(
+      `
       INSERT INTO ${TRIP_GEO_SNAPSHOTS_TABLE}
-      (tripId, type, latitude, longitude, timestamp, zoneId, createdAt)
-      VALUES (?, ?, ?, ?, ?, ?, ?);
-    `;
+        (tripId, kind, snapshot, createdAt)
+      VALUES (?, ?, ?, ?)
+      `,
+      [
+        snapshot.tripId,
+        snapshot.kind,
+        JSON.stringify(snapshot.snapshot),
+        snapshot.createdAt,
+      ]
+    );
+  }
+  // =========================
+  // EXISTENTE: insert(...)
+  // =========================
 
-    await db.runAsync(query, [
-      snapshot.tripId,
-      snapshot.type,
-      snapshot.latitude,
-      snapshot.longitude,
-      snapshot.timestamp,
-      snapshot.zoneId ?? null,
-      snapshot.createdAt,
-    ]);
+  /**
+   * Devuelve todos los snapshots GEO (START + END)
+   * asociados a un día de trabajo concreto.
+   *
+   * - El snapshot JSON se devuelve PARSEADO
+   * - Ordenado por fecha de creación
+   */
+  static async getSnapshotsForWorkday(
+    workdayId: number
+  ): Promise<
+    Array<{
+      tripId: number;
+      kind: "START" | "END";
+      snapshot: GeoAddressSnapshot;
+      createdAt: string;
+    }>
+  > {
+    const db = await getDatabase();
+
+    const rows = await db.getAllAsync<{
+      tripId: number;
+      kind: "START" | "END";
+      snapshot: string;
+      createdAt: string;
+    }>(
+      `
+      SELECT
+        s.tripId,
+        s.kind,
+        s.snapshot,
+        s.createdAt
+      FROM trip_geo_snapshots s
+      INNER JOIN trips t ON t.id = s.tripId
+      WHERE t.workdayId = ?
+      ORDER BY s.createdAt ASC
+      `,
+      [workdayId]
+    );
+
+    return rows.map((row) => ({
+      tripId: row.tripId,
+      kind: row.kind,
+      snapshot: JSON.parse(row.snapshot) as GeoAddressSnapshot,
+      createdAt: row.createdAt,
+    }));
   }
 
   /**
-   * Obtiene todos los snapshots GEO de un viaje
-   */
-  static async getByTripId(tripId: number): Promise<TripGeoSnapshot[]> {
-    const db = await getDatabase();
+ * Devuelve los snapshots GEO de un viaje (START / END).
+ * Ordenados por creación.
+ */
+static async getByTripId(tripId: number) {
+  const db = await getDatabase();
 
-    const query = `
-      SELECT *
-      FROM ${TRIP_GEO_SNAPSHOTS_TABLE}
-      WHERE tripId = ?
-      ORDER BY createdAt ASC;
-    `;
+  return db.getAllAsync(
+    `
+    SELECT *
+    FROM trip_geo_snapshots
+    WHERE tripId = ?
+    ORDER BY createdAt ASC
+    `,
+    [tripId]
+  );
+}
 
-    const rows = await db.getAllAsync<TripGeoSnapshot>(query, [tripId]);
-    return rows;
-  }
 }

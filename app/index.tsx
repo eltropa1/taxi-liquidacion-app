@@ -139,10 +139,14 @@ export default function TodayScreen() {
    * ESTADO DÍA DE TRABAJO (ACTIVO)
    * ---------------------------
    */
-  const [activeWorkday, setActiveWorkday] = useState<{
-    id: number;
-    startTime: string;
-  } | null | undefined>(null);
+  const [activeWorkday, setActiveWorkday] = useState<
+    | {
+        id: number;
+        startTime: string;
+      }
+    | null
+    | undefined
+  >(null);
 
   /**
    * Resumen DIARIO por workdayId (clave para que al cerrar el día no "se pierdan" viajes en los totales)
@@ -162,56 +166,52 @@ export default function TodayScreen() {
   } | null>(null);
 
   // Propina en efectivo (opcional)
-const [cashTipInput, setCashTipInput] = useState("");
-
-
+  const [cashTipInput, setCashTipInput] = useState("");
 
   // ---------------------------
   // CARGA DE DATOS
   // ---------------------------
 
- const refresh = async () => {
-  // Viaje activo
-  const active = await TripService.getActiveTrip();
-  setActiveTripId(active ? active.id : null);
+  const refresh = async () => {
+    // Viaje activo
+    const active = await TripService.getActiveTrip();
+    setActiveTripId(active ? active.id : null);
 
-  // Resúmenes globales (independientes del día)
-  const weekSummary = await SummaryService.getWeekSummary();
-  setWeeklySummary(weekSummary);
+    // Resúmenes globales (independientes del día)
+    const weekSummary = await SummaryService.getWeekSummary();
+    setWeeklySummary(weekSummary);
 
-  const monthSummary = await SummaryService.getMonthSummary();
-  setMonthlySummary(monthSummary);
+    const monthSummary = await SummaryService.getMonthSummary();
+    setMonthlySummary(monthSummary);
 
-  // Día de trabajo activo (HOY)
-  const workday = await TripService.getActiveWorkday();
-  setActiveWorkday(workday);
+    // Día de trabajo activo (HOY)
+    const workday = await TripService.getActiveWorkday();
+    setActiveWorkday(workday);
 
-  // Día de trabajo asociado a la fecha seleccionada
-  const wd = await TripService.getWorkdayInfoForDate(selectedDate);
-  setWorkdayInfo(wd);
+    // Día de trabajo asociado a la fecha seleccionada
+    const wd = await TripService.getWorkdayInfoForDate(selectedDate);
+    setWorkdayInfo(wd);
 
-  if (wd) {
-    // ✅ SOLO aquí se cargan viajes
-    const tripsForDate = await TripService.getTripsForDate(selectedDate);
-    setTrips(tripsForDate as TripRow[]);
+    if (wd) {
+      // ✅ SOLO aquí se cargan viajes
+      const tripsForDate = await TripService.getTripsForDate(selectedDate);
+      setTrips(tripsForDate as TripRow[]);
 
-    const summary = await TripService.getSummaryForWorkday(wd.id);
-    setDailySummary(summary);
-  } else {
-    // ✅ Día sin trabajo → estado limpio
-    setTrips([]);
-    setDailySummary(null);
-  }
-};
-
+      const summary = await TripService.getSummaryForWorkday(wd.id);
+      setDailySummary(summary);
+    } else {
+      // ✅ Día sin trabajo → estado limpio
+      setTrips([]);
+      setDailySummary(null);
+    }
+  };
 
   useEffect(() => {
-  // Evita carga en frío sin estado de día de trabajo resuelto
-  if (activeWorkday === undefined) return;
+    // Evita carga en frío sin estado de día de trabajo resuelto
+    if (activeWorkday === undefined) return;
 
-  refresh().catch(console.error);
-}, [selectedDate, refreshKey, activeWorkday]);
-
+    refresh().catch(console.error);
+  }, [selectedDate, refreshKey, activeWorkday]);
 
   /**
    * Recarga las metas cada vez que esta pantalla
@@ -248,23 +248,21 @@ const [cashTipInput, setCashTipInput] = useState("");
 
     let chargedAmountValue: number | undefined = undefined;
 
-if (payment === PaymentType.CARD && chargedAmountInput.trim() !== "") {
-  chargedAmountValue = Number(chargedAmountInput.replace(",", "."));
-  if (isNaN(chargedAmountValue)) return;
-}
+    if (payment === PaymentType.CARD && chargedAmountInput.trim() !== "") {
+      chargedAmountValue = Number(chargedAmountInput.replace(",", "."));
+      if (isNaN(chargedAmountValue)) return;
+    }
 
-let cashTip: number | undefined = undefined;
+    let cashTip: number | undefined = undefined;
 
-if (payment === PaymentType.CASH && cashTipInput.trim() !== "") {
-  const totalCobrado = Number(cashTipInput.replace(",", "."));
-  if (isNaN(totalCobrado)) return;
+    if (payment === PaymentType.CASH && cashTipInput.trim() !== "") {
+      const totalCobrado = Number(cashTipInput.replace(",", "."));
+      if (isNaN(totalCobrado)) return;
 
- // Blindaje: la propina nunca puede ser negativa
-  const diff = totalCobrado - amount;
-  cashTip = diff > 0 ? diff : 0;
-}
-
-
+      // Blindaje: la propina nunca puede ser negativa
+      const diff = totalCobrado - amount;
+      cashTip = diff > 0 ? diff : 0;
+    }
 
     // ============================
     // RESOLVER TIPO DE VIAJE FINAL
@@ -294,7 +292,7 @@ if (payment === PaymentType.CASH && cashTipInput.trim() !== "") {
         editingTrip.id,
         amount,
         payment,
-        finalSource as any
+        finalSource as any,
       );
     }
     // ============================
@@ -307,7 +305,7 @@ if (payment === PaymentType.CASH && cashTipInput.trim() !== "") {
         finalSource as any,
         undefined,
         chargedAmountValue,
-        cashTip
+        cashTip,
       );
       setLastPayment(payment);
       setLastSource(source);
@@ -369,7 +367,7 @@ if (payment === PaymentType.CASH && cashTipInput.trim() !== "") {
           selectedDate.getDate(),
           0,
           0,
-          0
+          0,
         ).toISOString(),
         endTime: new Date(
           selectedDate.getFullYear(),
@@ -377,7 +375,7 @@ if (payment === PaymentType.CASH && cashTipInput.trim() !== "") {
           selectedDate.getDate(),
           23,
           59,
-          59
+          59,
         ).toISOString(),
         isClosed: true,
         isVirtual: true,
@@ -442,7 +440,7 @@ if (payment === PaymentType.CASH && cashTipInput.trim() !== "") {
 
     const tarjeta = trips
       .filter(
-        (t) => t.payment === PaymentType.CARD || t.payment === PaymentType.APP
+        (t) => t.payment === PaymentType.CARD || t.payment === PaymentType.APP,
       )
       .reduce((sum, t) => sum + (t.amount ?? 0), 0);
 
@@ -460,7 +458,7 @@ if (payment === PaymentType.CASH && cashTipInput.trim() !== "") {
   // Progreso mensual
   const monthlyProgress = getProgress(
     monthlySummary?.total ?? 0,
-    goals.monthly
+    goals.monthly,
   );
   const monthlyStatus = getStatus(monthlyProgress);
 
@@ -502,7 +500,7 @@ if (payment === PaymentType.CASH && cashTipInput.trim() !== "") {
                           await refresh();
                         },
                       },
-                    ]
+                    ],
                   );
                 }}
               />
@@ -531,7 +529,7 @@ if (payment === PaymentType.CASH && cashTipInput.trim() !== "") {
                           await refresh();
                         },
                       },
-                    ]
+                    ],
                   );
                 }}
               />
@@ -545,7 +543,7 @@ if (payment === PaymentType.CASH && cashTipInput.trim() !== "") {
         <Pressable
           onPress={() =>
             setSelectedDate(
-              new Date(selectedDate.getTime() - 24 * 60 * 60 * 1000)
+              new Date(selectedDate.getTime() - 24 * 60 * 60 * 1000),
             )
           }
         >
@@ -559,7 +557,7 @@ if (payment === PaymentType.CASH && cashTipInput.trim() !== "") {
         <Pressable
           onPress={() =>
             setSelectedDate(
-              new Date(selectedDate.getTime() + 24 * 60 * 60 * 1000)
+              new Date(selectedDate.getTime() + 24 * 60 * 60 * 1000),
             )
           }
         >
@@ -677,37 +675,29 @@ if (payment === PaymentType.CASH && cashTipInput.trim() !== "") {
             <Text>{(dailySummary?.app ?? 0).toFixed(2)} €</Text>
           </View>
 
-{/* ---------------------------
+          {/* ---------------------------
     PROPINA (NO CUENTA COMO RECAUDACIÓN)
 ---------------------------- */}
-<View
-  style={{
-    marginTop: 8,
-    paddingTop: 8,
-    borderTopWidth: 1,
-    borderTopColor: "#ccc",
-  }}
->
-  <Text style={{ fontWeight: "600", marginBottom: 4 }}>
-    Propinas
-  </Text>
+          <View
+            style={{
+              marginTop: 8,
+              paddingTop: 8,
+              borderTopWidth: 1,
+              borderTopColor: "#ccc",
+            }}
+          >
+            <Text style={{ fontWeight: "600", marginBottom: 4 }}>Propinas</Text>
 
-  <View style={styles.tableRow}>
-    <Text>Tarjeta</Text>
-    <Text>
-      {(dailySummary?.propinaTarjeta ?? 0).toFixed(2)} €
-    </Text>
-  </View>
+            <View style={styles.tableRow}>
+              <Text>Tarjeta</Text>
+              <Text>{(dailySummary?.propinaTarjeta ?? 0).toFixed(2)} €</Text>
+            </View>
 
-  <View style={styles.tableRow}>
-    <Text>Efectivo</Text>
-    <Text>
-      {(dailySummary?.propinaEfectivo ?? 0).toFixed(2)} €
-    </Text>
-  </View>
-</View>
-
-
+            <View style={styles.tableRow}>
+              <Text>Efectivo</Text>
+              <Text>{(dailySummary?.propinaEfectivo ?? 0).toFixed(2)} €</Text>
+            </View>
+          </View>
         </View>
       )}
 
@@ -830,11 +820,10 @@ if (payment === PaymentType.CASH && cashTipInput.trim() !== "") {
           <Pressable
             onPress={() => {
               if (!item.endTime) return;
-              setEditingTrip(item);
-              setAmountInput(String(item.amount ?? ""));
-              setPayment(item.payment ?? PaymentType.CASH);
-              setSource(item.source);
-              setShowFinishModal(true);
+              router.push({
+                pathname: "/trip/edit",
+                params: { tripId: item.id },
+              });
             }}
           >
             <Text style={styles.tripText}>
@@ -889,19 +878,18 @@ if (payment === PaymentType.CASH && cashTipInput.trim() !== "") {
             )}
 
             {/* PROPINA EFECTIVO (SOLO CASH) */}
-{payment === PaymentType.CASH && (
-  <>
-    <Text style={{ marginTop: 10 }}>Importe cobrado (€)</Text>
-    <TextInput
-      value={cashTipInput}
-      onChangeText={setCashTipInput}
-      keyboardType="decimal-pad"
-      placeholder="0,00"
-      style={styles.input}
-    />
-  </>
-)}
-
+            {payment === PaymentType.CASH && (
+              <>
+                <Text style={{ marginTop: 10 }}>Importe cobrado (€)</Text>
+                <TextInput
+                  value={cashTipInput}
+                  onChangeText={setCashTipInput}
+                  keyboardType="decimal-pad"
+                  placeholder="0,00"
+                  style={styles.input}
+                />
+              </>
+            )}
 
             {/* FORMA DE PAGO */}
             <Text style={{ marginTop: 10 }}>Forma de pago</Text>
@@ -915,7 +903,7 @@ if (payment === PaymentType.CASH && cashTipInput.trim() !== "") {
                   >
                     <Text>{p}</Text>
                   </Pressable>
-                )
+                ),
               )}
             </View>
 
@@ -967,7 +955,7 @@ if (payment === PaymentType.CASH && cashTipInput.trim() !== "") {
                           style: "destructive",
                           onPress: handleDelete,
                         },
-                      ]
+                      ],
                     );
                   }}
                 />

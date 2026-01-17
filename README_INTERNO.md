@@ -1,76 +1,3 @@
-# README_INTERNO.md  
-## Geo taxi aplicación
-
----
-
-## 1. Propósito del documento
-
-Este documento define las **reglas fijas y no negociables** del desarrollo de la aplicación **Geo taxi aplicación**.
-
-No es documentación técnica ni de usuario.  
-Es un **contrato interno de desarrollo**.
-
-Cualquier cambio que contradiga este documento debe:
-- justificarse explícitamente
-- revisarse conscientemente
-- y asumirse como excepción
-
----
-
-## 2. Principios fundamentales del proyecto
-
-1. **Estabilidad > nuevas funcionalidades**
-2. **Los datos históricos nunca se rompen**
-3. **Primero se razona, luego se programa**
-4. **Cambios mínimos y controlados**
-5. **Si algo funciona, no se toca**
-
----
-
-## 3. Reglas generales de desarrollo
-
-### 3.1 Alcance
-
-- No se añaden funcionalidades nuevas si no se solicitan explícitamente.
-- No se aprovecha un cambio para introducir mejoras colaterales.
-- Cada chat y cada cambio tiene un objetivo único y definido.
-
----
-
-### 3.2 Código
-
-Cuando se escriba código, **SIEMPRE**:
-
-- Código **bien comentado y documentado**
-- Comentarios orientados a **lógica de negocio**, no obvios
-- Sin refactorizaciones por estética o preferencia personal
-- Sin cambios de nombres, estructuras o estilos si no es imprescindible
-
----
-
-### 3.3 Cambios permitidos
-
-- Cambiar solo lo estrictamente necesario
-- Evitar reescrituras completas
-- Mantener compatibilidad hacia atrás
-
----
-
-## 4. Rutas de archivos (obligatorio)
-
-Siempre que se proponga modificar código:
-
-- Se indicará la **ruta absoluta del archivo**
-- Si hay varios archivos, se listarán y se explicará el cambio en cada uno
-
-Ejemplo:
-
-/src/services/TripService.ts
-→ Corrección de la carga inicial de viajes
-
-/src/screens/DayHistoryScreen.tsx
-→ Ajuste de estado cuando el día está cerrado
-
 
 ---
 
@@ -119,54 +46,105 @@ Las siguientes decisiones están **cerradas** y no se rediscuten salvo decisión
 
 ---
 
-## 8. Organización de chats del proyecto
+## 8. Organización de chats y flujo de trabajo
 
-Cada chat debe tener un objetivo claro y único:
-
-- 🔴 **Bugs críticos**  
-  - Sin nuevas funcionalidades  
-  - Prioridad absoluta a estabilidad
-
-- 🟡 **Lógica de negocio**  
-  - Sin tocar UI  
-  - Sin escribir código hasta validar lógica
-
-- 🟢 **UI / pantallas**  
-  - Sin tocar base de datos
-
-- 🔵 **Base de datos**  
-  - Cambios controlados y explicados
-
-- 🟣 **Estadísticas y cálculos**  
-  - Solo lectura de datos existentes
-
-Lo que no pertenece al objetivo del chat **no se toca**.
+Para cualquier nueva funcionalidad o modificación relevante se usarán
+**DOS CHATS DIFERENCIADOS**.
 
 ---
 
-## 9. Forma de trabajo
+### 8.1 Chat de diseño / lógica
+
+- Se discute **qué se va a hacer y cómo**
+- Se define la lógica completa
+- Se enumeran los pasos a seguir (1, 2, 3, …)
+- **NO se escribe código**
+- Se cierran decisiones
+- No se dejan opciones abiertas
+
+Este chat es el único lugar donde:
+- se debate
+- se comparan alternativas
+- se toman decisiones
+
+---
+
+### 8.2 Chat de programación / implementación
+
+- Se ejecuta **únicamente** lo decidido en el chat de diseño
+- Se va **directo al código**
+- Explicaciones mínimas y operativas
+- No se hacen preguntas del tipo *“¿qué quieres hacer ahora?”*
+- No se proponen alternativas nuevas
+
+Durante la fase de programación se permite preguntar
+**únicamente dudas técnicas u operativas**, por ejemplo:
+- nombres de variables, constantes o enums
+- ubicación de ficheros o bloques
+- estructura de carpetas
+- detalles mecánicos de implementación
+
+No se permite reabrir ni rediscutir decisiones ya cerradas
+en el chat de diseño.
+
+Si una duda afecta a una decisión de diseño:
+- se detiene la implementación
+- se vuelve al chat de diseño
+- no se improvisa
+
+---
+
+## 9. Ejecución por pasos
+
+Cuando se haya decidido un plan del tipo:
+
+1. Paso 1  
+2. Paso 2  
+3. Paso 3  
+
+Se seguirá estrictamente ese orden.
+
+- Cada paso se considera **cerrado** una vez completado
+- No se añaden opciones nuevas al finalizar un paso
+- Punto cerrado → siguiente punto
+
+---
+
+## 10. Forma de trabajo
 
 - Respuestas estructuradas
 - Pasos claros y numerados
 - Lenguaje técnico, directo y sin relleno
-- Si algo no está claro, se pregunta antes de actuar
+- Las dudas de diseño solo se plantean en fase de diseño
+- Las dudas técnicas u operativas pueden plantearse en fase de programación
 
 ---
 
-## 10. Qué NO se debe hacer
+## 11. Qué NO se debe hacer
 
 - Refactorizar por estética
 - Cambiar nombres existentes sin motivo
 - Asumir comportamientos
 - Introducir mejoras no solicitadas
 - Mezclar responsabilidades (UI / lógica / BD)
+- Reabrir decisiones ya cerradas en fase de diseño
 
 ---
 
-## 11. Regla final
+## 12. Regla final
 
 > **Si algo funciona, no se toca.**  
-> **Si hay dudas, se razona.**  
-> **Si se cambia algo, se documenta.**
+> **Si hay dudas, se razona (en diseño).**  
+> **Si se cambia algo, se ejecuta rápido y se documenta.**
 
 ---
+🔧 Recomendación práctica final
+
+Guárdate esta plantilla en un snippet, nota o bloc:
+
+Chat de programación del proyecto Geo taxi aplicación.
+Aplica el README_INTERNO.
+La lógica ya está decidida. Ir directo al código.
+
+
+Eso es tu botón turbo 🚀

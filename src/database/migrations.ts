@@ -1,4 +1,10 @@
 import { getDatabase } from "./database";
+import {
+  WORKDAYS_SCHEMA,
+  ADD_WORKDAY_TO_TRIPS_SCHEMA,
+  TRIP_GEO_SNAPSHOTS_SCHEMA,
+} from "./schema";
+
 
 /**
  * Ejecuta las migraciones necesarias.
@@ -137,6 +143,11 @@ if (!hasCashTip) {
     ALTER TABLE trips ADD COLUMN cashTip REAL;
   `);
 }
+
+// =====================================================
+// NUEVO: TABLA trip_geo_snapshots (GEO)
+// =====================================================
+await db.execAsync(TRIP_GEO_SNAPSHOTS_SCHEMA);
 
 
 }

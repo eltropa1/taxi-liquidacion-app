@@ -26,24 +26,17 @@ ALTER TABLE trips ADD COLUMN workdayId INTEGER;
 `;
 
 /**
- * Tabla de snapshots geográficos de viajes.
- * Representa capturas puntuales de GPS (inicio / fin de viaje).
+ * Snapshots GEO de viajes (inicio / fin)
  */
 export const TRIP_GEO_SNAPSHOTS_TABLE = "trip_geo_snapshots";
 
-/**
- * Esquema de la tabla trip_geo_snapshots
- */
 export const TRIP_GEO_SNAPSHOTS_SCHEMA = `
 CREATE TABLE IF NOT EXISTS trip_geo_snapshots (
   id INTEGER PRIMARY KEY AUTOINCREMENT,
   tripId INTEGER NOT NULL,
-  type TEXT NOT NULL CHECK (type IN ('START', 'END')),
-  latitude REAL NOT NULL,
-  longitude REAL NOT NULL,
-  timestamp TEXT NOT NULL,
-  zoneId TEXT,
+  kind TEXT NOT NULL, -- START | END
+  snapshot TEXT NOT NULL, -- JSON serializado
   createdAt TEXT NOT NULL,
-  FOREIGN KEY (tripId) REFERENCES trips(id) ON DELETE CASCADE
+  FOREIGN KEY (tripId) REFERENCES trips(id)
 );
 `;
