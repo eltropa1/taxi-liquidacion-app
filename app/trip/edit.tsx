@@ -12,6 +12,10 @@ import { useLocalSearchParams, router } from "expo-router";
 
 import { TripService } from "../../src/services/TripService";
 import { PaymentType, TripSource } from "../../src/constants/enums";
+import { NeighborhoodSelector } from "../../src/components/forms/NeighborhoodSelector";
+import { NEIGHBORHOODS_CATALOG } from "../../src/geo/geocoding/catalog/neighborhoods.catalog";
+import { TripGeoSnapshotRepository } from "../../src/database/repositories/TripGeoSnapshotRepository";
+
 
 export default function EditTripScreen() {
   const { tripId } = useLocalSearchParams<{ tripId: string }>();
@@ -28,6 +32,24 @@ export default function EditTripScreen() {
 
   const [trip, setTrip] = useState<any>(null);
 
+  // ---------------------------
+// ZONAS GEO AUTOMÁTICAS (SOLO UI)
+// ---------------------------
+const [geoPickupZone, setGeoPickupZone] = useState<string | null>(null);
+const [geoDropoffZone, setGeoDropoffZone] = useState<string | null>(null);
+
+
+  // ---------------------------
+  // ZONAS (EDICIÓN MANUAL)
+  // ---------------------------
+  const [manualPickupZone, setManualPickupZone] = useState<string | null>(null);
+  const [manualDropoffZone, setManualDropoffZone] = useState<string | null>(
+    null,
+  );
+
+  const [showPickupSelector, setShowPickupSelector] = useState(false);
+  const [showDropoffSelector, setShowDropoffSelector] = useState(false);
+
   useEffect(() => {
     if (!tripId) return;
 
@@ -38,6 +60,23 @@ export default function EditTripScreen() {
         router.back();
         return;
       }
+
+      // ---------------------------
+// Resolver zonas GEO automáticas (START / END)
+// ---------------------------
+const snapshots = await TripGeoSnapshotRepository.getSnapshotsForTrip(t.id);
+
+const startSnapshot = snapshots.find((s) => s.kind === "START");
+const endSnapshot = snapshots.find((s) => s.kind === "END");
+
+setGeoPickupZone(
+  startSnapshot?.snapshot?.neighborhood?.id ?? null
+);
+
+setGeoDropoffZone(
+  endSnapshot?.snapshot?.neighborhood?.id ?? null
+);
+
 
       setTrip(t);
       setAmountInput(String(t.amount ?? ""));
@@ -50,9 +89,12 @@ export default function EditTripScreen() {
           : "",
       );
 
-      setCashTipInput(
-        t.cashTip !== null && t.cashTip !== undefined ? String(t.cashTip) : "",
-      );
+     setCashTipInput(
+  t.cashTip !== null && t.cashTip !== undefined
+    ? String((t.amount ?? 0) + t.cashTip)
+    : ""
+);
+
 
       // ---------------------------
       // Cargar horas (HH:mm)
@@ -73,6 +115,11 @@ export default function EditTripScreen() {
           .toString()
           .padStart(2, "0")}`,
       );
+      // ---------------------------
+      // Cargar zonas manuales (si existen)
+      // ---------------------------
+      setManualPickupZone(t.manualPickupZone ?? null);
+      setManualDropoffZone(t.manualDropoffZone ?? null);
 
       setLoading(false);
     };
@@ -177,6 +224,17 @@ export default function EditTripScreen() {
       // 🔁 Traducción interna
       cashTipValue = resolvedCashCharged - amount;
     }
+    // ---------------------------
+    // GUARDAR ZONAS MANUALES
+    // ---------------------------
+    await TripService.updateTripManualZones(
+      trip.id,
+      manualPickupZone,
+      manualDropoffZone,
+    );
+
+    // Guardar horas
+    await TripService.updateTripTimes(trip.id, newStartTime, newEndTime);
 
     // ---------------------------
     // GUARDAR HORAS DEL VIAJE
@@ -222,6 +280,21 @@ export default function EditTripScreen() {
       ],
     );
   };
+ /**
+ * Devuelve el nombre del barrio efectivo para UI:
+ * - Manual si existe
+ * - Si no, GEO automático
+ */
+const resolveEffectiveNeighborhoodName = (
+  manualId: string | null,
+  geoId: string | null
+) => {
+  const id = manualId ?? geoId;
+  if (!id) return "—";
+
+  const found = NEIGHBORHOODS_CATALOG.find((n) => n.id === id);
+  return found ? found.name : "—";
+};
 
   // ---------------------------
   // RENDER
@@ -236,7 +309,19 @@ export default function EditTripScreen() {
 
   return (
     <View style={styles.container}>
-      <Text style={styles.title}>Editar viaje</Text>
+      
+
+      <Pressable
+  onPress={() => router.back()}
+  style={{ marginBottom: 10 }}
+>
+  <Text style={{ color: "#0066cc", fontWeight: "600" }}>
+    ← Volver
+  </Text>
+</Pressable>
+
+<Text style={styles.title}>Editar viaje</Text>
+
 
       {/* ---------------------------
     HORAS DEL VIAJE
@@ -256,6 +341,32 @@ export default function EditTripScreen() {
         placeholder="09:10"
         style={styles.input}
       />
+
+      {/* ---------------------------
+    ZONAS DEL VIAJE (MANUAL)
+---------------------------- */}
+      {/* ---------------------------
+    ZONAS DEL VIAJE (MANUAL)
+---------------------------- */}
+      <Text style={{ marginTop: 10, fontWeight: "600" }}>Zona de recogida</Text>
+
+      <Text>Actual:{" "} {resolveEffectiveNeighborhoodName(manualPickupZone, geoPickupZone)}</Text>
+
+      <Pressable onPress={() => setShowPickupSelector(true)}>
+        <Text style={{ color: "#0066cc", fontWeight: "600" }}>
+          Cambiar zona
+        </Text>
+      </Pressable>
+
+      <Text style={{ marginTop: 14, fontWeight: "600" }}>Zona de destino</Text>
+
+      <Text>Actual:{" "} {resolveEffectiveNeighborhoodName(manualDropoffZone, geoDropoffZone)}</Text>
+
+      <Pressable onPress={() => setShowDropoffSelector(true)}>
+        <Text style={{ color: "#0066cc", fontWeight: "600" }}>
+          Cambiar zona
+        </Text>
+      </Pressable>
 
       <Text>Importe del viaje (€)</Text>
       <TextInput
@@ -332,6 +443,21 @@ export default function EditTripScreen() {
       <View style={{ marginTop: 10 }}>
         <Button title="Borrar viaje" color="red" onPress={handleDelete} />
       </View>
+      {/* Selector zona recogida */}
+      <NeighborhoodSelector
+        visible={showPickupSelector}
+        title="Seleccionar zona de recogida"
+        onSelect={(id) => setManualPickupZone(id)}
+        onClose={() => setShowPickupSelector(false)}
+      />
+
+      {/* Selector zona destino */}
+      <NeighborhoodSelector
+        visible={showDropoffSelector}
+        title="Seleccionar zona de destino"
+        onSelect={(id) => setManualDropoffZone(id)}
+        onClose={() => setShowDropoffSelector(false)}
+      />
     </View>
   );
 }

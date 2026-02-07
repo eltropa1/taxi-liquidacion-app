@@ -35,6 +35,7 @@ export class TripService {
     if (!workday) {
       throw new Error("No hay un día de trabajo abierto");
     }
+   
 
     // 1️⃣ Crear viaje
     await db.runAsync(
@@ -66,6 +67,7 @@ export class TripService {
       location.latitude,
       location.longitude,
     );
+    
 
     // 5️⃣ Guardar snapshot START
     await TripGeoSnapshotRepository.insert({
@@ -110,6 +112,8 @@ export class TripService {
     customSource: string | null;
     chargedAmount: number | null;
     cashTip: number | null;
+    manualPickupZone: string | null;
+    manualDropoffZone: string | null;
   } | null> {
     const db = await getDatabase();
 
@@ -124,7 +128,9 @@ export class TripService {
         source,
         customSource,
         chargedAmount,
-        cashTip
+        cashTip,
+        manualPickupZone,
+        manualDropoffZone
       FROM trips
       WHERE id = ?
       `,
@@ -159,46 +165,7 @@ export class TripService {
     if (!active) return;
 
     const endTime = new Date().toISOString();
-
-    // ==============================
-    // 🔎 VALIDACIÓN PASO 1 (TEMPORAL)
-    // 🧪 TEST TEMPORAL GEO — eliminar cuando se complete el Paso 3
-    //console.log("🧪 SNAPSHOTS GEO DEL WORKDAY:", snapshots);
-    // ==============================
-    const workday = await this.getActiveWorkday();
-
-    if (workday) {
-      const snapshots = await TripGeoSnapshotRepository.getSnapshotsForWorkday(
-        workday.id,
-      );
-
-      console.log("🧪 SNAPSHOTS GEO DEL WORKDAY:", snapshots);
-    }
-    if (workday) {
-      const snapshots = await TripGeoSnapshotRepository.getSnapshotsForWorkday(
-        workday.id,
-      );
-
-      const groupedByTrip: Record<number, any[]> = {};
-
-      for (const s of snapshots) {
-        if (!groupedByTrip[s.tripId]) {
-          groupedByTrip[s.tripId] = [];
-        }
-        groupedByTrip[s.tripId].push(s);
-      }
-
-      console.log("🧪 SNAPSHOTS AGRUPADOS POR VIAJE:");
-
-      for (const [tripId, snaps] of Object.entries(groupedByTrip)) {
-        console.log(
-          `🚕 Trip ${tripId}:`,
-          snaps.map((s) => s.kind),
-        );
-      }
-      // hasta aqui es el test
-    }
-
+  
     // Importe realmente cobrado
     const finalChargedAmount =
       payment === PaymentType.CARD && typeof chargedAmount === "number"
@@ -293,6 +260,28 @@ export class TripService {
       [startTime.toISOString(), endTime.toISOString(), id],
     );
   }
+
+  /**
+ * Actualiza las zonas manuales de un viaje.
+ * No altera snapshots GEO automáticos.
+ */
+static async updateTripManualZones(
+  id: number,
+  pickupZone: string | null,
+  dropoffZone: string | null
+): Promise<void> {
+  const db = await getDatabase();
+
+  await db.runAsync(
+    `
+    UPDATE trips
+    SET manualPickupZone = ?, manualDropoffZone = ?
+    WHERE id = ?
+    `,
+    [pickupZone, dropoffZone, id]
+  );
+}
+
 
   /**
    * Borra un viaje.

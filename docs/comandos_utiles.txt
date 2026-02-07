@@ -1,0 +1,2 @@
+npx expo start --dev-client --lan para iniciar
+npx expo start --dev-client --lan -c para borrar la cache

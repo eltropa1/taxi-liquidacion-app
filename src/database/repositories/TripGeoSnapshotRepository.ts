@@ -18,9 +18,52 @@ export class TripGeoSnapshotRepository {
         snapshot.kind,
         JSON.stringify(snapshot.snapshot),
         snapshot.createdAt,
-      ]
+      ],
     );
   }
+
+  /**
+   * Devuelve los snapshots GEO de un viaje (START / END).
+   * - Snapshot PARSEADO
+   * - Ordenado por creación
+   */
+  static async getSnapshotsForTrip(tripId: number): Promise<
+    Array<{
+      tripId: number;
+      kind: "START" | "END";
+      snapshot: GeoAddressSnapshot;
+      createdAt: string;
+    }>
+  > {
+    const db = await getDatabase();
+
+    const rows = await db.getAllAsync<{
+      tripId: number;
+      kind: "START" | "END";
+      snapshot: string;
+      createdAt: string;
+    }>(
+      `
+    SELECT
+      tripId,
+      kind,
+      snapshot,
+      createdAt
+    FROM trip_geo_snapshots
+    WHERE tripId = ?
+    ORDER BY createdAt ASC
+    `,
+      [tripId],
+    );
+
+    return rows.map((row) => ({
+      tripId: row.tripId,
+      kind: row.kind,
+      snapshot: JSON.parse(row.snapshot) as GeoAddressSnapshot,
+      createdAt: row.createdAt,
+    }));
+  }
+
   // =========================
   // EXISTENTE: insert(...)
   // =========================
@@ -32,9 +75,7 @@ export class TripGeoSnapshotRepository {
    * - El snapshot JSON se devuelve PARSEADO
    * - Ordenado por fecha de creación
    */
-  static async getSnapshotsForWorkday(
-    workdayId: number
-  ): Promise<
+  static async getSnapshotsForWorkday(workdayId: number): Promise<
     Array<{
       tripId: number;
       kind: "START" | "END";
@@ -61,7 +102,7 @@ export class TripGeoSnapshotRepository {
       WHERE t.workdayId = ?
       ORDER BY s.createdAt ASC
       `,
-      [workdayId]
+      [workdayId],
     );
 
     return rows.map((row) => ({
@@ -71,23 +112,4 @@ export class TripGeoSnapshotRepository {
       createdAt: row.createdAt,
     }));
   }
-
-  /**
- * Devuelve los snapshots GEO de un viaje (START / END).
- * Ordenados por creación.
- */
-static async getByTripId(tripId: number) {
-  const db = await getDatabase();
-
-  return db.getAllAsync(
-    `
-    SELECT *
-    FROM trip_geo_snapshots
-    WHERE tripId = ?
-    ORDER BY createdAt ASC
-    `,
-    [tripId]
-  );
-}
-
 }

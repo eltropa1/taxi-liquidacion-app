@@ -2,21 +2,162 @@ import { GeoAdministrativeUnit } from "../models";
 import { GeoAdministrativeType } from "../models";
 
 /**
- * Catálogo de barrios.
- * Solo se incluyen barrios relevantes
- * para análisis o reglas GEO.
+ * Catálogo oficial de barrios administrativos del municipio de Madrid.
+ *
+ * Fuente:
+ * Ayuntamiento de Madrid – Límites administrativos (Barrios municipales).
  */
 export const NEIGHBORHOODS_CATALOG: GeoAdministrativeUnit[] = [
-  {
-    id: "MAD_SOL",
-    name: "Sol",
-    type: GeoAdministrativeType.NEIGHBORHOOD,
-    geoZoneId: "ZONE_SOL",
-  },
-  {
-    id: "MAD_RECOLETOS",
-    name: "Recoletos",
-    type: GeoAdministrativeType.NEIGHBORHOOD,
-    geoZoneId: "ZONE_RECOLETOS",
-  },
+  { id: "011", name: "Palacio", type: GeoAdministrativeType.NEIGHBORHOOD },
+  { id: "012", name: "Embajadores", type: GeoAdministrativeType.NEIGHBORHOOD },
+  { id: "013", name: "Cortes", type: GeoAdministrativeType.NEIGHBORHOOD },
+  { id: "014", name: "Justicia", type: GeoAdministrativeType.NEIGHBORHOOD },
+  { id: "015", name: "Universidad", type: GeoAdministrativeType.NEIGHBORHOOD },
+  { id: "016", name: "Sol", type: GeoAdministrativeType.NEIGHBORHOOD },
+  { id: "021", name: "Imperial", type: GeoAdministrativeType.NEIGHBORHOOD },
+  { id: "022", name: "Acacias", type: GeoAdministrativeType.NEIGHBORHOOD },
+  { id: "023", name: "Chopera", type: GeoAdministrativeType.NEIGHBORHOOD },
+  { id: "024", name: "Legazpi", type: GeoAdministrativeType.NEIGHBORHOOD },
+  { id: "025", name: "Delicias", type: GeoAdministrativeType.NEIGHBORHOOD },
+  { id: "026", name: "Palos de la Frontera", type: GeoAdministrativeType.NEIGHBORHOOD },
+  { id: "027", name: "Atocha", type: GeoAdministrativeType.NEIGHBORHOOD },
+  { id: "031", name: "Pacífico", type: GeoAdministrativeType.NEIGHBORHOOD },
+  { id: "032", name: "Adelfas", type: GeoAdministrativeType.NEIGHBORHOOD },
+  { id: "033", name: "Estrella", type: GeoAdministrativeType.NEIGHBORHOOD },
+  { id: "034", name: "Ibiza", type: GeoAdministrativeType.NEIGHBORHOOD },
+  { id: "035", name: "Los Jerónimos", type: GeoAdministrativeType.NEIGHBORHOOD },
+  { id: "036", name: "Niño Jesús", type: GeoAdministrativeType.NEIGHBORHOOD },
+  { id: "041", name: "Recoletos", type: GeoAdministrativeType.NEIGHBORHOOD },
+  { id: "042", name: "Goya", type: GeoAdministrativeType.NEIGHBORHOOD },
+  { id: "043", name: "Fuente del Berro", type: GeoAdministrativeType.NEIGHBORHOOD },
+  { id: "044", name: "Guindalera", type: GeoAdministrativeType.NEIGHBORHOOD },
+  { id: "045", name: "Lista", type: GeoAdministrativeType.NEIGHBORHOOD },
+  { id: "046", name: "Castellana", type: GeoAdministrativeType.NEIGHBORHOOD },
+  { id: "051", name: "El Viso", type: GeoAdministrativeType.NEIGHBORHOOD },
+  { id: "052", name: "Prosperidad", type: GeoAdministrativeType.NEIGHBORHOOD },
+  { id: "053", name: "Ciudad Jardín", type: GeoAdministrativeType.NEIGHBORHOOD },
+  { id: "054", name: "Hispanoamérica", type: GeoAdministrativeType.NEIGHBORHOOD },
+  { id: "055", name: "Nueva España", type: GeoAdministrativeType.NEIGHBORHOOD },
+  { id: "056", name: "Castilla", type: GeoAdministrativeType.NEIGHBORHOOD },
+  { id: "061", name: "Bellas Vistas", type: GeoAdministrativeType.NEIGHBORHOOD },
+  { id: "062", name: "Cuatro Caminos", type: GeoAdministrativeType.NEIGHBORHOOD },
+  { id: "063", name: "Castillejos", type: GeoAdministrativeType.NEIGHBORHOOD },
+  { id: "064", name: "Almenara", type: GeoAdministrativeType.NEIGHBORHOOD },
+  { id: "065", name: "Valdeacederas", type: GeoAdministrativeType.NEIGHBORHOOD },
+  { id: "066", name: "Berruguete", type: GeoAdministrativeType.NEIGHBORHOOD },
+  { id: "071", name: "Gaztambide", type: GeoAdministrativeType.NEIGHBORHOOD },
+  { id: "072", name: "Arapiles", type: GeoAdministrativeType.NEIGHBORHOOD },
+  { id: "073", name: "Trafalgar", type: GeoAdministrativeType.NEIGHBORHOOD },
+  { id: "074", name: "Almagro", type: GeoAdministrativeType.NEIGHBORHOOD },
+  { id: "075", name: "Ríos Rosas", type: GeoAdministrativeType.NEIGHBORHOOD },
+  { id: "076", name: "Vallehermoso", type: GeoAdministrativeType.NEIGHBORHOOD },
+  { id: "081", name: "El Pardo", type: GeoAdministrativeType.NEIGHBORHOOD },
+  { id: "082", name: "Fuentelarreina", type: GeoAdministrativeType.NEIGHBORHOOD },
+  { id: "083", name: "Peñagrande", type: GeoAdministrativeType.NEIGHBORHOOD },
+  { id: "084", name: "Pilar", type: GeoAdministrativeType.NEIGHBORHOOD },
+  { id: "085", name: "La Paz", type: GeoAdministrativeType.NEIGHBORHOOD },
+  { id: "086", name: "Valverde", type: GeoAdministrativeType.NEIGHBORHOOD },
+  { id: "087", name: "Mirasierra", type: GeoAdministrativeType.NEIGHBORHOOD },
+  { id: "088", name: "El Goloso", type: GeoAdministrativeType.NEIGHBORHOOD },
+  { id: "091", name: "Casa de Campo", type: GeoAdministrativeType.NEIGHBORHOOD },
+  { id: "092", name: "Argüelles", type: GeoAdministrativeType.NEIGHBORHOOD },
+  { id: "093", name: "Ciudad Universitaria", type: GeoAdministrativeType.NEIGHBORHOOD },
+  { id: "094", name: "Valdezarza", type: GeoAdministrativeType.NEIGHBORHOOD },
+  { id: "095", name: "Valdemarín", type: GeoAdministrativeType.NEIGHBORHOOD },
+  { id: "096", name: "El Plantío", type: GeoAdministrativeType.NEIGHBORHOOD },
+  { id: "097", name: "Aravaca", type: GeoAdministrativeType.NEIGHBORHOOD },
+  { id: "101", name: "Los Cármenes", type: GeoAdministrativeType.NEIGHBORHOOD },
+  { id: "102", name: "Puerta del Ángel", type: GeoAdministrativeType.NEIGHBORHOOD },
+  { id: "103", name: "Lucero", type: GeoAdministrativeType.NEIGHBORHOOD },
+  { id: "104", name: "Aluche", type: GeoAdministrativeType.NEIGHBORHOOD },
+  { id: "105", name: "Campamento", type: GeoAdministrativeType.NEIGHBORHOOD },
+  { id: "106", name: "Cuatro Vientos", type: GeoAdministrativeType.NEIGHBORHOOD },
+  { id: "107", name: "Águilas", type: GeoAdministrativeType.NEIGHBORHOOD },
+  { id: "111", name: "Comillas", type: GeoAdministrativeType.NEIGHBORHOOD },
+  { id: "112", name: "Opañel", type: GeoAdministrativeType.NEIGHBORHOOD },
+  { id: "113", name: "San Isidro", type: GeoAdministrativeType.NEIGHBORHOOD },
+  { id: "114", name: "Vista Alegre", type: GeoAdministrativeType.NEIGHBORHOOD },
+  { id: "115", name: "Puerta Bonita", type: GeoAdministrativeType.NEIGHBORHOOD },
+  { id: "116", name: "Buenavista", type: GeoAdministrativeType.NEIGHBORHOOD },
+  { id: "117", name: "Abrantes", type: GeoAdministrativeType.NEIGHBORHOOD },
+  { id: "121", name: "Orcasitas", type: GeoAdministrativeType.NEIGHBORHOOD },
+  { id: "122", name: "Orcasur", type: GeoAdministrativeType.NEIGHBORHOOD },
+  { id: "123", name: "San Fermín", type: GeoAdministrativeType.NEIGHBORHOOD },
+  { id: "124", name: "Almendrales", type: GeoAdministrativeType.NEIGHBORHOOD },
+  { id: "125", name: "Moscardó", type: GeoAdministrativeType.NEIGHBORHOOD },
+  { id: "126", name: "Zofío", type: GeoAdministrativeType.NEIGHBORHOOD },
+  { id: "127", name: "Pradolongo", type: GeoAdministrativeType.NEIGHBORHOOD },
+  { id: "131", name: "Entrevías", type: GeoAdministrativeType.NEIGHBORHOOD },
+  { id: "132", name: "San Diego", type: GeoAdministrativeType.NEIGHBORHOOD },
+  { id: "133", name: "Palomeras Bajas", type: GeoAdministrativeType.NEIGHBORHOOD },
+  { id: "134", name: "Palomeras Sureste", type: GeoAdministrativeType.NEIGHBORHOOD },
+  { id: "135", name: "Portazgo", type: GeoAdministrativeType.NEIGHBORHOOD },
+  { id: "136", name: "Numancia", type: GeoAdministrativeType.NEIGHBORHOOD },
+  { id: "141", name: "Pavones", type: GeoAdministrativeType.NEIGHBORHOOD },
+  { id: "142", name: "Horcajo", type: GeoAdministrativeType.NEIGHBORHOOD },
+  { id: "143", name: "Marroquina", type: GeoAdministrativeType.NEIGHBORHOOD },
+  { id: "144", name: "Media Legua", type: GeoAdministrativeType.NEIGHBORHOOD },
+  { id: "145", name: "Fontarrón", type: GeoAdministrativeType.NEIGHBORHOOD },
+  { id: "146", name: "Vinateros", type: GeoAdministrativeType.NEIGHBORHOOD },
+  { id: "151", name: "Ventas", type: GeoAdministrativeType.NEIGHBORHOOD },
+  { id: "152", name: "Pueblo Nuevo", type: GeoAdministrativeType.NEIGHBORHOOD },
+  { id: "153", name: "Quintana", type: GeoAdministrativeType.NEIGHBORHOOD },
+  { id: "154", name: "La Concepción", type: GeoAdministrativeType.NEIGHBORHOOD },
+  { id: "155", name: "San Pascual", type: GeoAdministrativeType.NEIGHBORHOOD },
+  { id: "156", name: "San Juan Bautista", type: GeoAdministrativeType.NEIGHBORHOOD },
+  { id: "157", name: "Colina", type: GeoAdministrativeType.NEIGHBORHOOD },
+  { id: "158", name: "Atalaya", type: GeoAdministrativeType.NEIGHBORHOOD },
+  { id: "159", name: "Costillares", type: GeoAdministrativeType.NEIGHBORHOOD },
+  { id: "161", name: "Palomas", type: GeoAdministrativeType.NEIGHBORHOOD },
+  { id: "162", name: "Piovera", type: GeoAdministrativeType.NEIGHBORHOOD },
+  { id: "163", name: "Canillas", type: GeoAdministrativeType.NEIGHBORHOOD },
+  { id: "164", name: "Pinar del Rey", type: GeoAdministrativeType.NEIGHBORHOOD },
+  { id: "165", name: "Apóstol Santiago", type: GeoAdministrativeType.NEIGHBORHOOD },
+  { id: "166", name: "Valdefuentes", type: GeoAdministrativeType.NEIGHBORHOOD },
+  { id: "171", name: "Villaverde Alto - Casco Histórico de Villaverde", type: GeoAdministrativeType.NEIGHBORHOOD },
+  { id: "172", name: "San Cristóbal", type: GeoAdministrativeType.NEIGHBORHOOD },
+  { id: "173", name: "Butarque", type: GeoAdministrativeType.NEIGHBORHOOD },
+  { id: "174", name: "Los Rosales", type: GeoAdministrativeType.NEIGHBORHOOD },
+  { id: "175", name: "Ángeles", type: GeoAdministrativeType.NEIGHBORHOOD },
+  { id: "181", name: "Casco Histórico de Vallecas", type: GeoAdministrativeType.NEIGHBORHOOD },
+  { id: "182", name: "Santa Eugenia", type: GeoAdministrativeType.NEIGHBORHOOD },
+  { id: "183", name: "Ensanche de Vallecas", type: GeoAdministrativeType.NEIGHBORHOOD },
+  { id: "191", name: "Casco Histórico de Vicálvaro", type: GeoAdministrativeType.NEIGHBORHOOD },
+  { id: "192", name: "Valdebernardo", type: GeoAdministrativeType.NEIGHBORHOOD },
+  { id: "193", name: "Valderrivas", type: GeoAdministrativeType.NEIGHBORHOOD },
+  { id: "194", name: "El Cañaveral", type: GeoAdministrativeType.NEIGHBORHOOD },
+  { id: "201", name: "Simancas", type: GeoAdministrativeType.NEIGHBORHOOD },
+  { id: "202", name: "Hellín", type: GeoAdministrativeType.NEIGHBORHOOD },
+  { id: "203", name: "Amposta", type: GeoAdministrativeType.NEIGHBORHOOD },
+  { id: "204", name: "Arcos", type: GeoAdministrativeType.NEIGHBORHOOD },
+  { id: "205", name: "Rosas", type: GeoAdministrativeType.NEIGHBORHOOD },
+  { id: "206", name: "Rejas", type: GeoAdministrativeType.NEIGHBORHOOD },
+  { id: "207", name: "Canillejas", type: GeoAdministrativeType.NEIGHBORHOOD },
+  { id: "208", name: "El Salvador", type: GeoAdministrativeType.NEIGHBORHOOD },
+  { id: "211", name: "Alameda de Osuna", type: GeoAdministrativeType.NEIGHBORHOOD },
+  { id: "212", name: "Aeropuerto", type: GeoAdministrativeType.NEIGHBORHOOD },
+  { id: "213", name: "Casco Histórico de Barajas", type: GeoAdministrativeType.NEIGHBORHOOD },
+  { id: "214", name: "Timón", type: GeoAdministrativeType.NEIGHBORHOOD },
+  { id: "215", name: "Corralejos", type: GeoAdministrativeType.NEIGHBORHOOD },
 ];
+
+/**
+ * Lista plana de barrios para uso en UI (selectores).
+ *
+ * IMPORTANTE:
+ * - Derivada del catálogo oficial
+ * - Solo lectura
+ * - Sin lógica GEO
+ * - Pensada exclusivamente para presentación
+ */
+export const NEIGHBORHOODS_UI_LIST = NEIGHBORHOODS_CATALOG
+  .filter(
+    (unit) => unit.type === GeoAdministrativeType.NEIGHBORHOOD
+  )
+  .map((unit) => ({
+    id: unit.id,
+    label: unit.name,
+  }))
+  // Orden alfabético para facilitar selección al taxista
+  .sort((a, b) => a.label.localeCompare(b.label));
+

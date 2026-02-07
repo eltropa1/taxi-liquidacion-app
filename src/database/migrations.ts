@@ -145,6 +145,33 @@ if (!hasCashTip) {
 }
 
 // =====================================================
+// NUEVO: zonas manuales (edición de viaje)
+// =====================================================
+
+// Zona de recogida manual
+const hasManualPickupZone = columns.some(
+  (column) => column.name === "manualPickupZone"
+);
+
+if (!hasManualPickupZone) {
+  await db.execAsync(`
+    ALTER TABLE trips ADD COLUMN manualPickupZone TEXT;
+  `);
+}
+
+// Zona de destino manual
+const hasManualDropoffZone = columns.some(
+  (column) => column.name === "manualDropoffZone"
+);
+
+if (!hasManualDropoffZone) {
+  await db.execAsync(`
+    ALTER TABLE trips ADD COLUMN manualDropoffZone TEXT;
+  `);
+}
+
+
+// =====================================================
 // NUEVO: TABLA trip_geo_snapshots (GEO)
 // =====================================================
 await db.execAsync(TRIP_GEO_SNAPSHOTS_SCHEMA);
