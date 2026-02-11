@@ -10,6 +10,19 @@ import { TripSource, PaymentType } from '../constants/enums';
  */
 export interface Trip {
   id?: number;                 // Opcional: SQLite lo genera
+
+  /**
+   * Identificador del Workday al que pertenece el viaje.
+   *
+   * FASE 1:
+   * - Se introduce como opcional y nullable.
+   * - NO se usa todavía en lógica.
+   * - NO es obligatorio aún.
+   *
+   * FASE 3 lo convertirá en obligatorio.
+   */
+  workdayId?: number | null;
+
   startTime: string;           // ISO string
   endTime?: string | null;     // Puede ser null si el viaje está en curso
   pickup?: string | null;

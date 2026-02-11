@@ -19,6 +19,9 @@ import { GoalService } from "../src/services/GoalService";
 import { TripService } from "../src/services/TripService";
 import { SummaryService } from "../src/services/SummaryService";
 
+import { WorkdayService } from "../src/services/WorkdayService"; // ← TEMPORAL FASE 2
+
+
 /**
  * Tipo de fila para mostrar viajes
  */
@@ -168,6 +171,7 @@ export default function TodayScreen() {
   // Propina en efectivo (opcional)
   const [cashTipInput, setCashTipInput] = useState("");
 
+
   // ---------------------------
   // CARGA DE DATOS
   // ---------------------------
@@ -211,7 +215,7 @@ export default function TodayScreen() {
     if (activeWorkday === undefined) return;
 
     refresh().catch(console.error);
-  }, [selectedDate, refreshKey, activeWorkday]);
+   }, [selectedDate, refreshKey, activeWorkday]);
 
   /**
    * Recarga las metas cada vez que esta pantalla
