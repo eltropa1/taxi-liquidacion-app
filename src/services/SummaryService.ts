@@ -29,10 +29,24 @@ export class SummaryService {
   }
 
   /**
-   * Resumen del mes actual
-   */
-  static async getMonthSummary() {
-    const { start, end } = getCurrentMonthRange();
-    return TripService.getSummaryBetweenDates(start, end);
-  }
+ * Resumen del mes activo.
+ *
+ * Regla de dominio:
+ * - Si existe workday abierto → mes del startTime del workday.
+ * - Si no existe → mes natural actual.
+ */
+static async getMonthSummary() {
+  // 1️⃣ Resolver fecha ancla de mes activo
+  const activeWorkday = await TripService.getActiveWorkday();
+
+  const anchorDate = activeWorkday
+    ? new Date(activeWorkday.startTime)
+    : new Date();
+
+  // 2️⃣ Construir rango del mes de esa fecha
+  const { start, end } = getCurrentMonthRange(anchorDate);
+
+  // 3️⃣ Delegar agregación por workdays
+  return TripService.getSummaryBetweenDates(start, end);
+}
 }

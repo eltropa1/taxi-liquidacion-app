@@ -333,52 +333,81 @@ static async updateTripManualZones(
   // RESÚMENES (SIN CAMBIOS)
   // ===================================================
 
-  static async getSummaryBetweenDates(startDate: Date, endDate: Date) {
-    const db = await getDatabase();
+ static async getSummaryBetweenDates(startDate: Date, endDate: Date) {
+  const db = await getDatabase();
 
-    const format = (d: Date) =>
-      `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(
-        d.getDate(),
-      ).padStart(2, "0")}`;
+  const format = (d: Date) =>
+    `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(
+      d.getDate(),
+    ).padStart(2, "0")}`;
 
-    const rows = await db.getAllAsync<{
-      amount: number | null;
-      source: TripSource;
-      payment: PaymentType | null;
-    }>(
-      `
-      SELECT amount, source, payment
-      FROM trips
-      WHERE substr(startTime, 1, 10) BETWEEN ? AND ?
-      `,
-      [format(startDate), format(endDate)],
-    );
+  // 1️⃣ Obtener workdays cuyo startTime esté en el rango
+  const workdays = await db.getAllAsync<{ id: number }>(
+    `
+    SELECT id
+    FROM workdays
+    WHERE substr(startTime, 1, 10) BETWEEN ? AND ?
+    `,
+    [format(startDate), format(endDate)],
+  );
 
-    let total = 0,
-      taxi = 0,
-      uber = 0,
-      cabify = 0,
-      freeNow = 0,
-      efectivo = 0,
-      tarjeta = 0,
-      app = 0;
-
-    for (const t of rows) {
-      const amount = t.amount ?? 0;
-      total += amount;
-
-      if (t.source === TripSource.TAXI) taxi += amount;
-      if (t.source === TripSource.UBER) uber += amount;
-      if (t.source === TripSource.CABIFY) cabify += amount;
-      if (t.source === TripSource.FREE_NOW) freeNow += amount;
-
-      if (t.payment === PaymentType.CASH) efectivo += amount;
-      if (t.payment === PaymentType.CARD) tarjeta += amount;
-      if (t.payment === PaymentType.APP) app += amount;
-    }
-
-    return { total, taxi, uber, cabify, freeNow, efectivo, tarjeta, app };
+  if (workdays.length === 0) {
+    return {
+      total: 0,
+      taxi: 0,
+      uber: 0,
+      cabify: 0,
+      freeNow: 0,
+      efectivo: 0,
+      tarjeta: 0,
+      app: 0,
+    };
   }
+
+  const workdayIds = workdays.map((w) => w.id);
+
+  // 2️⃣ Obtener todos los trips pertenecientes a esos workdays
+  const placeholders = workdayIds.map(() => "?").join(",");
+
+  const rows = await db.getAllAsync<{
+    amount: number | null;
+    source: TripSource;
+    payment: PaymentType | null;
+  }>(
+    `
+    SELECT amount, source, payment
+    FROM trips
+    WHERE workdayId IN (${placeholders})
+    `,
+    workdayIds,
+  );
+
+  let total = 0,
+    taxi = 0,
+    uber = 0,
+    cabify = 0,
+    freeNow = 0,
+    efectivo = 0,
+    tarjeta = 0,
+    app = 0;
+
+  for (const t of rows) {
+    const amount = t.amount ?? 0;
+    total += amount;
+
+    if (t.source === TripSource.TAXI) taxi += amount;
+    if (t.source === TripSource.UBER) uber += amount;
+    if (t.source === TripSource.CABIFY) cabify += amount;
+    if (t.source === TripSource.FREE_NOW) freeNow += amount;
+
+    if (t.payment === PaymentType.CASH) efectivo += amount;
+    if (t.payment === PaymentType.CARD) tarjeta += amount;
+    if (t.payment === PaymentType.APP) app += amount;
+  }
+
+  return { total, taxi, uber, cabify, freeNow, efectivo, tarjeta, app };
+}
+
 
   static async getSummaryForWorkday(workdayId: number) {
     const db = await getDatabase();
