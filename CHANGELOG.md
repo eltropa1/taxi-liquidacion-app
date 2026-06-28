@@ -4,9 +4,25 @@ Todos los cambios relevantes de la aplicación **Taxi Liquidación** se document
 El formato sigue una versión simplificada de *Keep a Changelog*  
 y el versionado es semántico.
 
+
+---
+## [1.0.5] - 2026-03-01
+### Added
+feat(stats): align monthly summary with active workday month
+
+- Monthly summary no longer depends solely on natural calendar month.
+- If a workday is open, monthly statistics are anchored to the month
+  of the workday startTime.
+- If no workday is open, the current natural month is used.
+- No changes to data model, trips, or aggregation logic.
+- Maintains separation between date utils (pure) and domain logic (SummaryService).
+
+This prevents month rollover from hiding statistics of an open workday
+that belongs to the previous month.
+
 ---
 ## [1.0.5] - 2026-02-11
-
+### Added
 FASE 1 + FASE 2 COMPLETADAS
 
 - Añadido campo workdayId al modelo Trip (nullable en esta fase).

@@ -63,6 +63,107 @@ export class WorkdayService {
   }
 
   /**
+   * Devuelve el workday exacto asociado a una fecha natural.
+   */
+  static async getWorkdayForDate(
+    date: Date,
+  ): Promise<{ id: number; startTime: string } | null> {
+    const today = new Date();
+    const isToday = date.toDateString() === today.toDateString();
+
+    if (isToday) {
+      const active = await this.getOpenWorkday();
+      if (active) return active;
+    }
+
+    const startOfDay = new Date(
+      date.getFullYear(),
+      date.getMonth(),
+      date.getDate(),
+      0,
+      0,
+      0,
+    ).toISOString();
+
+    const endOfDay = new Date(
+      date.getFullYear(),
+      date.getMonth(),
+      date.getDate(),
+      23,
+      59,
+      59,
+    ).toISOString();
+
+    const db = await getDatabase();
+
+    return db.getFirstAsync(
+      `
+      SELECT *
+      FROM workdays
+      WHERE startTime BETWEEN ? AND ?
+      ORDER BY startTime DESC
+      LIMIT 1
+      `,
+      [startOfDay, endOfDay],
+    );
+  }
+
+  /**
+   * Devuelve información completa del workday asociado a una fecha natural.
+   */
+  static async getWorkdayInfoForDate(date: Date): Promise<{
+    id: number;
+    startTime: string;
+    endTime: string | null;
+    isClosed: boolean;
+  } | null> {
+    const db = await getDatabase();
+
+    const dayStart = new Date(
+      date.getFullYear(),
+      date.getMonth(),
+      date.getDate(),
+      0,
+      0,
+      0,
+    ).toISOString();
+
+    const dayEnd = new Date(
+      date.getFullYear(),
+      date.getMonth(),
+      date.getDate(),
+      23,
+      59,
+      59,
+    ).toISOString();
+
+    const row = await db.getFirstAsync<{
+      id: number;
+      startTime: string;
+      endTime: string | null;
+      isClosed: number;
+    }>(
+      `
+    SELECT id, startTime, endTime, isClosed
+    FROM workdays
+    WHERE startTime BETWEEN ? AND ?
+    ORDER BY startTime ASC
+    LIMIT 1
+    `,
+      [dayStart, dayEnd],
+    );
+
+    return row
+      ? {
+          id: row.id,
+          startTime: row.startTime,
+          endTime: row.endTime,
+          isClosed: row.isClosed === 1,
+        }
+      : null;
+  }
+
+  /**
    * Asocia un viaje al día de trabajo abierto
    */
   static async assignTripToCurrentWorkday(tripId: number) {

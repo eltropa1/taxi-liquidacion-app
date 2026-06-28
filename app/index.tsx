@@ -1,7 +1,6 @@
-import { useEffect, useMemo, useState } from "react";
+import { useMemo, useState } from "react";
 import {
   Button,
-  FlatList,
   Modal,
   Pressable,
   StyleSheet,
@@ -11,36 +10,23 @@ import {
   Alert,
 } from "react-native";
 
-import { router, useFocusEffect } from "expo-router";
+import { router } from "expo-router";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { PaymentType, TripSource } from "../src/constants/enums";
+import {
+  calculateProgress,
+  calculateRemainingAmount,
+  calculateTripTotalsByPayment,
+  calculateTripTotalsBySource,
+} from "../src/domain/trips/tripEconomics";
+import {
+  TodayTripRow,
+  useTodayScreen,
+} from "../src/hooks/useTodayScreen";
+import { TripHistory } from "../src/components/trip-history";
+import { toTripVisualProjection } from "../src/presentation";
+import { useTripActions } from "../src/hooks/useTripActions";
 import { ExportService } from "../src/services/ExportService";
-import { GoalService } from "../src/services/GoalService";
-import { TripService } from "../src/services/TripService";
-import { SummaryService } from "../src/services/SummaryService";
-
-import { WorkdayService } from "../src/services/WorkdayService"; // ← TEMPORAL FASE 2
-
-
-/**
- * Tipo de fila para mostrar viajes
- */
-type TripRow = {
-  id: number;
-  startTime: string;
-  endTime: string | null;
-  amount: number | null;
-  source: TripSource;
-  payment: PaymentType | null;
-};
-
-/**
- * Calcula porcentaje de progreso respecto a una meta
- */
-const getProgress = (current: number, goal: number) => {
-  if (goal <= 0) return null;
-  return Math.min((current / goal) * 100, 100);
-};
 
 /**
  * Devuelve estado visual según porcentaje
@@ -88,9 +74,6 @@ export default function TodayScreen() {
   // ESTADOS
   // ---------------------------
 
-  const [activeTripId, setActiveTripId] = useState<number | null>(null);
-  const [trips, setTrips] = useState<TripRow[]>([]);
-
   const [lastPayment, setLastPayment] = useState<PaymentType>(PaymentType.CASH);
   const [lastSource, setLastSource] = useState<TripSource>(TripSource.TAXI);
 
@@ -99,24 +82,13 @@ export default function TodayScreen() {
   const [payment, setPayment] = useState<PaymentType>(PaymentType.CASH);
   const [source, setSource] = useState<TripSource>(TripSource.TAXI);
 
-  const [editingTrip, setEditingTrip] = useState<TripRow | null>(null);
+  const [editingTrip, setEditingTrip] = useState<TodayTripRow | null>(null);
 
   const [selectedDate, setSelectedDate] = useState<Date>(new Date());
-
-  const [refreshKey, setRefreshKey] = useState(0);
-
-  const [weeklySummary, setWeeklySummary] = useState<any>(null);
-  const [monthlySummary, setMonthlySummary] = useState<any>(null);
 
   const [showSummary, setShowSummary] = useState(false);
 
   const [showDailySummary, setShowDailySummary] = useState(true);
-
-  const [goals, setGoals] = useState<{
-    daily: number;
-    weekly: number;
-    monthly: number;
-  }>({ daily: 0, weekly: 0, monthly: 0 });
 
   const [showGoals, setShowGoals] = useState(false);
 
@@ -127,113 +99,46 @@ export default function TodayScreen() {
   // Si es null, se asume igual al importe del servicio
   const [chargedAmountInput, setChargedAmountInput] = useState("");
 
-  /**
-   * Info del día de trabajo asociado a selectedDate.
-   * - Si la fecha pertenece a un día de trabajo real: startTime / endTime / isClosed vendrán de BD.
-   * - Si no pertenece a ninguno: vendrá null (y mostraremos un "día natural" virtual en UI).
-   */
-  const [workdayInfo, setWorkdayInfo] = useState<{
-    startTime: string;
-    endTime: string | null;
-    isClosed: boolean;
-  } | null>(null);
-
-  /**---------------------------
-   * ESTADO DÍA DE TRABAJO (ACTIVO)
-   * ---------------------------
-   */
-  const [activeWorkday, setActiveWorkday] = useState<
-    | {
-        id: number;
-        startTime: string;
-      }
-    | null
-    | undefined
-  >(null);
-
-  /**
-   * Resumen DIARIO por workdayId (clave para que al cerrar el día no "se pierdan" viajes en los totales)
-   * OJO: el nombre del campo es "freenow" porque así lo estás usando en UI.
-   */
-  const [dailySummary, setDailySummary] = useState<{
-    total: number;
-    taxi: number;
-    uber: number;
-    cabify: number;
-    freeNow: number;
-    efectivo: number;
-    tarjeta: number;
-    app: number;
-    propinaTarjeta: number;
-    propinaEfectivo: number;
-  } | null>(null);
 
   // Propina en efectivo (opcional)
   const [cashTipInput, setCashTipInput] = useState("");
 
+  const {
+    activeTripId,
+    trips,
+    weeklySummary,
+    monthlySummary,
+    goals,
+    workdayInfo,
+    activeWorkday,
+    dailySummary,
+    refreshData,
+  } = useTodayScreen(selectedDate);
 
-  // ---------------------------
-  // CARGA DE DATOS
-  // ---------------------------
-
-  const refresh = async () => {
-    // Viaje activo
-    const active = await TripService.getActiveTrip();
-    setActiveTripId(active ? active.id : null);
-
-    // Resúmenes globales (independientes del día)
-    const weekSummary = await SummaryService.getWeekSummary();
-    setWeeklySummary(weekSummary);
-
-    const monthSummary = await SummaryService.getMonthSummary();
-    setMonthlySummary(monthSummary);
-
-    // Día de trabajo activo (HOY)
-    const workday = await TripService.getActiveWorkday();
-    setActiveWorkday(workday);
-
-    // Día de trabajo asociado a la fecha seleccionada
-    const wd = await TripService.getWorkdayInfoForDate(selectedDate);
-    setWorkdayInfo(wd);
-
-    if (wd) {
-      // ✅ SOLO aquí se cargan viajes
-      const tripsForDate = await TripService.getTripsForDate(selectedDate);
-      setTrips(tripsForDate as TripRow[]);
-
-      const summary = await TripService.getSummaryForWorkday(wd.id);
-      setDailySummary(summary);
-    } else {
-      // ✅ Día sin trabajo → estado limpio
-      setTrips([]);
-      setDailySummary(null);
-    }
-  };
-
-  useEffect(() => {
-    // Evita carga en frío sin estado de día de trabajo resuelto
-    if (activeWorkday === undefined) return;
-
-    refresh().catch(console.error);
-   }, [selectedDate, refreshKey, activeWorkday]);
-
-  /**
-   * Recarga las metas cada vez que esta pantalla
-   * vuelve a estar activa (por ejemplo, al volver de /goals)
-   */
-  useFocusEffect(() => {
-    GoalService.getGoals().then(setGoals);
+  const {
+    handleStartTrip,
+    handleSaveTrip,
+    handleDeleteTrip,
+    handleOpenWorkday,
+    handleCloseWorkday,
+  } = useTripActions({
+    refreshData,
+    setLastPayment,
+    setLastSource,
+    setEditingTrip,
+    setShowFinishModal,
+    setAmountInput,
+    setCustomSource,
   });
+
+  const tripHistoryProjections = useMemo(
+    () => trips.map((trip) => toTripVisualProjection(trip)),
+    [trips],
+  );
 
   // ---------------------------
   // ACCIONES
   // ---------------------------
-
-  const handleStartTrip = async () => {
-    await TripService.startTrip();
-    setRefreshKey((k) => k + 1);
-    await refresh();
-  };
 
   const handleOpenFinish = () => {
     setEditingTrip(null);
@@ -247,94 +152,19 @@ export default function TodayScreen() {
   };
 
   const handleSave = async () => {
-    const amount = Number(amountInput.replace(",", "."));
-    if (isNaN(amount)) return;
-
-    let chargedAmountValue: number | undefined = undefined;
-
-    if (payment === PaymentType.CARD && chargedAmountInput.trim() !== "") {
-      chargedAmountValue = Number(chargedAmountInput.replace(",", "."));
-      if (isNaN(chargedAmountValue)) return;
-    }
-
-    let cashTip: number | undefined = undefined;
-
-    if (payment === PaymentType.CASH && cashTipInput.trim() !== "") {
-      const totalCobrado = Number(cashTipInput.replace(",", "."));
-      if (isNaN(totalCobrado)) return;
-
-      // Blindaje: la propina nunca puede ser negativa
-      const diff = totalCobrado - amount;
-      cashTip = diff > 0 ? diff : 0;
-    }
-
-    // ============================
-    // RESOLVER TIPO DE VIAJE FINAL
-    // ============================
-    const finalSource =
-      source === TripSource.CUSTOM && customSource.trim()
-        ? customSource.trim()
-        : source;
-
-    // ============================
-    // VIAJE MANUAL
-    // ============================
-    if (editingTrip && editingTrip.id === -1) {
-      await TripService.createManualTrip({
-        startTime: new Date(editingTrip.startTime),
-        endTime: new Date(editingTrip.endTime ?? editingTrip.startTime),
-        amount,
-        payment,
-        source: finalSource as any,
-      });
-    }
-    // ============================
-    // EDICIÓN NORMAL
-    // ============================
-    else if (editingTrip) {
-      await TripService.updateTrip(
-        editingTrip.id,
-        amount,
-        payment,
-        finalSource as any,
-      );
-    }
-    // ============================
-    // FINALIZAR VIAJE ACTIVO
-    // ============================
-    else {
-      await TripService.finishActiveTripWithData(
-        amount,
-        payment,
-        finalSource as any,
-        undefined,
-        chargedAmountValue,
-        cashTip,
-      );
-      setLastPayment(payment);
-      setLastSource(source);
-    }
-
-    // ============================
-    // LIMPIEZA Y REFRESH
-    // ============================
-    setEditingTrip(null);
-    setShowFinishModal(false);
-    setAmountInput("");
-    setCustomSource("");
-
-    setRefreshKey((k) => k + 1);
-    await refresh();
+    await handleSaveTrip({
+      editingTrip,
+      amountInput,
+      payment,
+      chargedAmountInput,
+      cashTipInput,
+      source,
+      customSource,
+    });
   };
 
   const handleDelete = async () => {
-    if (!editingTrip) return;
-    await TripService.deleteTrip(editingTrip.id);
-    setEditingTrip(null);
-    setShowFinishModal(false);
-
-    setRefreshKey((k) => k + 1);
-    await refresh();
+    await handleDeleteTrip({ editingTrip });
   };
 
   // ---------------------------
@@ -400,67 +230,49 @@ export default function TodayScreen() {
    * - Si la meta es 0 → no se muestra
    * - Nunca valores negativos
    */
-  const remainingDaily =
-    goals.daily > 0 ? Math.max(goals.daily - totalToday, 0) : null;
+  const remainingDaily = calculateRemainingAmount(totalToday, goals.daily);
 
   const remainingWeekly =
-    goals.weekly > 0 && weeklySummary
-      ? Math.max(goals.weekly - weeklySummary.total, 0)
+    weeklySummary !== null
+      ? calculateRemainingAmount(weeklySummary.total, goals.weekly)
       : null;
 
   const remainingMonthly =
-    goals.monthly > 0 && monthlySummary
-      ? Math.max(goals.monthly - monthlySummary.total, 0)
+    monthlySummary !== null
+      ? calculateRemainingAmount(monthlySummary.total, goals.monthly)
       : null;
 
   /**
    * Totales por plataforma (Taxi / Uber / Cabify)
    */
-  const totalsBySource = useMemo(() => {
-    return {
-      taxi: trips
-        .filter((t) => t.source === TripSource.TAXI)
-        .reduce((sum, t) => sum + (t.amount ?? 0), 0),
-
-      uber: trips
-        .filter((t) => t.source === TripSource.UBER)
-        .reduce((sum, t) => sum + (t.amount ?? 0), 0),
-
-      cabify: trips
-        .filter((t) => t.source === TripSource.CABIFY)
-        .reduce((sum, t) => sum + (t.amount ?? 0), 0),
-    };
-  }, [trips]);
+  const totalsBySource = useMemo(
+    () => calculateTripTotalsBySource(trips),
+    [trips],
+  );
 
   /**
    * Totales por tipo de dinero
    * - efectivo: lo que te quedas tú
    * - tarjeta: tarjeta + app (propietario)
    */
-  const totalsByPayment = useMemo(() => {
-    const efectivo = trips
-      .filter((t) => t.payment === PaymentType.CASH)
-      .reduce((sum, t) => sum + (t.amount ?? 0), 0);
-
-    const tarjeta = trips
-      .filter(
-        (t) => t.payment === PaymentType.CARD || t.payment === PaymentType.APP,
-      )
-      .reduce((sum, t) => sum + (t.amount ?? 0), 0);
-
-    return { efectivo, tarjeta };
-  }, [trips]);
+  const totalsByPayment = useMemo(
+    () => calculateTripTotalsByPayment(trips),
+    [trips],
+  );
 
   // Progreso diario
-  const dailyProgress = getProgress(totalToday, goals.daily);
+  const dailyProgress = calculateProgress(totalToday, goals.daily);
   const dailyStatus = getStatus(dailyProgress);
 
   // Progreso semanal
-  const weeklyProgress = getProgress(weeklySummary?.total ?? 0, goals.weekly);
+  const weeklyProgress = calculateProgress(
+    weeklySummary?.total ?? 0,
+    goals.weekly,
+  );
   const weeklyStatus = getStatus(weeklyProgress);
 
   // Progreso mensual
-  const monthlyProgress = getProgress(
+  const monthlyProgress = calculateProgress(
     monthlySummary?.total ?? 0,
     goals.monthly,
   );
@@ -499,9 +311,7 @@ export default function TodayScreen() {
                         text: "Cerrar día",
                         style: "destructive",
                         onPress: async () => {
-                          await TripService.closeActiveWorkday();
-                          setRefreshKey((k) => k + 1);
-                          await refresh();
+                          await handleCloseWorkday();
                         },
                       },
                     ],
@@ -528,9 +338,7 @@ export default function TodayScreen() {
                       {
                         text: "Abrir",
                         onPress: async () => {
-                          await TripService.openWorkday();
-                          setRefreshKey((k) => k + 1);
-                          await refresh();
+                          await handleOpenWorkday();
                         },
                       },
                     ],
@@ -816,29 +624,14 @@ export default function TodayScreen() {
         }}
       />
 
-      {/* Lista de viajes */}
-      <FlatList
-        data={trips}
-        keyExtractor={(i) => String(i.id)}
-        renderItem={({ item }) => (
-          <Pressable
-            onPress={() => {
-              if (!item.endTime) return;
-              router.push({
-                pathname: "/trip/edit",
-                params: { tripId: item.id },
-              });
-            }}
-          >
-            <Text style={styles.tripText}>
-              {new Date(item.startTime).toLocaleTimeString()} →{" "}
-              {item.endTime
-                ? new Date(item.endTime).toLocaleTimeString()
-                : "..."}{" "}
-              · {item.amount ?? ""} €
-            </Text>
-          </Pressable>
-        )}
+      <TripHistory
+        trips={tripHistoryProjections}
+        onTripPress={(tripId) =>
+          router.push({
+            pathname: "/trip/edit",
+            params: { tripId },
+          })
+        }
       />
 
       <Button
@@ -1006,8 +799,6 @@ const styles = StyleSheet.create({
     justifyContent: "space-between",
     marginVertical: 2,
   },
-
-  tripText: { paddingVertical: 6 },
 
   modalOverlay: {
     flex: 1,

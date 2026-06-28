@@ -1,0 +1,58 @@
+import type { PaymentMethodIdentity } from '../contracts/PaymentMethodIdentity';
+
+export const paymentMethods = [
+  {
+    id: 'cash',
+    domain: 'paymentMethod',
+    label: 'Efectivo',
+    order: 1,
+    initial: 'E',
+    icon: '💶',
+    aliases: ['Efectivo', 'Cash'],
+  },
+  {
+    id: 'card',
+    domain: 'paymentMethod',
+    label: 'Tarjeta',
+    order: 2,
+    initial: 'T',
+    icon: '💳',
+    aliases: ['Tarjeta', 'Card'],
+  },
+  {
+    id: 'bizum',
+    domain: 'paymentMethod',
+    label: 'Bizum',
+    order: 3,
+    initial: 'B',
+    icon: '📱',
+    aliases: ['Bizum'],
+  },
+  {
+    id: 'app',
+    domain: 'paymentMethod',
+    label: 'App',
+    order: 4,
+    initial: 'A',
+    icon: '📲',
+    aliases: ['App'],
+  },
+  {
+    id: 'companyVoucher',
+    domain: 'paymentMethod',
+    label: 'Bono empresa',
+    order: 5,
+    initial: 'B',
+    icon: '💼',
+    aliases: ['Bono empresa', 'Voucher'],
+  },
+  {
+    id: 'other',
+    domain: 'paymentMethod',
+    label: 'Otro',
+    order: 6,
+    initial: 'O',
+    icon: '✏️',
+    aliases: ['Otro', 'Other'],
+  },
+] as const satisfies readonly PaymentMethodIdentity[];

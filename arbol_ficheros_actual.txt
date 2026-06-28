@@ -1,0 +1,147 @@
+taxi-liquidacion-app
+|-- .vscode
+|   |-- extensions.json
+|   `-- settings.json
+|-- app
+|   |-- goals
+|   |   `-- index.tsx
+|   |-- settings
+|   |   `-- index.tsx
+|   |-- summary
+|   |   |-- detail.tsx
+|   |   `-- index.tsx
+|   |-- trip
+|   |   |-- edit.tsx
+|   |   `-- new.tsx
+|   |-- _layout.tsx
+|   `-- index.tsx
+|-- assets
+|   |-- icons
+|   |-- images
+|   |-- icon.png
+|   `-- splash-icon.png
+|-- data
+|   `-- barrios_madrid.geojson
+|-- docs
+|   |-- comandos_utiles.txt
+|   |-- proyecto_map.md
+|   `-- roadmap.md
+|-- scripts
+|   |-- geo
+|   |   |-- generate-districts.ts
+|   |   `-- generate-neighborhoods.ts
+|   `-- reset-project.js
+|-- src
+|   |-- components
+|   |   |-- buttons
+|   |   |   `-- PrimaryButton.tsx
+|   |   |-- cards
+|   |   |   `-- StatCard.tsx
+|   |   `-- forms
+|   |       |-- NeighborhoodSelector.tsx
+|   |       `-- TripForm.tsx
+|   |-- constants
+|   |   `-- enums.ts
+|   |-- database
+|   |   |-- repositories
+|   |   |   `-- TripGeoSnapshotRepository.ts
+|   |   |-- database.ts
+|   |   |-- migrations.ts
+|   |   `-- schema.ts
+|   |-- geo
+|   |   |-- __tests__
+|   |   |   |-- CircleRuleEvaluator.test.ts
+|   |   |   `-- GeoZoneEvaluator.test.ts
+|   |   |-- catalog
+|   |   |   |-- index.ts
+|   |   |   `-- zones.catalog.ts
+|   |   |-- domain
+|   |   |   |-- GeoDomainService.ts
+|   |   |   `-- index.ts
+|   |   |-- engine
+|   |   |   |-- ruleEvaluators
+|   |   |   |   |-- CircleRuleEvaluator.ts
+|   |   |   |   `-- index.ts
+|   |   |   |-- GeoRuleEvaluator.ts
+|   |   |   |-- GeoZoneEvaluator.ts
+|   |   |   `-- index.ts
+|   |   |-- geocoding
+|   |   |   |-- base
+|   |   |   |   |-- districts.geo.ts
+|   |   |   |   |-- index.ts
+|   |   |   |   `-- neighborhoods.geo.ts
+|   |   |   |-- catalog
+|   |   |   |   |-- districts.catalog.ts
+|   |   |   |   |-- index.ts
+|   |   |   |   |-- neighborhoods.catalog.ts
+|   |   |   |   `-- specialZones.catalog.ts
+|   |   |   |-- engine
+|   |   |   |   |-- GeoAdministrativeResolver.ts
+|   |   |   |   `-- index.ts
+|   |   |   |-- helpers
+|   |   |   |   |-- GeoSnapshotSelectors.ts
+|   |   |   |   `-- getTripGeoSnapshots.ts
+|   |   |   `-- models
+|   |   |       |-- GeoAddressSnapshot.ts
+|   |   |       |-- GeoAdministrativeType.ts
+|   |   |       |-- GeoAdministrativeUnit.ts
+|   |   |       `-- index.ts
+|   |   |-- models
+|   |   |   |-- GeoContext.ts
+|   |   |   |-- GeoPoint.ts
+|   |   |   |-- GeoRule.ts
+|   |   |   |-- GeoZone.ts
+|   |   |   `-- index.ts
+|   |   |-- GeoServiceFactory.ts
+|   |   `-- index.ts
+|   |-- geo-location
+|   |   |-- models
+|   |   |   `-- GeoLocationFix.ts
+|   |   |-- services
+|   |   |   |-- ExpoGeoLocationService.ts
+|   |   |   `-- GeoLocationService.ts
+|   |   |-- ExpoGeoLocationService.ts
+|   |   |-- GeoLocationFactory.ts
+|   |   `-- index.ts
+|   |-- hooks
+|   |   |-- use-color-scheme.ts
+|   |   |-- use-color-scheme.web.ts
+|   |   `-- use-theme-color.ts
+|   |-- models
+|   |   |-- Trip.ts
+|   |   `-- TripGeoSnapshot.ts
+|   |-- services
+|   |   |-- ExportService.ts
+|   |   |-- GeoStatsService.ts
+|   |   |-- GoalService.ts
+|   |   |-- SummaryService.ts
+|   |   |-- TripService.ts
+|   |   |-- VoiceInputService.ts
+|   |   `-- WorkdayService.ts
+|   |-- theme
+|   |   |-- colors.ts
+|   |   |-- spacing.ts
+|   |   `-- typography.ts
+|   `-- utils
+|       |-- dateUtils.ts
+|       `-- moneyUtils.ts
+|-- .gitignore
+|-- App (Recuperado automaticamente).docx
+|-- App.docx
+|-- app.json
+|-- arbol.txt
+|-- arbol1.txt
+|-- arbol_ficheros_actual.txt
+|-- CHANGELOG.md
+|-- eas.json
+|-- eslint.config.js
+|-- estructura.txt
+|-- estructura1.txt
+|-- estructura2.txt
+|-- jest.config.js
+|-- metro.config.js
+|-- package-lock.json
+|-- package.json
+|-- proyecto_map.txt
+|-- README_INTERNO.md
+`-- tsconfig.json

@@ -15,6 +15,9 @@ import { PaymentType, TripSource } from "../../src/constants/enums";
 import { NeighborhoodSelector } from "../../src/components/forms/NeighborhoodSelector";
 import { NEIGHBORHOODS_CATALOG } from "../../src/geo/geocoding/catalog/neighborhoods.catalog";
 import { TripGeoSnapshotRepository } from "../../src/database/repositories/TripGeoSnapshotRepository";
+import { prepareTripEditSaveData } from "../../src/domain/trips/tripEditPreparation";
+import { UpdateTrip } from "../../src/application/trips/UpdateTrip";
+import { DeleteTrip } from "../../src/application/trips/DeleteTrip";
 
 
 export default function EditTripScreen() {
@@ -131,89 +134,43 @@ setGeoDropoffZone(
   // GUARDAR
   // ---------------------------
   const handleSave = async () => {
-    // ---------------------------
-    // VALIDACIÓN Y CÁLCULO DE HORAS
-    // ---------------------------
-    const parseTime = (value: string): { h: number; m: number } | null => {
-      const match = /^(\d{1,2}):(\d{2})$/.exec(value.trim());
-      if (!match) return null;
+    const prepared = prepareTripEditSaveData({
+      tripStartTime: trip.startTime,
+      amountInput,
+      payment,
+      chargedAmountInput,
+      cashTipInput,
+      startTimeInput,
+      endTimeInput,
+      existingChargedAmount: trip.chargedAmount,
+      existingCashTip: trip.cashTip,
+    });
 
-      const h = Number(match[1]);
-      const m = Number(match[2]);
+    if (!prepared.ok) {
+      if (prepared.error === "INVALID_AMOUNT") return;
 
-      if (h < 0 || h > 23 || m < 0 || m > 59) return null;
-      return { h, m };
-    };
-
-    const startParsed = parseTime(startTimeInput);
-    const endParsed = parseTime(endTimeInput);
-
-    if (!startParsed || !endParsed) {
-      Alert.alert("Hora inválida", "Introduce las horas en formato HH:mm");
-      return;
-    }
-
-    // Construimos nuevas fechas usando el día original
-    const baseDate = new Date(trip.startTime);
-
-    const newStartTime = new Date(baseDate);
-    newStartTime.setHours(startParsed.h, startParsed.m, 0, 0);
-
-    const newEndTime = new Date(baseDate);
-    newEndTime.setHours(endParsed.h, endParsed.m, 0, 0);
-
-    // Validación lógica
-    if (newEndTime < newStartTime) {
-      Alert.alert(
-        "Horas incorrectas",
-        "La hora de fin no puede ser anterior a la de inicio.",
-      );
-      return;
-    }
-
-    const amount = Number(amountInput.replace(",", "."));
-    if (isNaN(amount)) return;
-
-    let chargedAmountValue: number | undefined = undefined;
-    let cashTipValue: number | undefined = undefined;
-
-    if (payment === PaymentType.CARD) {
-      let resolvedChargedAmount: number = trip.chargedAmount ?? amount;
-
-      if (chargedAmountInput.trim() !== "") {
-        const parsed = Number(chargedAmountInput.replace(",", "."));
-        if (isNaN(parsed)) {
-          Alert.alert("Importe inválido", "Importe cobrado no válido.");
-          return;
-        }
-        resolvedChargedAmount = parsed;
+      if (prepared.error === "INVALID_TIME_FORMAT") {
+        Alert.alert("Hora inválida", "Introduce las horas en formato HH:mm");
+        return;
       }
 
-      // 🚨 VALIDACIÓN CRÍTICA
-      if (resolvedChargedAmount < amount) {
+      if (prepared.error === "END_BEFORE_START") {
         Alert.alert(
-          "Importe incorrecto",
-          "El importe cobrado no puede ser menor que el importe del viaje.",
+          "Horas incorrectas",
+          "La hora de fin no puede ser anterior a la de inicio.",
         );
         return;
       }
-      chargedAmountValue = resolvedChargedAmount;
-    }
 
-    if (payment === PaymentType.CASH) {
-      let resolvedCashCharged: number = amount + (trip.cashTip ?? 0);
-
-      if (cashTipInput.trim() !== "") {
-        const parsed = Number(cashTipInput.replace(",", "."));
-        if (isNaN(parsed)) {
-          Alert.alert("Importe inválido", "Importe cobrado no válido.");
-          return;
-        }
-        resolvedCashCharged = parsed;
+      if (
+        prepared.error === "INVALID_CARD_AMOUNT_FORMAT" ||
+        prepared.error === "INVALID_CASH_AMOUNT_FORMAT"
+      ) {
+        Alert.alert("Importe inválido", "Importe cobrado no válido.");
+        return;
       }
 
-      // 🚨 VALIDACIÓN EN EDICIÓN (MISMA QUE TARJETA)
-      if (resolvedCashCharged < amount) {
+      if (prepared.error === "CHARGED_AMOUNT_TOO_LOW") {
         Alert.alert(
           "Importe incorrecto",
           "El importe cobrado no puede ser menor que el importe del viaje.",
@@ -221,38 +178,21 @@ setGeoDropoffZone(
         return;
       }
 
-      // 🔁 Traducción interna
-      cashTipValue = resolvedCashCharged - amount;
+      return;
     }
-    // ---------------------------
-    // GUARDAR ZONAS MANUALES
-    // ---------------------------
-    await TripService.updateTripManualZones(
-      trip.id,
+
+    await UpdateTrip.updateEditedTrip({
+      id: trip.id,
+      amount: prepared.value.amount,
+      payment,
+      source,
+      startTime: prepared.value.newStartTime,
+      endTime: prepared.value.newEndTime,
       manualPickupZone,
       manualDropoffZone,
-    );
-
-    // Guardar horas
-    await TripService.updateTripTimes(trip.id, newStartTime, newEndTime);
-
-    // ---------------------------
-    // GUARDAR HORAS DEL VIAJE
-    // ---------------------------
-    await TripService.updateTripTimes(trip.id, newStartTime, newEndTime);
-
-    // ---------------------------
-    // GUARDAR DATOS ECONÓMICOS
-    // ---------------------------
-    await TripService.updateTrip(
-      trip.id,
-      amount,
-      payment,
-      source as any,
-      undefined,
-      chargedAmountValue,
-      cashTipValue,
-    );
+      chargedAmount: prepared.value.chargedAmountValue,
+      cashTip: prepared.value.cashTipValue,
+    });
 
     // ---------------------------
     // VOLVER
@@ -273,7 +213,7 @@ setGeoDropoffZone(
           text: "Borrar",
           style: "destructive",
           onPress: async () => {
-            await TripService.deleteTrip(trip.id);
+            await DeleteTrip.execute(trip.id);
             router.back();
           },
         },
