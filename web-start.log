@@ -1,0 +1,6 @@
+
+> taxi-liquidacion-app@1.0.0 start
+> expo start --web --port 8081
+
+Starting project at C:\Users\monic\Desktop\geo\taxi-liquidacion-app
+CommandError: Skipping web setup: "web" is not included in the project app.json "platforms" array.
