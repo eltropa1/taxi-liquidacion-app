@@ -1,4 +1,5 @@
 import { PaymentType, TripSource } from "../constants/enums";
+import { TripGeoSnapshotRepository } from "../database/repositories/TripGeoSnapshotRepository";
 import { TripQueryService } from "./TripQueryService";
 
 /**
@@ -29,5 +30,13 @@ export class TripService {
     manualDropoffZone: string | null;
   } | null> {
     return TripQueryService.getTripById(id);
+  }
+
+  /**
+   * Devuelve los snapshots GEO de un viaje.
+   * Usado exclusivamente para edición.
+   */
+  static async getTripGeoSnapshots(tripId: number) {
+    return TripGeoSnapshotRepository.getSnapshotsForTrip(tripId);
   }
 }

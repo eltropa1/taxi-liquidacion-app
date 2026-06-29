@@ -14,7 +14,6 @@ import { TripService } from "../../src/services/TripService";
 import { PaymentType, TripSource } from "../../src/constants/enums";
 import { NeighborhoodSelector } from "../../src/components/forms/NeighborhoodSelector";
 import { NEIGHBORHOODS_CATALOG } from "../../src/geo/geocoding/catalog/neighborhoods.catalog";
-import { TripGeoSnapshotRepository } from "../../src/database/repositories/TripGeoSnapshotRepository";
 import { prepareTripEditSaveData } from "../../src/domain/trips/tripEditPreparation";
 import { UpdateTrip } from "../../src/application/trips/UpdateTrip";
 import { DeleteTrip } from "../../src/application/trips/DeleteTrip";
@@ -67,7 +66,7 @@ const [geoDropoffZone, setGeoDropoffZone] = useState<string | null>(null);
       // ---------------------------
 // Resolver zonas GEO automáticas (START / END)
 // ---------------------------
-const snapshots = await TripGeoSnapshotRepository.getSnapshotsForTrip(t.id);
+const snapshots = await TripService.getTripGeoSnapshots(t.id);
 
 const startSnapshot = snapshots.find((s) => s.kind === "START");
 const endSnapshot = snapshots.find((s) => s.kind === "END");
