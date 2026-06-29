@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { useFocusEffect } from "expo-router";
 
 import { PaymentType, TripSource } from "../constants/enums";
@@ -59,18 +59,31 @@ type TodayScreenState = {
 };
 
 async function loadTodayScreenData(selectedDate: Date) {
-  const active = await TripQueryService.getActiveTrip();
-  const weekSummary = await SummaryService.getWeekSummary();
-  const monthSummary = await SummaryService.getMonthSummary();
-  const workday = await WorkdayService.getOpenWorkday();
-  const wd = await WorkdayService.getWorkdayInfoForDate(selectedDate);
+  const activePromise = TripQueryService.getActiveTrip();
+  const weekSummaryPromise = SummaryService.getWeekSummary();
+  const monthSummaryPromise = SummaryService.getMonthSummary();
+  const workdayPromise = WorkdayService.getOpenWorkday();
+  const workdayInfoPromise = WorkdayService.getWorkdayInfoForDate(selectedDate);
+
+  const [active, weekSummary, monthSummary, workday, wd] = await Promise.all([
+    activePromise,
+    weekSummaryPromise,
+    monthSummaryPromise,
+    workdayPromise,
+    workdayInfoPromise,
+  ]);
 
   let trips: TodayTripRow[] = [];
   let dailySummary: TodayDailySummary = null;
 
   if (wd) {
-    trips = (await TripQueryService.getTripsForDate(selectedDate)) as TodayTripRow[];
-    dailySummary = await SummaryService.getSummaryForWorkday(wd.id);
+    const tripsPromise = TripQueryService.getTripsForDate(selectedDate);
+    const dailySummaryPromise = SummaryService.getSummaryForWorkday(wd.id);
+
+    [trips, dailySummary] = await Promise.all([
+      tripsPromise as Promise<TodayTripRow[]>,
+      dailySummaryPromise,
+    ]);
   }
 
   return {
@@ -97,6 +110,7 @@ export function useTodayScreen(selectedDate: Date): TodayScreenState {
   const [workdayInfo, setWorkdayInfo] = useState<TodayWorkdayInfo | null>(null);
   const [activeWorkday, setActiveWorkday] = useState<TodayActiveWorkday>(null);
   const [dailySummary, setDailySummary] = useState<TodayDailySummary>(null);
+  const hasMountedRef = useRef(false);
 
   const refreshData = useCallback(async () => {
     const data = await loadTodayScreenData(selectedDate);
@@ -117,6 +131,17 @@ export function useTodayScreen(selectedDate: Date): TodayScreenState {
   useFocusEffect(() => {
     GoalService.getGoals().then(setGoals);
   });
+
+  useFocusEffect(
+    useCallback(() => {
+      if (!hasMountedRef.current) {
+        hasMountedRef.current = true;
+        return;
+      }
+
+      refreshData().catch(console.error);
+    }, [refreshData]),
+  );
 
   return {
     activeTripId,

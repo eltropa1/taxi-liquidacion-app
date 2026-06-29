@@ -46,21 +46,25 @@ export class StartTrip {
 
     if (!trip) return;
 
-    // 3️⃣ GPS real
-    const location = await geoLocationService.getCurrentLocation();
+    // El camino crítico termina aquí: la UI puede refrescar inmediatamente.
+    // El snapshot GEO se captura en segundo plano para no bloquear la respuesta visual.
+    void (async () => {
+      try {
+        const location = await geoLocationService.getCurrentLocation();
+        const geoSnapshot = GeoAdministrativeResolver.resolve(
+          location.latitude,
+          location.longitude,
+        );
 
-    // 4️⃣ Resolver snapshot administrativo
-    const geoSnapshot = GeoAdministrativeResolver.resolve(
-      location.latitude,
-      location.longitude,
-    );
-
-    // 5️⃣ Guardar snapshot START
-    await TripGeoSnapshotRepository.insert({
-      tripId: trip.id,
-      kind: "START",
-      snapshot: geoSnapshot,
-      createdAt: new Date().toISOString(),
-    });
+        await TripGeoSnapshotRepository.insert({
+          tripId: trip.id,
+          kind: "START",
+          snapshot: geoSnapshot,
+          createdAt: new Date().toISOString(),
+        });
+      } catch (error) {
+        console.error("Error capturando snapshot GEO de inicio", error);
+      }
+    })();
   }
 }

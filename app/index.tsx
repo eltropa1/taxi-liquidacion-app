@@ -99,7 +99,6 @@ export default function TodayScreen() {
   // Si es null, se asume igual al importe del servicio
   const [chargedAmountInput, setChargedAmountInput] = useState("");
 
-
   // Propina en efectivo (opcional)
   const [cashTipInput, setCashTipInput] = useState("");
 
