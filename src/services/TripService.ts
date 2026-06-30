@@ -1,17 +1,15 @@
 import { PaymentType, TripSource } from "../constants/enums";
 import { TripGeoSnapshotRepository } from "../database/repositories/TripGeoSnapshotRepository";
+import { Trip } from "../domain/trips/canonical";
 import { TripQueryService } from "./TripQueryService";
 
 /**
- * Servicio de viajes.
- * Contiene TODA la lógica de negocio histórica
- * + integración GEO sin romper nada existente.
+ * Fachada temporal del dominio de viajes.
+ *
+ * Mantiene compatibilidad con consumidores heredados mientras la
+ * lectura canónica del aggregate se introduce de forma progresiva.
  */
 export class TripService {
-  // ===================================================
-  // VIAJES
-  // ===================================================
-
   /**
    * Devuelve un viaje por ID.
    * Usado exclusivamente para edición.
@@ -30,6 +28,13 @@ export class TripService {
     manualDropoffZone: string | null;
   } | null> {
     return TripQueryService.getTripById(id);
+  }
+
+  /**
+   * Devuelve el aggregate canónico de un viaje por ID.
+   */
+  static async getCanonicalTripById(id: number): Promise<Trip | null> {
+    return TripQueryService.getCanonicalTripById(id);
   }
 
   /**
