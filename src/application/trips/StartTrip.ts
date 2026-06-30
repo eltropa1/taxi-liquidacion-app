@@ -1,6 +1,8 @@
 import { TripSource } from "../../constants/enums";
 import { getDatabase } from "../../database/database";
 import { TripGeoSnapshotRepository } from "../../database/repositories/TripGeoSnapshotRepository";
+import { Trip } from "../../domain/trips/canonical";
+import { TripServiceClassification } from "../../domain/trips/canonical";
 import { GeoLocationFactory } from "../../geo-location";
 import { GeoAdministrativeResolver } from "../../geo/geocoding/engine";
 import { WorkdayService } from "../../services/WorkdayService";
@@ -16,35 +18,38 @@ export class StartTrip {
   static async execute(): Promise<void> {
     const db = await getDatabase();
 
-    const startTime = new Date().toISOString();
-    const createdAt = startTime;
-
     const workday = await WorkdayService.getOpenWorkday();
     if (!workday) {
       throw new Error("No hay un día de trabajo abierto");
     }
 
-    // 1️⃣ Crear viaje
-    await db.runAsync(
+    const startedAt = new Date();
+    const classification = TripServiceClassification.create({
+      platformId: TripSource.TAXI,
+      serviceLabel: TripSource.TAXI,
+    });
+
+    // 1️⃣ Persistir la apertura del viaje
+    const insertResult = await db.runAsync(
       `
       INSERT INTO trips (startTime, source, createdAt, workdayId)
       VALUES (?, ?, ?, ?)
       `,
-      [startTime, TripSource.TAXI, createdAt, workday.id],
+      [
+        startedAt.toISOString(),
+        classification.platformId ?? TripSource.TAXI,
+        startedAt.toISOString(),
+        workday.id,
+      ],
     );
 
-    // 2️⃣ Obtener viaje activo
-    const trip = await db.getFirstAsync<{ id: number }>(
-      `
-      SELECT id
-      FROM trips
-      WHERE endTime IS NULL
-      ORDER BY startTime DESC
-      LIMIT 1
-      `,
-    );
-
-    if (!trip) return;
+    // 2️⃣ Representar el viaje ya persistido mediante el aggregate canónico
+    const trip = Trip.start({
+      id: String(insertResult.lastInsertRowId),
+      startedAt,
+      workdayId: String(workday.id),
+      classification,
+    });
 
     // El camino crítico termina aquí: la UI puede refrescar inmediatamente.
     // El snapshot GEO se captura en segundo plano para no bloquear la respuesta visual.
@@ -57,7 +62,7 @@ export class StartTrip {
         );
 
         await TripGeoSnapshotRepository.insert({
-          tripId: trip.id,
+          tripId: Number(trip.id),
           kind: "START",
           snapshot: geoSnapshot,
           createdAt: new Date().toISOString(),
