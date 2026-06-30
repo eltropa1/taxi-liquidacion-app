@@ -1,8 +1,40 @@
 import { PaymentType, TripSource } from "../constants/enums";
 import { getDatabase } from "../database/database";
+import { Trip } from "../domain/trips/canonical";
+import {
+  TripRecordMapper,
+  TripRecordRow,
+} from "../database/mappers/TripRecordMapper";
 import { WorkdayService } from "./WorkdayService";
 
 export class TripQueryService {
+  private static async getTripRecordById(
+    id: number,
+  ): Promise<TripRecordRow | null> {
+    const db = await getDatabase();
+
+    return db.getFirstAsync<TripRecordRow>(
+      `
+      SELECT
+        id,
+        startTime,
+        endTime,
+        amount,
+        payment,
+        source,
+        customSource,
+        chargedAmount,
+        cashTip,
+        manualPickupZone,
+        manualDropoffZone,
+        workdayId
+      FROM trips
+      WHERE id = ?
+      `,
+      [id],
+    );
+  }
+
   static async getActiveTrip(): Promise<{
     id: number;
     startTime: string;
@@ -20,6 +52,13 @@ export class TripQueryService {
     );
   }
 
+  static async getCanonicalTripById(id: number): Promise<Trip | null> {
+    const row = await this.getTripRecordById(id);
+    if (!row) return null;
+
+    return TripRecordMapper.toCanonicalTrip(row);
+  }
+
   static async getTripById(id: number): Promise<{
     id: number;
     startTime: string;
@@ -33,27 +72,22 @@ export class TripQueryService {
     manualPickupZone: string | null;
     manualDropoffZone: string | null;
   } | null> {
-    const db = await getDatabase();
+    const row = await this.getTripRecordById(id);
+    if (!row) return null;
 
-    return db.getFirstAsync(
-      `
-      SELECT
-        id,
-        startTime,
-        endTime,
-        amount,
-        payment,
-        source,
-        customSource,
-        chargedAmount,
-        cashTip,
-        manualPickupZone,
-        manualDropoffZone
-      FROM trips
-      WHERE id = ?
-      `,
-      [id],
-    );
+    return {
+      id: row.id,
+      startTime: row.startTime,
+      endTime: row.endTime,
+      amount: row.amount,
+      payment: row.payment,
+      source: row.source,
+      customSource: row.customSource,
+      chargedAmount: row.chargedAmount,
+      cashTip: row.cashTip,
+      manualPickupZone: row.manualPickupZone,
+      manualDropoffZone: row.manualDropoffZone,
+    };
   }
 
   static async getTripsForDate(date: Date) {
