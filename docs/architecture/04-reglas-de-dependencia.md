@@ -1,10 +1,10 @@
 # Reglas de Dependencia
 
-## Reglas base
+> Estado: Historical / Superseded
+>
+> La regla vigente está en `docs/architecture/Dependency Rules v1.0.md`.
 
-## Dependencias permitidas
+## Nota
 
-## Dependencias prohibidas
-
-## Ejemplos
+Este documento ya no tiene autoridad normativa.
 

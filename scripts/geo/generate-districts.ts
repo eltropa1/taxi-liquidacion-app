@@ -32,7 +32,7 @@ const INPUT_GEOJSON = path.resolve(
 
 const OUTPUT_GEO = path.resolve(
   __dirname,
-  "../../src/geo/geocoding/base/districts.geo.ts",
+  "../../src/infrastructure/geocoding/base/districts.geo.ts",
 );
 
 // =============================

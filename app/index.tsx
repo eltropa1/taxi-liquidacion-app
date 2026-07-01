@@ -13,30 +13,11 @@ import {
 import { router } from "expo-router";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { PaymentType, TripSource } from "../src/constants/enums";
-import {
-  calculateProgress,
-  calculateRemainingAmount,
-  calculateTripTotalsByPayment,
-  calculateTripTotalsBySource,
-} from "../src/domain/trips/tripEconomics";
-import {
-  TodayTripRow,
-  useTodayScreen,
-} from "../src/hooks/useTodayScreen";
+import { useTodayScreen, type TodayTripRow } from "../src/hooks/useTodayScreen";
 import { TripHistory } from "../src/components/trip-history";
-import { toTripVisualProjection } from "../src/presentation";
+import { buildTodayScreenProjection, toTripVisualProjection } from "../src/presentation";
 import { useTripActions } from "../src/hooks/useTripActions";
-import { ExportService } from "../src/services/ExportService";
-
-/**
- * Devuelve estado visual según porcentaje
- */
-const getStatus = (percent: number | null) => {
-  if (percent === null) return null;
-  if (percent >= 80) return { label: "Vas bien", color: "#2ecc71" };
-  if (percent >= 50) return { label: "Vas justo", color: "#f1c40f" };
-  return { label: "Vas mal", color: "#e74c3c" };
-};
+import { ExportService } from "../src/application/runtime";
 
 /**
  * Barra de progreso simple y reutilizable
@@ -135,6 +116,32 @@ export default function TodayScreen() {
     [trips],
   );
 
+  const todayProjection = useMemo(
+    () =>
+      buildTodayScreenProjection({
+        selectedDate,
+        activeTripId,
+        trips,
+        weeklySummary,
+        monthlySummary,
+        goals,
+        workdayInfo,
+        activeWorkday,
+        dailySummary,
+      }),
+    [
+      activeTripId,
+      activeWorkday,
+      dailySummary,
+      goals,
+      monthlySummary,
+      selectedDate,
+      trips,
+      weeklySummary,
+      workdayInfo,
+    ],
+  );
+
   // ---------------------------
   // ACCIONES
   // ---------------------------
@@ -169,113 +176,6 @@ export default function TodayScreen() {
   // ---------------------------
   // CÁLCULOS
   // ---------------------------
-
-  /**
-   * Determina si la fecha seleccionada es "hoy" (día natural).
-   * Se usa SOLO para UI: el Bloque B debe salir únicamente en días anteriores.
-   */
-  const isToday = selectedDate.toDateString() === new Date().toDateString();
-
-  /**
-   * Información de día de trabajo "resuelta" para UI en días anteriores:
-   * - Si existe workdayInfo real → se usa tal cual.
-   * - Si NO existe → creamos un "día natural" (00:00–23:59) para evitar sensación de fallo.
-   */
-  const resolvedWorkdayInfo: {
-    startTime: string;
-    endTime: string | null;
-    isClosed: boolean;
-    isVirtual: boolean;
-  } = workdayInfo
-    ? {
-        startTime: workdayInfo.startTime,
-        endTime: workdayInfo.endTime,
-        isClosed: workdayInfo.isClosed,
-        isVirtual: false,
-      }
-    : {
-        startTime: new Date(
-          selectedDate.getFullYear(),
-          selectedDate.getMonth(),
-          selectedDate.getDate(),
-          0,
-          0,
-          0,
-        ).toISOString(),
-        endTime: new Date(
-          selectedDate.getFullYear(),
-          selectedDate.getMonth(),
-          selectedDate.getDate(),
-          23,
-          59,
-          59,
-        ).toISOString(),
-        isClosed: true,
-        isVirtual: true,
-      };
-
-  /**
-   * Total del día (POR WORKDAY).
-   * Si por lo que sea dailySummary aún no llegó, hacemos fallback a los viajes cargados.
-   */
-  const totalToday = useMemo(() => {
-    if (!workdayInfo) return 0; // ⬅️ blindaje lógico
-    if (dailySummary) return dailySummary.total;
-    return trips.reduce((acc, t) => acc + (t.amount ?? 0), 0);
-  }, [dailySummary, trips, workdayInfo]);
-
-  /**
-   * Diferencia respecto a metas
-   * - Si la meta es 0 → no se muestra
-   * - Nunca valores negativos
-   */
-  const remainingDaily = calculateRemainingAmount(totalToday, goals.daily);
-
-  const remainingWeekly =
-    weeklySummary !== null
-      ? calculateRemainingAmount(weeklySummary.total, goals.weekly)
-      : null;
-
-  const remainingMonthly =
-    monthlySummary !== null
-      ? calculateRemainingAmount(monthlySummary.total, goals.monthly)
-      : null;
-
-  /**
-   * Totales por plataforma (Taxi / Uber / Cabify)
-   */
-  const totalsBySource = useMemo(
-    () => calculateTripTotalsBySource(trips),
-    [trips],
-  );
-
-  /**
-   * Totales por tipo de dinero
-   * - efectivo: lo que te quedas tú
-   * - tarjeta: tarjeta + app (propietario)
-   */
-  const totalsByPayment = useMemo(
-    () => calculateTripTotalsByPayment(trips),
-    [trips],
-  );
-
-  // Progreso diario
-  const dailyProgress = calculateProgress(totalToday, goals.daily);
-  const dailyStatus = getStatus(dailyProgress);
-
-  // Progreso semanal
-  const weeklyProgress = calculateProgress(
-    weeklySummary?.total ?? 0,
-    goals.weekly,
-  );
-  const weeklyStatus = getStatus(weeklyProgress);
-
-  // Progreso mensual
-  const monthlyProgress = calculateProgress(
-    monthlySummary?.total ?? 0,
-    goals.monthly,
-  );
-  const monthlyStatus = getStatus(monthlyProgress);
 
   // ---------------------------
   // RENDER
@@ -379,28 +279,29 @@ export default function TodayScreen() {
       {/* ===========================
           BLOQUE B - INFO DÍA DE TRABAJO (SOLO DÍAS ANTERIORES)
       =========================== */}
-      {!isToday && (
+      {!todayProjection.isToday && (
         <View style={[styles.card, { backgroundColor: "#f5f7fa" }]}>
           <Text style={{ fontWeight: "600" }}>🚕 Día de trabajo</Text>
 
           <Text>
-            Inicio: {new Date(resolvedWorkdayInfo.startTime).toLocaleString()}
+            Inicio:{" "}
+            {new Date(todayProjection.resolvedWorkdayInfo.startTime).toLocaleString()}
           </Text>
 
           <Text>
             Fin:{" "}
-            {resolvedWorkdayInfo.endTime
-              ? new Date(resolvedWorkdayInfo.endTime).toLocaleString()
+            {todayProjection.resolvedWorkdayInfo.endTime
+              ? new Date(todayProjection.resolvedWorkdayInfo.endTime).toLocaleString()
               : "En curso"}
           </Text>
 
-          {!resolvedWorkdayInfo.isClosed && (
+          {!todayProjection.resolvedWorkdayInfo.isClosed && (
             <Text style={{ color: "#2ecc71", marginTop: 4 }}>
               ● Día de trabajo abierto
             </Text>
           )}
 
-          {resolvedWorkdayInfo.isVirtual && (
+          {todayProjection.resolvedWorkdayInfo.isVirtual && (
             <Text style={{ color: "#999", marginTop: 4 }}>
               Día natural (sin cierre registrado)
             </Text>
@@ -414,24 +315,24 @@ export default function TodayScreen() {
       <View style={styles.dayStatusRow}>
         <View style={[styles.card, styles.cardToday, styles.cardCompact]}>
           <Text style={styles.smallLabel}>Hoy</Text>
-          <Text style={styles.amount}>{totalToday.toFixed(2)} €</Text>
+          <Text style={styles.amount}>{todayProjection.totalToday.toFixed(2)} €</Text>
         </View>
 
-        {dailyStatus && (
+        {todayProjection.dailyStatus && (
           <View
             style={[
               styles.card,
               styles.cardProgress,
               styles.cardCompact,
-              { borderLeftWidth: 4, borderLeftColor: dailyStatus.color },
+              { borderLeftWidth: 4, borderLeftColor: todayProjection.dailyStatus.color },
             ]}
           >
             <Text style={styles.progressLine}>
-              {dailyStatus.label} · {dailyProgress?.toFixed(0)}% · faltan{" "}
-              {Math.max(goals.daily - totalToday, 0).toFixed(2)} €
+              {todayProjection.dailyStatus.label} · {todayProjection.dailyProgress?.toFixed(0)}% · faltan{" "}
+              {Math.max(goals.daily - todayProjection.totalToday, 0).toFixed(2)} €
             </Text>
 
-            <ProgressBar percent={dailyProgress} color={dailyStatus.color} />
+            <ProgressBar percent={todayProjection.dailyProgress} color={todayProjection.dailyStatus.color} />
           </View>
         )}
       </View>
@@ -527,26 +428,26 @@ export default function TodayScreen() {
           <Text style={styles.sectionTitle}>Metas</Text>
 
           <Text>
-            Día: {totalToday.toFixed(2)} € / {goals.daily.toFixed(2)} €
+            Día: {todayProjection.totalToday.toFixed(2)} € / {goals.daily.toFixed(2)} €
           </Text>
-          {remainingDaily !== null && (
-            <Text>Te faltan {remainingDaily.toFixed(2)} € hoy</Text>
+          {todayProjection.remainingDaily !== null && (
+            <Text>Te faltan {todayProjection.remainingDaily.toFixed(2)} € hoy</Text>
           )}
 
           <Text style={{ marginTop: 6 }}>
             Semana: {weeklySummary?.total.toFixed(2)} € /{" "}
             {goals.weekly.toFixed(2)} €
           </Text>
-          {remainingWeekly !== null && (
-            <Text>Te faltan {remainingWeekly.toFixed(2)} € esta semana</Text>
+          {todayProjection.remainingWeekly !== null && (
+            <Text>Te faltan {todayProjection.remainingWeekly.toFixed(2)} € esta semana</Text>
           )}
 
           <Text style={{ marginTop: 6 }}>
             Mes: {monthlySummary?.total.toFixed(2)} € /{" "}
             {goals.monthly.toFixed(2)} €
           </Text>
-          {remainingMonthly !== null && (
-            <Text>Te faltan {remainingMonthly.toFixed(2)} € este mes</Text>
+          {todayProjection.remainingMonthly !== null && (
+            <Text>Te faltan {todayProjection.remainingMonthly.toFixed(2)} € este mes</Text>
           )}
         </View>
       )}

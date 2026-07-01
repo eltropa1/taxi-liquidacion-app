@@ -1,20 +1,14 @@
 # Evolucion
 
-## Fase 1
+> Estado: Historical / Superseded
+>
+> La evolución arquitectónica oficial se rige por:
+>
+> - `docs/architecture/Architectural Decision Process v1.0.md`
+> - `docs/architecture/Project Structure v1.0.md`
+> - `docs/architecture/Documentation Lifecycle v1.0.md`
 
-## Fase 2
+## Nota
 
-## Fase 3
-
-## Fase 4
-
-## Fase 5
-
-## Fase 6
-
-## Fase 7
-
-## Fase 8
-
-## Proximos pasos
+Se conserva solo por trazabilidad.
 

@@ -2,7 +2,11 @@ import { router, useFocusEffect } from "expo-router";
 import { useEffect, useState } from "react";
 import { Button, StyleSheet, Text, TextInput, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
-import { GoalService } from "../../src/services/GoalService";
+import { GoalService } from "../../src/application/runtime";
+import {
+  formatGoalValue,
+  parseGoalValue,
+} from "../../src/presentation";
 
 
 /**
@@ -26,9 +30,9 @@ export default function GoalsScreen() {
 
   useEffect(() => {
     GoalService.getGoals().then((g) => {
-      setDaily(String(g.daily || ""));
-      setWeekly(String(g.weekly || ""));
-      setMonthly(String(g.monthly || ""));
+      setDaily(formatGoalValue(g.daily));
+      setWeekly(formatGoalValue(g.weekly));
+      setMonthly(formatGoalValue(g.monthly));
       setLoading(false);
     });
   }, []);
@@ -39,9 +43,9 @@ export default function GoalsScreen() {
 
   const handleSave = async () => {
     await GoalService.saveGoals({
-      daily: Number(daily.replace(",", ".")) || 0,
-      weekly: Number(weekly.replace(",", ".")) || 0,
-      monthly: Number(monthly.replace(",", ".")) || 0,
+      daily: parseGoalValue(daily),
+      weekly: parseGoalValue(weekly),
+      monthly: parseGoalValue(monthly),
     });
 
     alert("Metas guardadas correctamente");

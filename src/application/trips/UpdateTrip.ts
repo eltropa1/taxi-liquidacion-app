@@ -1,5 +1,5 @@
 import { PaymentType, TripSource } from "../../constants/enums";
-import { getDatabase } from "../../database/database";
+import { getApplicationPersistence } from "../ports/persistence";
 
 export class UpdateTrip {
   static async execute(
@@ -11,24 +11,17 @@ export class UpdateTrip {
     chargedAmount?: number,
     cashTip?: number,
   ): Promise<void> {
-    const db = await getDatabase();
+    const { tripRepository } = getApplicationPersistence();
 
-    await db.runAsync(
-      `
-      UPDATE trips
-      SET amount = ?, payment = ?, source = ?, customSource = ?, chargedAmount = ?, cashTip = ?
-      WHERE id = ?
-      `,
-      [
-        amount,
-        payment,
-        source,
-        customSource ?? null,
-        chargedAmount ?? null,
-        cashTip ?? null,
-        id,
-      ],
-    );
+    await tripRepository.updateTrip({
+      id,
+      amount,
+      payment,
+      source,
+      customSource: customSource ?? null,
+      chargedAmount: chargedAmount ?? null,
+      cashTip: cashTip ?? null,
+    });
   }
 
   static async updateTimes(
@@ -36,16 +29,13 @@ export class UpdateTrip {
     startTime: Date,
     endTime: Date,
   ): Promise<void> {
-    const db = await getDatabase();
+    const { tripRepository } = getApplicationPersistence();
 
-    await db.runAsync(
-      `
-    UPDATE trips
-    SET startTime = ?, endTime = ?
-    WHERE id = ?
-    `,
-      [startTime.toISOString(), endTime.toISOString(), id],
-    );
+    await tripRepository.updateTripTimes({
+      id,
+      startTime,
+      endTime,
+    });
   }
 
   static async updateManualZones(
@@ -53,16 +43,13 @@ export class UpdateTrip {
     pickupZone: string | null,
     dropoffZone: string | null,
   ): Promise<void> {
-    const db = await getDatabase();
+    const { tripRepository } = getApplicationPersistence();
 
-    await db.runAsync(
-      `
-    UPDATE trips
-    SET manualPickupZone = ?, manualDropoffZone = ?
-    WHERE id = ?
-    `,
-      [pickupZone, dropoffZone, id],
-    );
+    await tripRepository.updateTripManualZones({
+      id,
+      pickupZone,
+      dropoffZone,
+    });
   }
 
   static async updateEditedTrip(params: {
@@ -78,22 +65,20 @@ export class UpdateTrip {
     chargedAmount?: number;
     cashTip?: number;
   }): Promise<void> {
-    await this.updateManualZones(
-      params.id,
-      params.manualPickupZone,
-      params.manualDropoffZone,
-    );
+    const { tripRepository } = getApplicationPersistence();
 
-    await this.updateTimes(params.id, params.startTime, params.endTime);
-
-    await this.execute(
-      params.id,
-      params.amount,
-      params.payment,
-      params.source,
-      params.customSource,
-      params.chargedAmount,
-      params.cashTip,
-    );
+    await tripRepository.updateEditedTrip({
+      id: params.id,
+      amount: params.amount,
+      payment: params.payment,
+      source: params.source,
+      startTime: params.startTime,
+      endTime: params.endTime,
+      manualPickupZone: params.manualPickupZone,
+      manualDropoffZone: params.manualDropoffZone,
+      customSource: params.customSource ?? null,
+      chargedAmount: params.chargedAmount ?? null,
+      cashTip: params.cashTip ?? null,
+    });
   }
 }

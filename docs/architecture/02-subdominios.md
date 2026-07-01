@@ -1,12 +1,13 @@
 # Subdominios
 
-## Trips
+> Estado: Historical / Superseded
+>
+> La definición vigente de subdominios y módulos de soporte está en:
+>
+> - `docs/architecture/Domain Layer v1.0.md`
+> - `docs/architecture/Project Structure v1.0.md`
 
-## Workdays
+## Nota
 
-## Summaries
-
-## Goals
-
-## Geo
+Este documento no es normativo.
 

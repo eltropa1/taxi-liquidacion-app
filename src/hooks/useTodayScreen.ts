@@ -2,10 +2,12 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { useFocusEffect } from "expo-router";
 
 import { PaymentType, TripSource } from "../constants/enums";
-import { GoalService } from "../services/GoalService";
-import { SummaryService } from "../services/SummaryService";
-import { TripQueryService } from "../services/TripQueryService";
-import { WorkdayService } from "../services/WorkdayService";
+import {
+  GoalService,
+  SummaryService,
+  TripQueryService,
+  WorkdayService,
+} from "../application/runtime";
 
 export type TodayTripRow = {
   id: number;

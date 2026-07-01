@@ -1,15 +1,8 @@
-import { getDatabase } from "../../database/database";
+import { getApplicationPersistence } from "../ports/persistence";
 
 export class DeleteTrip {
   static async execute(id: number): Promise<void> {
-    const db = await getDatabase();
-
-    await db.runAsync(
-      `
-      DELETE FROM trips
-      WHERE id = ?
-      `,
-      [id],
-    );
+    const { tripRepository } = getApplicationPersistence();
+    await tripRepository.deleteTrip(id);
   }
 }

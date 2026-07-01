@@ -10,13 +10,17 @@ import {
 } from "react-native";
 import { useLocalSearchParams, router } from "expo-router";
 
-import { TripService } from "../../src/services/TripService";
+import { TripService } from "../../src/application/runtime";
 import { PaymentType, TripSource } from "../../src/constants/enums";
 import { NeighborhoodSelector } from "../../src/components/forms/NeighborhoodSelector";
-import { NEIGHBORHOODS_CATALOG } from "../../src/geo/geocoding/catalog/neighborhoods.catalog";
 import { prepareTripEditSaveData } from "../../src/domain/trips/tripEditPreparation";
 import { UpdateTrip } from "../../src/application/trips/UpdateTrip";
 import { DeleteTrip } from "../../src/application/trips/DeleteTrip";
+import {
+  resolveEffectiveNeighborhoodName,
+  resolveTripEditClock,
+  resolveTripEditSnapshotZones,
+} from "../../src/presentation";
 
 
 export default function EditTripScreen() {
@@ -66,18 +70,12 @@ const [geoDropoffZone, setGeoDropoffZone] = useState<string | null>(null);
       // ---------------------------
 // Resolver zonas GEO automáticas (START / END)
 // ---------------------------
-const snapshots = await TripService.getTripGeoSnapshots(t.id);
+      const snapshots = await TripService.getTripGeoSnapshots(t.id);
+      const { geoPickupZone, geoDropoffZone } =
+        resolveTripEditSnapshotZones(snapshots);
 
-const startSnapshot = snapshots.find((s) => s.kind === "START");
-const endSnapshot = snapshots.find((s) => s.kind === "END");
-
-setGeoPickupZone(
-  startSnapshot?.snapshot?.neighborhood?.id ?? null
-);
-
-setGeoDropoffZone(
-  endSnapshot?.snapshot?.neighborhood?.id ?? null
-);
+      setGeoPickupZone(geoPickupZone);
+      setGeoDropoffZone(geoDropoffZone);
 
 
       setTrip(t);
@@ -104,19 +102,8 @@ setGeoDropoffZone(
       const start = new Date(t.startTime);
       const end = t.endTime ? new Date(t.endTime) : start;
 
-      setStartTimeInput(
-        `${start.getHours().toString().padStart(2, "0")}:${start
-          .getMinutes()
-          .toString()
-          .padStart(2, "0")}`,
-      );
-
-      setEndTimeInput(
-        `${end.getHours().toString().padStart(2, "0")}:${end
-          .getMinutes()
-          .toString()
-          .padStart(2, "0")}`,
-      );
+      setStartTimeInput(resolveTripEditClock(start.toISOString()));
+      setEndTimeInput(resolveTripEditClock(end.toISOString()));
       // ---------------------------
       // Cargar zonas manuales (si existen)
       // ---------------------------
@@ -224,17 +211,6 @@ setGeoDropoffZone(
  * - Manual si existe
  * - Si no, GEO automático
  */
-const resolveEffectiveNeighborhoodName = (
-  manualId: string | null,
-  geoId: string | null
-) => {
-  const id = manualId ?? geoId;
-  if (!id) return "—";
-
-  const found = NEIGHBORHOODS_CATALOG.find((n) => n.id === id);
-  return found ? found.name : "—";
-};
-
   // ---------------------------
   // RENDER
   // ---------------------------

@@ -1,6 +1,5 @@
 import { PaymentType, TripSource } from "../../constants/enums";
-import { getDatabase } from "../../database/database";
-import { WorkdayService } from "../../services/WorkdayService";
+import { getApplicationPersistence } from "../ports/persistence";
 
 export class CreateManualTrip {
   static async execute(params: {
@@ -10,35 +9,21 @@ export class CreateManualTrip {
     payment: PaymentType;
     source: TripSource;
   }) {
-    const db = await getDatabase();
+    const { tripRepository, workdayRepository } = getApplicationPersistence();
 
-    const workday = await WorkdayService.getWorkdayForDate(params.startTime);
+    const workday = await workdayRepository.getWorkdayForDate(params.startTime);
     if (!workday) {
       throw new Error("No existe día de trabajo para esa fecha");
     }
 
-    await db.runAsync(
-      `
-    INSERT INTO trips (
-      startTime,
-      endTime,
-      amount,
-      payment,
-      source,
-      createdAt,
-      workdayId
-    )
-    VALUES (?, ?, ?, ?, ?, ?, ?)
-    `,
-      [
-        params.startTime.toISOString(),
-        params.endTime.toISOString(),
-        params.amount,
-        params.payment,
-        params.source,
-        new Date().toISOString(),
-        workday.id,
-      ],
-    );
+    await tripRepository.createManualTrip({
+      startTime: params.startTime,
+      endTime: params.endTime,
+      amount: params.amount,
+      payment: params.payment,
+      source: params.source,
+      workdayId: workday.id,
+      createdAt: new Date(),
+    });
   }
 }

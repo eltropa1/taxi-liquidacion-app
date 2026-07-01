@@ -184,7 +184,7 @@ Dependen de geolocalización + km + tiempo.
 - [ ] Edición manual controlada
 
 y el git commit que he hecho es: 
-Se completa y blinda el motor de geolocalización (src/geo):
+Se completa y blinda el motor de geolocalización oficial:
 
 - Implementada evaluación AND estricta de reglas por zona
 - Zonas sin reglas se consideran inválidas (fail-safe)

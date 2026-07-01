@@ -8,8 +8,8 @@
  * - data/barrios_madrid.geojson (EPSG:4326 / CRS84)
  *
  * Salida:
- * - src/geo/geocoding/base/neighborhoods.geo.ts
- * - src/geo/geocoding/catalog/neighborhoods.catalog.ts
+ * - src/infrastructure/geocoding/base/neighborhoods.geo.ts
+ * - src/infrastructure/geocoding/catalog/neighborhoods.catalog.ts
  *
  * ⚠️ NO inventa datos
  * ⚠️ Reproducible
@@ -33,12 +33,12 @@ const INPUT_GEOJSON = path.resolve(
 
 const OUTPUT_GEO = path.resolve(
   __dirname,
-  "../../src/geo/geocoding/base/neighborhoods.geo.ts"
+  "../../src/infrastructure/geocoding/base/neighborhoods.geo.ts"
 );
 
 const OUTPUT_CATALOG = path.resolve(
   __dirname,
-  "../../src/geo/geocoding/catalog/neighborhoods.catalog.ts"
+  "../../src/infrastructure/geocoding/catalog/neighborhoods.catalog.ts"
 );
 
 // =============================

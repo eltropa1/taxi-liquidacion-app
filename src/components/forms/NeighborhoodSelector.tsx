@@ -9,7 +9,7 @@ import {
   StyleSheet,
 } from "react-native";
 
-import { NEIGHBORHOODS_UI_LIST } from "../../geo/geocoding/catalog/neighborhoods.catalog";
+import { NEIGHBORHOODS_UI_LIST } from "../../infrastructure/geocoding/catalog/neighborhoods.catalog";
 
 /**
  * Selector de barrio (uso UI).
