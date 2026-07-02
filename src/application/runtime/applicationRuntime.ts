@@ -3,10 +3,12 @@ import type {
   GeoAdministrativeResolverPort,
   GeoLocationPort,
   TripCsvExporterPort,
+  WeekConfigurationStoragePort,
 } from "../ports/runtime";
 
 export type ApplicationRuntime = Readonly<{
   goalStorage: GoalStoragePort;
+  weekConfigurationStorage: WeekConfigurationStoragePort;
   geoLocation: GeoLocationPort;
   geoAdministrativeResolver: GeoAdministrativeResolverPort;
   tripCsvExporter: TripCsvExporterPort;

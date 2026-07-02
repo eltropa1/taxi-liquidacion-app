@@ -18,6 +18,7 @@ import { TripHistory } from "../src/components/trip-history";
 import { buildTodayScreenProjection, toTripVisualProjection } from "../src/presentation";
 import { useTripActions } from "../src/hooks/useTripActions";
 import { ExportService } from "../src/application/runtime";
+import { addCalendarDays } from "../src/utils/dateUtils";
 
 /**
  * Barra de progreso simple y reutilizable
@@ -253,9 +254,7 @@ export default function TodayScreen() {
       <View style={styles.dateSelectorCompact}>
         <Pressable
           onPress={() =>
-            setSelectedDate(
-              new Date(selectedDate.getTime() - 24 * 60 * 60 * 1000),
-            )
+            setSelectedDate((current) => addCalendarDays(current, -1))
           }
         >
           <Text style={styles.dateArrow}>‹</Text>
@@ -267,9 +266,7 @@ export default function TodayScreen() {
 
         <Pressable
           onPress={() =>
-            setSelectedDate(
-              new Date(selectedDate.getTime() + 24 * 60 * 60 * 1000),
-            )
+            setSelectedDate((current) => addCalendarDays(current, 1))
           }
         >
           <Text style={styles.dateArrow}>›</Text>
@@ -453,6 +450,8 @@ export default function TodayScreen() {
       )}
 
       <Button title="Editar metas" onPress={() => router.push("/goals")} />
+      <View style={{ height: 8 }} />
+      <Button title="Configurar semana" onPress={() => router.push("/settings")} />
 
       {/* Toggle resumen */}
       <Pressable

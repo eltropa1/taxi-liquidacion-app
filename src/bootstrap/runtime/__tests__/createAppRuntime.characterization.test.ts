@@ -11,6 +11,10 @@ jest.mock("../../../infrastructure/runtime", () => ({
     getGoals = jest.fn();
     saveGoals = jest.fn();
   },
+  AsyncStorageWeekConfigurationStorage: class {
+    getWeekConfiguration = jest.fn();
+    saveWeekConfiguration = jest.fn();
+  },
   ExpoGeoLocationPort: class {
     getCurrentLocation = jest.fn();
   },

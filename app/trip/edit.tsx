@@ -167,23 +167,31 @@ const [geoDropoffZone, setGeoDropoffZone] = useState<string | null>(null);
       return;
     }
 
-    await UpdateTrip.updateEditedTrip({
-      id: trip.id,
-      amount: prepared.value.amount,
-      payment,
-      source,
-      startTime: prepared.value.newStartTime,
-      endTime: prepared.value.newEndTime,
-      manualPickupZone,
-      manualDropoffZone,
-      chargedAmount: prepared.value.chargedAmountValue,
-      cashTip: prepared.value.cashTipValue,
-    });
+    try {
+      await UpdateTrip.updateEditedTrip({
+        id: trip.id,
+        amount: prepared.value.amount,
+        payment,
+        source,
+        startTime: prepared.value.newStartTime,
+        endTime: prepared.value.newEndTime,
+        manualPickupZone,
+        manualDropoffZone,
+        chargedAmount: prepared.value.chargedAmountValue,
+        cashTip: prepared.value.cashTipValue,
+      });
 
-    // ---------------------------
-    // VOLVER
-    // ---------------------------
-    router.back();
+      // ---------------------------
+      // VOLVER
+      // ---------------------------
+      router.back();
+    } catch (error) {
+      console.error("Error saving edited trip", error);
+      Alert.alert(
+        "No se ha podido guardar la edición",
+        "Revisa los datos e inténtalo de nuevo. No se han guardado cambios parciales.",
+      );
+    }
   };
 
   // ---------------------------

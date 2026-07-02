@@ -17,6 +17,9 @@ import { UpdateTrip } from "../UpdateTrip";
 describe("Trip lifecycle characterization", () => {
   const createPersistence = () => ({
     tripRepository: {
+      runInTransaction: jest.fn(async (operation: () => Promise<void>) =>
+        operation(),
+      ),
       createStartedTrip: jest.fn(),
       createManualTrip: jest.fn(),
       findActiveTrip: jest.fn(),
@@ -61,6 +64,10 @@ describe("Trip lifecycle characterization", () => {
       goalStorage: {
         getGoals: jest.fn(),
         saveGoals: jest.fn(),
+      },
+      weekConfigurationStorage: {
+        getWeekConfiguration: jest.fn(),
+        saveWeekConfiguration: jest.fn(),
       },
       geoLocation: geoLocationService as any,
       geoAdministrativeResolver: {
@@ -168,6 +175,7 @@ describe("Trip lifecycle characterization", () => {
 
       await FinishTrip.execute(12.5, PaymentType.CASH, TripSource.TAXI);
 
+      expect(persistence.tripRepository.runInTransaction).toHaveBeenCalledTimes(1);
       expect(persistence.tripRepository.updateTripTimes).toHaveBeenCalledWith(
         expect.objectContaining({
           id: 99,
@@ -192,6 +200,72 @@ describe("Trip lifecycle characterization", () => {
           kind: "END",
         }),
       );
+    });
+
+    it("finalizes the trip even when GPS capture fails", async () => {
+      const trip = Trip.start({
+        id: "99",
+        startedAt: new Date("2026-07-01T10:00:00.000Z"),
+        workdayId: "7",
+        classification: TripServiceClassification.create({
+          platformId: TripSource.TAXI,
+          serviceLabel: TripSource.TAXI,
+        }),
+      });
+
+      persistence.tripRepository.findActiveTrip.mockResolvedValue({
+        id: 99,
+        startTime: "2026-07-01T10:00:00.000Z",
+      });
+      persistence.tripRepository.findCanonicalTripById.mockResolvedValue(trip);
+      geoLocationService.getCurrentLocation.mockRejectedValueOnce(
+        new Error("gps unavailable"),
+      );
+
+      await expect(
+        FinishTrip.execute(12.5, PaymentType.CASH, TripSource.TAXI),
+      ).resolves.toEqual({
+        finalized: true,
+        enrichmentSaved: false,
+      });
+
+      expect(persistence.tripRepository.runInTransaction).toHaveBeenCalledTimes(1);
+      expect(persistence.tripRepository.updateTripTimes).toHaveBeenCalledTimes(1);
+      expect(persistence.tripRepository.updateTrip).toHaveBeenCalledTimes(1);
+      expect(persistence.tripGeoSnapshotRepository.insert).not.toHaveBeenCalled();
+    });
+
+    it("finalizes the trip even when snapshot persistence fails", async () => {
+      const trip = Trip.start({
+        id: "99",
+        startedAt: new Date("2026-07-01T10:00:00.000Z"),
+        workdayId: "7",
+        classification: TripServiceClassification.create({
+          platformId: TripSource.TAXI,
+          serviceLabel: TripSource.TAXI,
+        }),
+      });
+
+      persistence.tripRepository.findActiveTrip.mockResolvedValue({
+        id: 99,
+        startTime: "2026-07-01T10:00:00.000Z",
+      });
+      persistence.tripRepository.findCanonicalTripById.mockResolvedValue(trip);
+      persistence.tripGeoSnapshotRepository.insert.mockRejectedValueOnce(
+        new Error("snapshot unavailable"),
+      );
+
+      await expect(
+        FinishTrip.execute(12.5, PaymentType.CASH, TripSource.TAXI),
+      ).resolves.toEqual({
+        finalized: true,
+        enrichmentSaved: false,
+      });
+
+      expect(persistence.tripRepository.runInTransaction).toHaveBeenCalledTimes(1);
+      expect(persistence.tripRepository.updateTripTimes).toHaveBeenCalledTimes(1);
+      expect(persistence.tripRepository.updateTrip).toHaveBeenCalledTimes(1);
+      expect(persistence.tripGeoSnapshotRepository.insert).toHaveBeenCalledTimes(1);
     });
   });
 
@@ -259,6 +333,31 @@ describe("Trip lifecycle characterization", () => {
           customSource: null,
           chargedAmount: null,
           cashTip: null,
+        }),
+      );
+    });
+
+    it("updates an edited trip inside a single transaction", async () => {
+      await UpdateTrip.updateEditedTrip({
+        id: 33,
+        amount: 21,
+        payment: PaymentType.CASH,
+        source: TripSource.CABIFY,
+        startTime: new Date("2026-07-01T09:00:00.000Z"),
+        endTime: new Date("2026-07-01T09:20:00.000Z"),
+        manualPickupZone: "016",
+        manualDropoffZone: "014",
+        customSource: undefined,
+        chargedAmount: undefined,
+        cashTip: undefined,
+      });
+
+      expect(persistence.tripRepository.runInTransaction).toHaveBeenCalledTimes(1);
+      expect(persistence.tripRepository.updateEditedTrip).toHaveBeenCalledWith(
+        expect.objectContaining({
+          id: 33,
+          manualPickupZone: "016",
+          manualDropoffZone: "014",
         }),
       );
     });

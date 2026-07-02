@@ -60,9 +60,9 @@ type TodayScreenState = {
   refreshData: () => Promise<void>;
 };
 
-async function loadTodayScreenData(selectedDate: Date) {
+export async function loadTodayScreenData(selectedDate: Date) {
   const activePromise = TripQueryService.getActiveTrip();
-  const weekSummaryPromise = SummaryService.getWeekSummary();
+  const weekSummaryPromise = SummaryService.getWeekSummary(selectedDate);
   const monthSummaryPromise = SummaryService.getMonthSummary();
   const workdayPromise = WorkdayService.getOpenWorkday();
   const workdayInfoPromise = WorkdayService.getWorkdayInfoForDate(selectedDate);
@@ -79,7 +79,7 @@ async function loadTodayScreenData(selectedDate: Date) {
   let dailySummary: TodayDailySummary = null;
 
   if (wd) {
-    const tripsPromise = TripQueryService.getTripsForDate(selectedDate);
+    const tripsPromise = TripQueryService.getTripsForWorkday(wd.id);
     const dailySummaryPromise = SummaryService.getSummaryForWorkday(wd.id);
 
     [trips, dailySummary] = await Promise.all([
@@ -113,9 +113,15 @@ export function useTodayScreen(selectedDate: Date): TodayScreenState {
   const [activeWorkday, setActiveWorkday] = useState<TodayActiveWorkday>(null);
   const [dailySummary, setDailySummary] = useState<TodayDailySummary>(null);
   const hasMountedRef = useRef(false);
+  const refreshRequestRef = useRef(0);
 
   const refreshData = useCallback(async () => {
+    const requestId = ++refreshRequestRef.current;
     const data = await loadTodayScreenData(selectedDate);
+
+    if (requestId !== refreshRequestRef.current) {
+      return;
+    }
 
     setActiveTripId(data.activeTripId);
     setTrips(data.trips);
@@ -127,6 +133,13 @@ export function useTodayScreen(selectedDate: Date): TodayScreenState {
   }, [selectedDate]);
 
   useEffect(() => {
+    setActiveTripId(null);
+    setTrips([]);
+    setWeeklySummary(null);
+    setMonthlySummary(null);
+    setWorkdayInfo(null);
+    setActiveWorkday(null);
+    setDailySummary(null);
     refreshData().catch(console.error);
   }, [refreshData]);
 

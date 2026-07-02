@@ -2,6 +2,15 @@ import { PaymentType, TripSource } from "../../../constants/enums";
 import { buildTodayScreenProjection } from "../TodayScreenProjection";
 
 describe("buildTodayScreenProjection", () => {
+  beforeAll(() => {
+    jest.useFakeTimers();
+    jest.setSystemTime(new Date("2026-07-01T12:00:00.000Z"));
+  });
+
+  afterAll(() => {
+    jest.useRealTimers();
+  });
+
   it("derives the visual state without changing business data", () => {
     const projection = buildTodayScreenProjection({
       selectedDate: new Date("2026-07-01T00:00:00.000Z"),

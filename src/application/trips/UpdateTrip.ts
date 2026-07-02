@@ -67,18 +67,20 @@ export class UpdateTrip {
   }): Promise<void> {
     const { tripRepository } = getApplicationPersistence();
 
-    await tripRepository.updateEditedTrip({
-      id: params.id,
-      amount: params.amount,
-      payment: params.payment,
-      source: params.source,
-      startTime: params.startTime,
-      endTime: params.endTime,
-      manualPickupZone: params.manualPickupZone,
-      manualDropoffZone: params.manualDropoffZone,
-      customSource: params.customSource ?? null,
-      chargedAmount: params.chargedAmount ?? null,
-      cashTip: params.cashTip ?? null,
+    await tripRepository.runInTransaction(async () => {
+      await tripRepository.updateEditedTrip({
+        id: params.id,
+        amount: params.amount,
+        payment: params.payment,
+        source: params.source,
+        startTime: params.startTime,
+        endTime: params.endTime,
+        manualPickupZone: params.manualPickupZone,
+        manualDropoffZone: params.manualDropoffZone,
+        customSource: params.customSource ?? null,
+        chargedAmount: params.chargedAmount ?? null,
+        cashTip: params.cashTip ?? null,
+      });
     });
   }
 }

@@ -6,7 +6,7 @@ describe("SqliteTripRepository", () => {
     runAsync: jest.fn().mockResolvedValue({ lastInsertRowId: 99 }),
     getFirstAsync: jest.fn(),
     getAllAsync: jest.fn(),
-    execAsync: jest.fn(),
+    execAsync: jest.fn().mockResolvedValue(undefined),
   });
 
   it("persists a started trip using the official insert shape", async () => {
@@ -63,5 +63,48 @@ describe("SqliteTripRepository", () => {
       expect.stringContaining("UPDATE trips\n      SET amount = ?, payment = ?, source = ?, customSource = ?, chargedAmount = ?, cashTip = ?"),
       [21, PaymentType.CASH, TripSource.CABIFY, null, null, null, 55],
     );
+  });
+
+  it("runs trip changes inside a database transaction", async () => {
+    const db = createDatabase();
+    const repository = new SqliteTripRepository(db as any);
+
+    const result = await repository.runInTransaction(async () => {
+      await repository.updateTrip({
+        id: 55,
+        amount: 21,
+        payment: PaymentType.CASH,
+        source: TripSource.CABIFY,
+        customSource: null,
+        chargedAmount: null,
+        cashTip: null,
+      });
+
+      return "ok";
+    });
+
+    expect(result).toBe("ok");
+    expect(db.execAsync).toHaveBeenNthCalledWith(
+      1,
+      "BEGIN IMMEDIATE TRANSACTION;",
+    );
+    expect(db.execAsync).toHaveBeenNthCalledWith(2, "COMMIT;");
+  });
+
+  it("rolls back the transaction when the operation fails", async () => {
+    const db = createDatabase();
+    const repository = new SqliteTripRepository(db as any);
+
+    await expect(
+      repository.runInTransaction(async () => {
+        throw new Error("boom");
+      }),
+    ).rejects.toThrow("boom");
+
+    expect(db.execAsync).toHaveBeenNthCalledWith(
+      1,
+      "BEGIN IMMEDIATE TRANSACTION;",
+    );
+    expect(db.execAsync).toHaveBeenNthCalledWith(2, "ROLLBACK;");
   });
 });

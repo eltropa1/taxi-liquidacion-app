@@ -1,4 +1,5 @@
 import { Dispatch, SetStateAction, useCallback } from "react";
+import { Alert } from "react-native";
 
 import { PaymentType, TripSource } from "../constants/enums";
 import { prepareTripSaveData } from "../domain/trips/tripSavePreparation";
@@ -80,16 +81,34 @@ export function useTripActions({
           preparedTrip.finalSource as any,
         );
       } else {
-        await FinishTrip.execute(
-          preparedTrip.amount,
-          input.payment,
-          preparedTrip.finalSource as any,
-          undefined,
-          preparedTrip.chargedAmountValue,
-          preparedTrip.cashTip,
-        );
-        setLastPayment(input.payment);
-        setLastSource(input.source);
+        try {
+          const result = await FinishTrip.execute(
+            preparedTrip.amount,
+            input.payment,
+            preparedTrip.finalSource as any,
+            undefined,
+            preparedTrip.chargedAmountValue,
+            preparedTrip.cashTip,
+          );
+          if (result.finalized) {
+            setLastPayment(input.payment);
+            setLastSource(input.source);
+
+            if (!result.enrichmentSaved) {
+              Alert.alert(
+                "Viaje finalizado",
+                "No se pudo guardar el enriquecimiento de ubicación, pero el viaje sí quedó finalizado.",
+              );
+            }
+          }
+        } catch (error) {
+          console.error("Error finalizing trip", error);
+          Alert.alert(
+            "No se ha podido finalizar el viaje",
+            "Revisa el GPS y vuelve a intentarlo. No se han guardado cambios parciales.",
+          );
+          return;
+        }
       }
 
       setEditingTrip(null);

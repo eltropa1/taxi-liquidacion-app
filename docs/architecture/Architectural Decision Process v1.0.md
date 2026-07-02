@@ -13,6 +13,7 @@ Su función es asegurar que la arquitectura evolucione de forma coherente con el
 La base de decisión es:
 
 - `docs/00-product-construction-principles.md`
+- `docs/architecture/Prioridad Operativa y Enriquecimiento de Datos v1.0.md`
 - `docs/domain/Trip Domain v2.md`
 - `docs/persistence/Persistent Model v1.0.md`
 - `docs/persistence/Persistence Architecture v1.0.md`
@@ -98,4 +99,3 @@ Toda decisión relevante debe:
 ## 6. Regla final
 
 Si una decisión no puede explicarse en términos de negocio, arquitectura y límites de capa, no debe adoptarse.
-

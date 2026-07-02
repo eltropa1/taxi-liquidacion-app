@@ -18,6 +18,24 @@ import type { TripRecordRow } from "../mappers/TripRecordMapper";
 export class SqliteTripRepository implements TripRepositoryPort {
   constructor(private readonly database: PersistenceDatabase) {}
 
+  async runInTransaction<T>(operation: () => Promise<T>): Promise<T> {
+    await this.database.execAsync("BEGIN IMMEDIATE TRANSACTION;");
+
+    try {
+      const result = await operation();
+      await this.database.execAsync("COMMIT;");
+      return result;
+    } catch (error) {
+      try {
+        await this.database.execAsync("ROLLBACK;");
+      } catch (rollbackError) {
+        console.error("Error ejecutando ROLLBACK de trip transaction", rollbackError);
+      }
+
+      throw error;
+    }
+  }
+
   async createStartedTrip(input: TripStartInput): Promise<{ id: number }> {
     const createdAt = input.createdAt ?? input.startedAt;
     const result = await this.database.runAsync(

@@ -10,6 +10,7 @@ import {
 } from "../../application/runtime";
 import {
   AsyncStorageGoalStorage,
+  AsyncStorageWeekConfigurationStorage,
   ExpoGeoLocationPort,
   ExpoTripCsvExporter,
   GeoAdministrativeResolverAdapter,
@@ -34,6 +35,7 @@ export async function createAppRuntime(): Promise<AppRuntime> {
 
   const application: ApplicationRuntime = Object.freeze({
     goalStorage: new AsyncStorageGoalStorage(),
+    weekConfigurationStorage: new AsyncStorageWeekConfigurationStorage(),
     geoLocation: new ExpoGeoLocationPort(),
     geoAdministrativeResolver: new GeoAdministrativeResolverAdapter(),
     tripCsvExporter: new ExpoTripCsvExporter(),

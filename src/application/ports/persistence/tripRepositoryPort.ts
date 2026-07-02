@@ -94,6 +94,8 @@ export type TripEditedInput = Readonly<{
 }>;
 
 export interface TripRepositoryPort {
+  runInTransaction<T>(operation: () => Promise<T>): Promise<T>;
+
   createStartedTrip(input: TripStartInput): Promise<{ id: number }>;
 
   createManualTrip(input: TripManualInput): Promise<{ id: number }>;

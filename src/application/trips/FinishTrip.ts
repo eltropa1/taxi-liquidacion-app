@@ -8,6 +8,11 @@ import {
 import { getApplicationRuntime } from "../runtime";
 import { getApplicationPersistence } from "../ports/persistence";
 
+export type FinishTripResult = Readonly<{
+  finalized: boolean;
+  enrichmentSaved: boolean;
+}>;
+
 function mapPaymentMethodId(
   payment: PaymentType | null,
 ): TripPaymentMethodId | null {
@@ -110,7 +115,7 @@ function mapPersistedPayment(
 /**
  * Caso de uso: finalizar un viaje.
  *
- * Mantiene la secuencia histórica exacta para no alterar comportamiento.
+ * Garantiza la finalización crítica y trata el enriquecimiento GEO como best effort.
  */
 export class FinishTrip {
   static async execute(
@@ -120,15 +125,19 @@ export class FinishTrip {
     customSource?: string,
     chargedAmount?: number,
     cashTip?: number,
-  ): Promise<void> {
+  ): Promise<FinishTripResult> {
     const { tripRepository, tripGeoSnapshotRepository } =
       getApplicationPersistence();
 
     const active = await tripRepository.findActiveTrip();
-    if (!active) return;
+    if (!active) {
+      return { finalized: false, enrichmentSaved: true };
+    }
 
     const trip = await tripRepository.findCanonicalTripById(active.id);
-    if (!trip) return;
+    if (!trip) {
+      return { finalized: false, enrichmentSaved: true };
+    }
 
     const endedAt = new Date();
     const completionInput = {
@@ -163,39 +172,44 @@ export class FinishTrip {
         ? trip.economics?.collectedAmountDelta ?? null
         : null;
 
-    // 2️⃣ Persistir el estado resultante
-    await tripRepository.updateTripTimes({
-      id: Number(trip.id),
-      startTime: trip.chronology.startedAt,
-      endTime: endedAt,
+    await tripRepository.runInTransaction(async () => {
+      // 2️⃣ Persistir el estado resultante de forma atómica
+      await tripRepository.updateTripTimes({
+        id: Number(trip.id),
+        startTime: trip.chronology.startedAt,
+        endTime: endedAt,
+      });
+
+      await tripRepository.updateTrip({
+        id: Number(trip.id),
+        amount: persistedAmount ?? 0,
+        payment: persistedPayment ?? payment,
+        source: persistedSource.source,
+        customSource: persistedSource.customSource,
+        chargedAmount: persistedChargedAmount,
+        cashTip: persistedCashTip,
+      });
     });
 
-    await tripRepository.updateTrip({
-      id: Number(trip.id),
-      amount: persistedAmount ?? 0,
-      payment: persistedPayment ?? payment,
-      source: persistedSource.source,
-      customSource: persistedSource.customSource,
-      chargedAmount: persistedChargedAmount,
-      cashTip: persistedCashTip,
-    });
+    try {
+      const runtime = getApplicationRuntime();
+      const location = await runtime.geoLocation.getCurrentLocation();
+      const geoSnapshot = runtime.geoAdministrativeResolver.resolve(
+        location.latitude,
+        location.longitude,
+      );
 
-    // 3️⃣ GPS real
-    const runtime = getApplicationRuntime();
-    const location = await runtime.geoLocation.getCurrentLocation();
+      await tripGeoSnapshotRepository.insert({
+        tripId: Number(trip.id),
+        kind: "END",
+        snapshot: geoSnapshot,
+        createdAt: new Date().toISOString(),
+      });
 
-    // 4️⃣ Resolver snapshot administrativo
-    const geoSnapshot = runtime.geoAdministrativeResolver.resolve(
-      location.latitude,
-      location.longitude,
-    );
-
-    // 5️⃣ Guardar snapshot END
-    await tripGeoSnapshotRepository.insert({
-      tripId: Number(trip.id),
-      kind: "END",
-      snapshot: geoSnapshot,
-      createdAt: new Date().toISOString(),
-    });
+      return { finalized: true, enrichmentSaved: true };
+    } catch (error) {
+      console.error("Error capturando snapshot GEO de fin de viaje", error);
+      return { finalized: true, enrichmentSaved: false };
+    }
   }
 }

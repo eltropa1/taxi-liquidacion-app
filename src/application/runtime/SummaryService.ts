@@ -1,6 +1,8 @@
-import { getCurrentMonthRange, getCurrentWeekRange, getTodayRange } from "../../utils/dateUtils";
+import { getCurrentMonthRange, getTodayRange } from "../../utils/dateUtils";
 import { PaymentType, TripSource } from "../../constants/enums";
+import { getOperationalWeekRange } from "../../domain/date-time";
 import { getApplicationPersistence } from "../ports/persistence";
+import { WeekConfigurationService } from "./WeekConfigurationService";
 
 type Summary = {
   total: number;
@@ -103,9 +105,13 @@ export class SummaryService {
     return this.getSummaryBetweenDates(start, end);
   }
 
-  static async getWeekSummary() {
-    const { start, end } = getCurrentWeekRange();
-    return this.getSummaryBetweenDates(start, end);
+  static async getWeekSummary(anchorDate: Date = new Date()) {
+    const weekStartDay = await WeekConfigurationService.getWeekStartDay();
+    const { startDate, endDate } = getOperationalWeekRange(
+      anchorDate,
+      weekStartDay,
+    );
+    return this.getSummaryBetweenDates(startDate, endDate);
   }
 
   static async getMonthSummary() {

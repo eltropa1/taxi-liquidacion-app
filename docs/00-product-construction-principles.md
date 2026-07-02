@@ -187,3 +187,13 @@ TaxiGeo no se está refactorizando.
 TaxiGeo se está construyendo correctamente por primera vez utilizando todo el conocimiento obtenido durante el prototipo.
 
 Este principio tiene prioridad sobre cualquier decisión de implementación.
+
+---
+
+# 11. La operativa del taxista tiene prioridad sobre el enriquecimiento de datos
+
+La misión principal de TaxiGeo es registrar de forma rápida, estable y fiable la actividad económica del taxista.
+
+Los datos de enriquecimiento aportan un enorme valor para estadísticas, análisis, inteligencia artificial y evolución futura del producto, pero nunca pueden bloquear la operativa diaria.
+
+Este principio se desarrolla como norma arquitectónica en `docs/architecture/Prioridad Operativa y Enriquecimiento de Datos v1.0.md`.
