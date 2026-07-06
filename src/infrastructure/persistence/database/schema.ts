@@ -5,6 +5,8 @@ CREATE TABLE IF NOT EXISTS workdays (
   id INTEGER PRIMARY KEY AUTOINCREMENT,
   startTime TEXT NOT NULL,
   endTime TEXT,
+  startOdometer INTEGER,
+  endOdometer INTEGER,
   isClosed INTEGER NOT NULL DEFAULT 0,
   createdAt TEXT NOT NULL
 );

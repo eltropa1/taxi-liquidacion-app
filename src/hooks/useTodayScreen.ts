@@ -25,17 +25,27 @@ type TodayGoals = {
 };
 
 type TodayWorkdayInfo = {
+  id: number;
   startTime: string;
   endTime: string | null;
+  startOdometer: number | null;
+  endOdometer: number | null;
   isClosed: boolean;
 };
 
 type TodayActiveWorkday = {
   id: number;
   startTime: string;
+  startOdometer: number | null;
 } | null | undefined;
 
 type TodayDailySummary = {
+  servicesTotal: number;
+  servicesTaxi: number;
+  servicesUber: number;
+  servicesCabify: number;
+  servicesFreeNow: number;
+  servicesOther: number;
   total: number;
   taxi: number;
   uber: number;

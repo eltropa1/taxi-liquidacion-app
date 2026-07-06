@@ -38,31 +38,51 @@ export async function runMigrations() {
       id INTEGER PRIMARY KEY AUTOINCREMENT,
       startTime TEXT NOT NULL,
       endTime TEXT,
+      startOdometer INTEGER,
+      endOdometer INTEGER,
       isClosed INTEGER NOT NULL DEFAULT 0,
       createdAt TEXT NOT NULL
     );
   `);
 
-  const columns = await db.getAllAsync<{ name: string }>(
-    `PRAGMA table_info(trips);`,
-  );
+  const getTableColumns = async (tableName: string) =>
+    db.getAllAsync<{ name: string }>(`PRAGMA table_info(${tableName});`);
 
-  const ensureColumn = async (columnName: string, statement: string) => {
+  const ensureColumn = async (
+    columns: Array<{ name: string }>,
+    columnName: string,
+    statement: string,
+  ) => {
     const hasColumn = columns.some((column) => column.name === columnName);
     if (!hasColumn) {
       await db.execAsync(statement);
     }
   };
 
-  await ensureColumn("chargedAmount", `ALTER TABLE trips ADD COLUMN chargedAmount REAL;`);
-  await ensureColumn("workdayId", `ALTER TABLE trips ADD COLUMN workdayId INTEGER;`);
-  await ensureColumn("customSource", `ALTER TABLE trips ADD COLUMN customSource TEXT;`);
-  await ensureColumn("cashTip", `ALTER TABLE trips ADD COLUMN cashTip REAL;`);
+  const tripColumns = await getTableColumns("trips");
+  const workdayColumns = await getTableColumns("workdays");
+
+  await ensureColumn(tripColumns, "chargedAmount", `ALTER TABLE trips ADD COLUMN chargedAmount REAL;`);
+  await ensureColumn(tripColumns, "workdayId", `ALTER TABLE trips ADD COLUMN workdayId INTEGER;`);
+  await ensureColumn(tripColumns, "customSource", `ALTER TABLE trips ADD COLUMN customSource TEXT;`);
+  await ensureColumn(tripColumns, "cashTip", `ALTER TABLE trips ADD COLUMN cashTip REAL;`);
   await ensureColumn(
+    workdayColumns,
+    "startOdometer",
+    `ALTER TABLE workdays ADD COLUMN startOdometer INTEGER;`,
+  );
+  await ensureColumn(
+    workdayColumns,
+    "endOdometer",
+    `ALTER TABLE workdays ADD COLUMN endOdometer INTEGER;`,
+  );
+  await ensureColumn(
+    tripColumns,
     "manualPickupZone",
     `ALTER TABLE trips ADD COLUMN manualPickupZone TEXT;`,
   );
   await ensureColumn(
+    tripColumns,
     "manualDropoffZone",
     `ALTER TABLE trips ADD COLUMN manualDropoffZone TEXT;`,
   );
@@ -103,8 +123,8 @@ export async function runMigrations() {
     const now = new Date().toISOString();
 
     await db.execAsync(`
-      INSERT INTO workdays (startTime, endTime, isClosed, createdAt)
-      VALUES ('${startTime}', '${endTime}', 1, '${now}');
+      INSERT INTO workdays (startTime, endTime, startOdometer, endOdometer, isClosed, createdAt)
+      VALUES ('${startTime}', '${endTime}', NULL, NULL, 1, '${now}');
     `);
 
     const insertedId = await db.getAllAsync<{ id: number }>(

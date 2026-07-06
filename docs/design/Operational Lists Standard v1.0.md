@@ -8,6 +8,8 @@ This document defines the official design standard for operational lists in Taxi
 
 The Trip History V2 is the first implementation of this standard, but the standard is not limited to trip history.
 
+The approved Home V2 baseline applies this standard with neutral rows and platform chips in the Registry Operativo.
+
 ---
 
 ## Mission
@@ -153,9 +155,9 @@ For Trip History V2:
 
 | Visual channel | Meaning |
 |---|---|
-| Row background color | Platform |
-| Main icon | Service type |
-| Platform mark | Platform |
+| Row background color | Neutral surface |
+| Service type slot | Not used in the Home V2 baseline |
+| Platform chip | Platform |
 | Payment icon | Payment method |
 | Text | Time and operational data |
 | Amount | Economic result |
@@ -169,15 +171,12 @@ These meanings must not be mixed.
 
 The approved order for Trip History V2 is:
 
-1. service type icon, when available;
-2. platform mark;
-3. payment method icon;
-4. start time → end time;
-5. flexible space;
-6. amount;
-7. chevron.
-
-If the service type is not available, the service type slot must be hidden.
+1. platform chip;
+2. payment method icon;
+3. start time → end time;
+4. flexible space;
+5. amount;
+6. chevron.
 
 Do not invent data.
 
@@ -187,8 +186,7 @@ Do not invent data.
 
 Trip History V2 may show:
 
-- service type icon, when available;
-- platform identity;
+- platform chip;
 - payment method;
 - start time;
 - end time;
@@ -208,6 +206,7 @@ Trip History V2 rows must not show:
 - notes;
 - statistics;
 - secondary comments;
+- full platform names;
 - operational details that belong to the trip detail screen.
 
 This information belongs in the detail or edit screen.
@@ -238,8 +237,9 @@ Colors must not be so saturated that they reduce text readability.
 
 For Trip History V2:
 
-- the row background color identifies the platform;
-- the color must come from the Visual Domain;
+- the row background remains neutral;
+- the platform chip identifies the platform;
+- the chip colors must come from the Visual Domain;
 - the UI must not calculate, mix, or invent colors.
 
 ---
@@ -261,8 +261,8 @@ For Trip History V2:
 - `TripVisualProjection` prepares the row data;
 - `TripHistory` renders the projection;
 - `VisualCatalog` provides visual identity;
-- `PlatformIdentity.surfaceColor` provides row background;
-- `PlatformIdentity.onSurfaceColor` provides readable foreground.
+- `PlatformIdentity.surfaceColor` and `PlatformIdentity.onSurfaceColor` provide the chip appearance;
+- the row background remains neutral.
 
 ---
 

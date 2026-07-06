@@ -1,140 +1,447 @@
-import { router } from "expo-router";
-import { useEffect, useState } from "react";
-import { Button, Pressable, StyleSheet, Text, View } from "react-native";
+import { useEffect, useMemo, useState } from "react";
+import {
+  Alert,
+  Modal,
+  Pressable,
+  ScrollView,
+  StyleSheet,
+  Text,
+  TextInput,
+  View,
+} from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 
 import {
-  WEEK_START_DAY_ORDER,
-  type WeekStartDay as WeekStartDayType,
-} from "../../src/domain/date-time";
-import { WeekConfigurationService } from "../../src/application/runtime";
+  ExportService,
+  WeekConfigurationService,
+} from "../../src/application/runtime";
+import { UpdateWorkday } from "../../src/application/workdays/UpdateWorkday";
+import type { WeekStartDay } from "../../src/domain/date-time";
+import { useTodayScreen } from "../../src/hooks/useTodayScreen";
+import {
+  parsePositiveIntegerInput,
+  validateWorkdayOdometers,
+} from "../../src/domain/workdays/workdayOdometer";
 
-const WEEK_START_DAY_LABELS: Record<WeekStartDayType, string> = {
-  monday: "Lunes",
-  tuesday: "Martes",
-  wednesday: "Miércoles",
-  thursday: "Jueves",
-  friday: "Viernes",
-  saturday: "Sábado",
-  sunday: "Domingo",
-};
+export default function MoreScreen() {
+  const [todayDate] = useState(() => new Date());
+  const [weekStartDay, setWeekStartDay] = useState<WeekStartDay>("monday");
+  const [editingOdometersVisible, setEditingOdometersVisible] = useState(false);
+  const [workdayStartOdometerInput, setWorkdayStartOdometerInput] = useState("");
+  const [workdayEndOdometerInput, setWorkdayEndOdometerInput] = useState("");
 
-export default function SettingsScreen() {
-  const [weekStartDay, setWeekStartDay] = useState<WeekStartDayType>("monday");
-  const [loading, setLoading] = useState(true);
-  const [saving, setSaving] = useState(false);
+  const { workdayInfo, refreshData } = useTodayScreen(todayDate);
+
+  const weekdays = useMemo(
+    () => [
+      { value: "monday" as const, label: "L" },
+      { value: "tuesday" as const, label: "M" },
+      { value: "wednesday" as const, label: "X" },
+      { value: "thursday" as const, label: "J" },
+      { value: "friday" as const, label: "V" },
+      { value: "saturday" as const, label: "S" },
+      { value: "sunday" as const, label: "D" },
+    ],
+    [],
+  );
 
   useEffect(() => {
     WeekConfigurationService.getWeekConfiguration()
-      .then((configuration) => {
-        setWeekStartDay(configuration.weekStartDay);
-      })
-      .finally(() => setLoading(false));
+      .then((configuration) => setWeekStartDay(configuration.weekStartDay))
+      .catch(console.error);
   }, []);
 
-  const handleSave = async () => {
-    setSaving(true);
-    try {
-      await WeekConfigurationService.saveWeekConfiguration({ weekStartDay });
-      alert("Configuración de semana guardada correctamente");
-    } finally {
-      setSaving(false);
+  const openEditOdometersModal = () => {
+    if (!workdayInfo) {
+      Alert.alert(
+        "Sin jornada disponible",
+        "No hay una jornada abierta o reciente para editar odómetros.",
+      );
+      return;
     }
+
+    setWorkdayStartOdometerInput(
+      workdayInfo.startOdometer !== null && workdayInfo.startOdometer !== undefined
+        ? String(workdayInfo.startOdometer)
+        : "",
+    );
+    setWorkdayEndOdometerInput(
+      workdayInfo.endOdometer !== null && workdayInfo.endOdometer !== undefined
+        ? String(workdayInfo.endOdometer)
+        : "",
+    );
+    setEditingOdometersVisible(true);
   };
 
-  if (loading) return null;
+  const closeEditOdometersModal = () => {
+    setEditingOdometersVisible(false);
+    setWorkdayStartOdometerInput("");
+    setWorkdayEndOdometerInput("");
+  };
+
+  const handleSaveWeekConfiguration = async () => {
+    await WeekConfigurationService.saveWeekConfiguration({ weekStartDay });
+    alert("Configuración de semana guardada correctamente");
+  };
+
+  const handleSaveOdometers = async () => {
+    if (!workdayInfo) {
+      Alert.alert(
+        "Sin jornada disponible",
+        "No hay una jornada disponible para actualizar odómetros.",
+      );
+      return;
+    }
+
+    const startOdometer = parsePositiveIntegerInput(workdayStartOdometerInput);
+    const trimmedEndOdometer = workdayEndOdometerInput.trim();
+    const endOdometer =
+      trimmedEndOdometer === ""
+        ? null
+        : parsePositiveIntegerInput(trimmedEndOdometer);
+
+    const validation = validateWorkdayOdometers(startOdometer, endOdometer);
+
+    if (!validation.ok) {
+      if (validation.error === "START_ODOMETER_REQUIRED") {
+        Alert.alert(
+          "Odómetro inicial obligatorio",
+          "Introduce un odómetro inicial entero y positivo.",
+        );
+        return;
+      }
+
+      if (
+        validation.error === "START_ODOMETER_INVALID" ||
+        validation.error === "END_ODOMETER_INVALID"
+      ) {
+        Alert.alert(
+          "Odómetro inválido",
+          "Los odómetros deben ser enteros y positivos.",
+        );
+        return;
+      }
+
+      Alert.alert(
+        "Odómetros incoherentes",
+        "El odómetro final no puede ser menor que el inicial.",
+      );
+      return;
+    }
+
+    if (startOdometer === null) {
+      return;
+    }
+
+    await UpdateWorkday.execute({
+      id: workdayInfo.id,
+      startOdometer,
+      endOdometer,
+    });
+    closeEditOdometersModal();
+    await refreshData();
+  };
 
   return (
-    <SafeAreaView style={styles.container}>
-      <View style={{ marginBottom: 10 }}>
-        <Button title="← Volver" onPress={() => router.back()} />
-      </View>
+    <SafeAreaView style={styles.screen} edges={["top", "bottom"]}>
+      <ScrollView
+        style={styles.scrollContainer}
+        contentContainerStyle={styles.content}
+        showsVerticalScrollIndicator={false}
+      >
+        <Text style={styles.title}>Más</Text>
 
-      <Text style={styles.title}>Configuración de semana</Text>
-      <Text style={styles.description}>
-        El resumen semanal se calculará desde el día seleccionado hasta seis
-        días después.
-      </Text>
+        <View style={styles.actionsSection}>
+          <Text style={styles.sectionTitle}>Acciones disponibles</Text>
 
-      <View style={styles.options}>
-        {WEEK_START_DAY_ORDER.map((day) => (
           <Pressable
-            key={day}
-            onPress={() => setWeekStartDay(day)}
-            style={[styles.chip, weekStartDay === day && styles.chipActive]}
+            onPress={() => ExportService.exportTripsToCSV()}
+            style={({ pressed }) => [
+              styles.actionRow,
+              pressed && styles.actionRowPressed,
+            ]}
           >
-            <Text
-              style={[
-                styles.chipText,
-                weekStartDay === day && styles.chipTextActive,
-              ]}
-            >
-              {WEEK_START_DAY_LABELS[day]}
-            </Text>
+            <Text style={styles.actionLabel}>Exportar CSV</Text>
+            <Text style={styles.actionChevron}>›</Text>
           </Pressable>
-        ))}
-      </View>
 
-      <Text style={styles.current}>
-        Semana operativa actual: {WEEK_START_DAY_LABELS[weekStartDay]}
-      </Text>
+          <Pressable
+            onPress={openEditOdometersModal}
+            style={({ pressed }) => [
+              styles.actionRow,
+              pressed && styles.actionRowPressed,
+            ]}
+          >
+            <Text style={styles.actionLabel}>Editar odómetros</Text>
+            <Text style={styles.actionChevron}>›</Text>
+          </Pressable>
+        </View>
 
-      <Button
-        title={saving ? "Guardando..." : "Guardar configuración"}
-        onPress={handleSave}
-        disabled={saving}
-      />
+        <View style={styles.section}>
+          <Text style={styles.sectionTitle}>Configuración</Text>
+          <Text style={styles.sectionSubtitle}>Configuración de semana</Text>
+
+          <View style={styles.weekdayRow}>
+            {weekdays.map((day) => (
+              <Pressable
+                key={day.value}
+                onPress={() => setWeekStartDay(day.value)}
+                style={({ pressed }) => [
+                  styles.weekdayChip,
+                  weekStartDay === day.value && styles.weekdayChipActive,
+                  pressed && styles.weekdayChipPressed,
+                ]}
+              >
+                <Text
+                  style={[
+                    styles.weekdayChipText,
+                    weekStartDay === day.value && styles.weekdayChipTextActive,
+                  ]}
+                >
+                  {day.label}
+                </Text>
+              </Pressable>
+            ))}
+          </View>
+
+          <Pressable
+            onPress={handleSaveWeekConfiguration}
+            style={({ pressed }) => [
+              styles.saveButton,
+              pressed && styles.saveButtonPressed,
+            ]}
+          >
+            <Text style={styles.saveButtonText}>Guardar configuración</Text>
+          </Pressable>
+        </View>
+      </ScrollView>
+
+      <Modal
+        visible={editingOdometersVisible}
+        transparent
+        animationType="slide"
+      >
+        <View style={styles.modalOverlay}>
+          <View style={styles.modalCard}>
+            <Text style={styles.modalTitle}>Editar odómetros</Text>
+
+            <Text style={styles.fieldLabel}>Odómetro inicial</Text>
+            <TextInput
+              value={workdayStartOdometerInput}
+              onChangeText={setWorkdayStartOdometerInput}
+              keyboardType="number-pad"
+              placeholder="123456"
+              style={styles.input}
+            />
+
+            <Text style={[styles.fieldLabel, styles.fieldLabelSpacing]}>
+              Odómetro final
+            </Text>
+            <TextInput
+              value={workdayEndOdometerInput}
+              onChangeText={setWorkdayEndOdometerInput}
+              keyboardType="number-pad"
+              placeholder="123789"
+              style={styles.input}
+            />
+
+            <View style={styles.modalButtons}>
+              <Pressable onPress={closeEditOdometersModal} style={styles.modalButton}>
+                <Text style={styles.modalButtonText}>Cancelar</Text>
+              </Pressable>
+              <Pressable
+                onPress={handleSaveOdometers}
+                style={styles.modalButtonPrimary}
+              >
+                <Text style={styles.modalButtonPrimaryText}>Guardar</Text>
+              </Pressable>
+            </View>
+          </View>
+        </View>
+      </Modal>
     </SafeAreaView>
   );
 }
 
 const styles = StyleSheet.create({
-  container: {
+  screen: {
     flex: 1,
-    padding: 20,
-    paddingTop: 60,
+    backgroundColor: "#f7f7f5",
+  },
+  scrollContainer: {
+    flex: 1,
+  },
+  content: {
+    paddingHorizontal: 20,
+    paddingTop: 20,
+    paddingBottom: 32,
   },
   title: {
-    fontSize: 22,
-    fontWeight: "bold",
-    textAlign: "center",
+    fontSize: 30,
+    fontWeight: "700",
+    color: "#111827",
+    marginBottom: 20,
+  },
+  actionsSection: {
+    gap: 12,
+    marginBottom: 24,
+  },
+  section: {
+    backgroundColor: "#ffffff",
+    borderRadius: 24,
+    padding: 18,
+    shadowColor: "#000000",
+    shadowOpacity: 0.06,
+    shadowRadius: 18,
+    shadowOffset: { width: 0, height: 8 },
+    elevation: 3,
+  },
+  sectionTitle: {
+    fontSize: 18,
+    fontWeight: "700",
+    color: "#111827",
     marginBottom: 12,
   },
-  description: {
-    color: "#444",
-    marginBottom: 16,
-    textAlign: "center",
-    lineHeight: 20,
+  sectionSubtitle: {
+    fontSize: 13,
+    color: "#6b7280",
+    marginBottom: 12,
   },
-  options: {
+  actionRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    borderRadius: 18,
+    backgroundColor: "#ffffff",
+    paddingHorizontal: 18,
+    paddingVertical: 16,
+    shadowColor: "#000000",
+    shadowOpacity: 0.05,
+    shadowRadius: 14,
+    shadowOffset: { width: 0, height: 6 },
+    elevation: 2,
+  },
+  actionRowPressed: {
+    opacity: 0.86,
+    transform: [{ scale: 0.99 }],
+  },
+  actionLabel: {
+    fontSize: 16,
+    fontWeight: "600",
+    color: "#111827",
+  },
+  actionChevron: {
+    fontSize: 24,
+    color: "#6b7280",
+    lineHeight: 24,
+  },
+  weekdayRow: {
     flexDirection: "row",
     flexWrap: "wrap",
-    gap: 8,
-    justifyContent: "center",
-    marginBottom: 16,
-  },
-  chip: {
-    borderWidth: 1,
-    borderColor: "#cfd8e3",
-    backgroundColor: "#fff",
-    borderRadius: 999,
-    paddingHorizontal: 14,
-    paddingVertical: 10,
-  },
-  chipActive: {
-    backgroundColor: "#1f6feb",
-    borderColor: "#1f6feb",
-  },
-  chipText: {
-    color: "#1b1f24",
-    fontWeight: "600",
-  },
-  chipTextActive: {
-    color: "#fff",
-  },
-  current: {
-    textAlign: "center",
+    gap: 10,
     marginBottom: 18,
+  },
+  weekdayChip: {
+    minWidth: 42,
+    paddingVertical: 12,
+    paddingHorizontal: 14,
+    borderRadius: 16,
+    backgroundColor: "#f3f4f6",
+    alignItems: "center",
+  },
+  weekdayChipActive: {
+    backgroundColor: "#dbeafe",
+  },
+  weekdayChipPressed: {
+    opacity: 0.88,
+  },
+  weekdayChipText: {
+    fontSize: 15,
+    fontWeight: "700",
+    color: "#374151",
+  },
+  weekdayChipTextActive: {
+    color: "#1d4ed8",
+  },
+  saveButton: {
+    marginTop: 4,
+    backgroundColor: "#111827",
+    borderRadius: 16,
+    paddingVertical: 16,
+    alignItems: "center",
+  },
+  saveButtonPressed: {
+    opacity: 0.9,
+  },
+  saveButtonText: {
+    color: "#ffffff",
+    fontSize: 16,
+    fontWeight: "700",
+  },
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: "rgba(0,0,0,0.38)",
+    justifyContent: "flex-end",
+  },
+  modalCard: {
+    backgroundColor: "#ffffff",
+    borderTopLeftRadius: 24,
+    borderTopRightRadius: 24,
+    paddingHorizontal: 20,
+    paddingTop: 20,
+    paddingBottom: 28,
+  },
+  modalTitle: {
+    fontSize: 22,
+    fontWeight: "700",
+    color: "#111827",
+    marginBottom: 18,
+  },
+  fieldLabel: {
+    fontSize: 14,
     fontWeight: "600",
+    color: "#374151",
+    marginBottom: 8,
+  },
+  fieldLabelSpacing: {
+    marginTop: 12,
+  },
+  input: {
+    borderWidth: 1,
+    borderColor: "#d1d5db",
+    borderRadius: 14,
+    paddingHorizontal: 14,
+    paddingVertical: 12,
+    fontSize: 16,
+    color: "#111827",
+  },
+  modalButtons: {
+    flexDirection: "row",
+    gap: 12,
+    marginTop: 20,
+  },
+  modalButton: {
+    flex: 1,
+    borderRadius: 16,
+    paddingVertical: 15,
+    alignItems: "center",
+    backgroundColor: "#f3f4f6",
+  },
+  modalButtonText: {
+    color: "#111827",
+    fontSize: 16,
+    fontWeight: "600",
+  },
+  modalButtonPrimary: {
+    flex: 1,
+    borderRadius: 16,
+    paddingVertical: 15,
+    alignItems: "center",
+    backgroundColor: "#111827",
+  },
+  modalButtonPrimaryText: {
+    color: "#ffffff",
+    fontSize: 16,
+    fontWeight: "700",
   },
 });

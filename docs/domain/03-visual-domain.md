@@ -315,7 +315,7 @@ Por tanto:
 * deberán preservar el aprendizaje del usuario;
 * deberán mantener compatibilidad visual siempre que sea posible.
 
----
+---nn   
 
 # 14. Visión a largo plazo
 

@@ -1,0 +1,13 @@
+{
+  "ok": false,
+  "exitCode": null,
+  "durationMs": 600062,
+  "timedOut": true,
+  "failureCategory": "bootstrap",
+  "message": "Maestro agotó el tiempo máximo permitido sin completar el smoke.",
+  "screenshotPath": "C:/Users/monic/Desktop/geo/taxi-liquidacion-app/tests/e2e/screenshots/latest/smoke.app-launch.png",
+  "logPath": "C:/Users/monic/Desktop/geo/taxi-liquidacion-app/tests/e2e/logs/latest/maestro.log",
+  "reportPath": "C:/Users/monic/Desktop/geo/taxi-liquidacion-app/tests/e2e/reports/latest/smoke.app-launch.json",
+  "appPackage": "com.taxiliquidacionapp",
+  "rootDir": "C:/Users/monic/Desktop/geo/taxi-liquidacion-app"
+}

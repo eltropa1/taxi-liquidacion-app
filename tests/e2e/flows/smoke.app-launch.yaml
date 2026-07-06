@@ -1,0 +1,12 @@
+appId: com.taxiliquidacionapp
+tags:
+  - android
+  - passing
+---
+- tapOn:
+    text: "Wait"
+    optional: true
+- launchApp
+- assertVisible: "Taxi · Liquidación diaria"
+- assertVisible: "Añadir viaje manual"
+- takeScreenshot: smoke app launch

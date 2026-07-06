@@ -1,39 +1,79 @@
 import { useMemo, useState } from "react";
 import {
-  Button,
+  Alert,
   Modal,
   Pressable,
   StyleSheet,
   Text,
   TextInput,
   View,
-  Alert,
 } from "react-native";
 
 import { router } from "expo-router";
 import { SafeAreaView } from "react-native-safe-area-context";
+
+import { TripHistory } from "../src/components/trip-history";
 import { PaymentType, TripSource } from "../src/constants/enums";
 import { useTodayScreen, type TodayTripRow } from "../src/hooks/useTodayScreen";
-import { TripHistory } from "../src/components/trip-history";
-import { buildTodayScreenProjection, toTripVisualProjection } from "../src/presentation";
 import { useTripActions } from "../src/hooks/useTripActions";
-import { ExportService } from "../src/application/runtime";
+import { buildTodayScreenProjection, toTripVisualProjection } from "../src/presentation";
+import { UpdateWorkday } from "../src/application/workdays/UpdateWorkday";
 import { addCalendarDays } from "../src/utils/dateUtils";
+import {
+  parsePositiveIntegerInput,
+  validateWorkdayOdometers,
+} from "../src/domain/workdays/workdayOdometer";
 
-/**
- * Barra de progreso simple y reutilizable
- */
+function capitalize(value: string) {
+  if (!value) return value;
+  return value.charAt(0).toUpperCase() + value.slice(1);
+}
+
+function formatMoney(value: number | null | undefined) {
+  if (value === null || value === undefined) return "—";
+  return `${new Intl.NumberFormat("es-ES", {
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 2,
+  }).format(value)} €`;
+}
+
+function formatDateLabel(date: Date) {
+  return capitalize(
+    date.toLocaleDateString("es-ES", {
+      weekday: "short",
+      day: "numeric",
+      month: "short",
+    }),
+  );
+}
+
+function formatTimeLabel(value: string | null | undefined) {
+  if (!value) return "—";
+  return new Date(value).toLocaleTimeString("es-ES", {
+    hour: "2-digit",
+    minute: "2-digit",
+  });
+}
+
+function getProgressPercent(current: number, goal: number) {
+  if (goal <= 0) return null;
+  return (current / goal) * 100;
+}
+
+function clampPercent(percent: number | null) {
+  if (percent === null) return 0;
+  return Math.min(percent, 100);
+}
+
 function ProgressBar({
   percent,
   color,
 }: {
-  percent: number | null;
+  percent: number;
   color: string;
 }) {
-  if (percent === null) return null;
-
   return (
-    <View style={styles.progressContainer}>
+    <View style={styles.progressRail}>
       <View
         style={[
           styles.progressFill,
@@ -47,15 +87,32 @@ function ProgressBar({
   );
 }
 
-// ===================================================
-// COMPONENTE PRINCIPAL
-// ===================================================
+function startOfMonth(date: Date) {
+  return new Date(date.getFullYear(), date.getMonth(), 1, 12, 0, 0, 0);
+}
+
+function addMonths(date: Date, months: number) {
+  return new Date(date.getFullYear(), date.getMonth() + months, 1, 12, 0, 0, 0);
+}
+
+function getDaysInMonth(date: Date) {
+  return new Date(date.getFullYear(), date.getMonth() + 1, 0).getDate();
+}
+
+function isSameDay(left: Date, right: Date) {
+  return left.toDateString() === right.toDateString();
+}
+
+function getMonthLabel(date: Date) {
+  return capitalize(
+    date.toLocaleDateString("es-ES", {
+      month: "long",
+      year: "numeric",
+    }),
+  );
+}
 
 export default function TodayScreen() {
-  // ---------------------------
-  // ESTADOS
-  // ---------------------------
-
   const [lastPayment, setLastPayment] = useState<PaymentType>(PaymentType.CASH);
   const [lastSource, setLastSource] = useState<TripSource>(TripSource.TAXI);
 
@@ -65,24 +122,23 @@ export default function TodayScreen() {
   const [source, setSource] = useState<TripSource>(TripSource.TAXI);
 
   const [editingTrip, setEditingTrip] = useState<TodayTripRow | null>(null);
-
   const [selectedDate, setSelectedDate] = useState<Date>(new Date());
 
-  const [showSummary, setShowSummary] = useState(false);
-
-  const [showDailySummary, setShowDailySummary] = useState(true);
-
-  const [showGoals, setShowGoals] = useState(false);
-
-  // Texto libre para tipo de viaje personalizado (CUSTOM)
   const [customSource, setCustomSource] = useState("");
-
-  // Importe realmente cobrado por tarjeta (solo CARD)
-  // Si es null, se asume igual al importe del servicio
   const [chargedAmountInput, setChargedAmountInput] = useState("");
-
-  // Propina en efectivo (opcional)
   const [cashTipInput, setCashTipInput] = useState("");
+
+  type WorkdayModalMode = "open" | "close" | "edit" | null;
+  const [workdayModalMode, setWorkdayModalMode] =
+    useState<WorkdayModalMode>(null);
+  const [workdayStartOdometerInput, setWorkdayStartOdometerInput] =
+    useState("");
+  const [workdayEndOdometerInput, setWorkdayEndOdometerInput] = useState("");
+  const [editingWorkdayId, setEditingWorkdayId] = useState<number | null>(null);
+  const [showDatePickerModal, setShowDatePickerModal] = useState(false);
+  const [calendarMonth, setCalendarMonth] = useState(() =>
+    startOfMonth(new Date()),
+  );
 
   const {
     activeTripId,
@@ -143,11 +199,68 @@ export default function TodayScreen() {
     ],
   );
 
-  // ---------------------------
-  // ACCIONES
-  // ---------------------------
+  const hasActiveWorkday = Boolean(activeWorkday);
+  const hasOperationalContext =
+    hasActiveWorkday || workdayInfo !== null || trips.length > 0;
 
-  const handleOpenFinish = () => {
+  const progressPercent = getProgressPercent(todayProjection.totalToday, goals.daily);
+  const progressFill = clampPercent(progressPercent);
+  const remainingDaily = Math.max(goals.daily - todayProjection.totalToday, 0);
+
+  const actionLabel = !hasActiveWorkday
+    ? "Abrir jornada"
+    : activeTripId
+      ? "Finalizar servicio"
+      : "Nuevo servicio";
+
+  const actionHandler = !hasActiveWorkday
+    ? () => openWorkdayModal("open")
+    : activeTripId
+      ? handleOpenFinish
+      : handleStartTrip;
+
+  const contextStartTime = workdayInfo?.startTime ?? activeWorkday?.startTime ?? null;
+
+  function openDatePickerModal() {
+    setCalendarMonth(startOfMonth(selectedDate));
+    setShowDatePickerModal(true);
+  }
+
+  function closeDatePickerModal() {
+    setShowDatePickerModal(false);
+  }
+
+  function openWorkdayModal(mode: Exclude<WorkdayModalMode, null>) {
+    setWorkdayModalMode(mode);
+    if (mode === "edit") {
+      setEditingWorkdayId(workdayInfo?.id ?? null);
+      setWorkdayStartOdometerInput(
+        workdayInfo?.startOdometer !== null &&
+          workdayInfo?.startOdometer !== undefined
+          ? String(workdayInfo.startOdometer)
+          : "",
+      );
+      setWorkdayEndOdometerInput(
+        workdayInfo?.endOdometer !== null && workdayInfo?.endOdometer !== undefined
+          ? String(workdayInfo.endOdometer)
+          : "",
+      );
+      return;
+    }
+
+    setEditingWorkdayId(null);
+    setWorkdayStartOdometerInput("");
+    setWorkdayEndOdometerInput("");
+  }
+
+  const closeWorkdayModal = () => {
+    setWorkdayModalMode(null);
+    setEditingWorkdayId(null);
+    setWorkdayStartOdometerInput("");
+    setWorkdayEndOdometerInput("");
+  };
+
+  function handleOpenFinish() {
     setEditingTrip(null);
     setPayment(lastPayment);
     setSource(lastSource);
@@ -156,7 +269,7 @@ export default function TodayScreen() {
     setShowFinishModal(true);
     setChargedAmountInput("");
     setCashTipInput("");
-  };
+  }
 
   const handleSave = async () => {
     await handleSaveTrip({
@@ -174,373 +287,359 @@ export default function TodayScreen() {
     await handleDeleteTrip({ editingTrip });
   };
 
-  // ---------------------------
-  // CÁLCULOS
-  // ---------------------------
+  const handleSaveWorkday = async () => {
+    if (workdayModalMode === null) {
+      return;
+    }
 
-  // ---------------------------
-  // RENDER
-  // ---------------------------
+    if (workdayModalMode === "open") {
+      const startOdometer = parsePositiveIntegerInput(workdayStartOdometerInput);
+      const validation = validateWorkdayOdometers(startOdometer, null);
+
+      if (!validation.ok || startOdometer === null) {
+        Alert.alert(
+          "Odómetro inicial inválido",
+          "Introduce un odómetro inicial entero y positivo.",
+        );
+        return;
+      }
+
+      await handleOpenWorkday(startOdometer);
+      closeWorkdayModal();
+      return;
+    }
+
+    if (workdayModalMode === "close") {
+      const trimmedEndOdometer = workdayEndOdometerInput.trim();
+      const endOdometer =
+        trimmedEndOdometer === ""
+          ? null
+          : parsePositiveIntegerInput(trimmedEndOdometer);
+
+      if (trimmedEndOdometer !== "" && endOdometer === null) {
+        Alert.alert(
+          "Odómetro final inválido",
+          "Introduce un odómetro final entero y positivo, o déjalo vacío.",
+        );
+        return;
+      }
+
+      await handleCloseWorkday(endOdometer);
+      closeWorkdayModal();
+      return;
+    }
+
+    const startOdometer = parsePositiveIntegerInput(workdayStartOdometerInput);
+    const trimmedEndOdometer = workdayEndOdometerInput.trim();
+    const endOdometer =
+      trimmedEndOdometer === ""
+        ? null
+        : parsePositiveIntegerInput(trimmedEndOdometer);
+
+    const validation = validateWorkdayOdometers(startOdometer, endOdometer);
+
+    if (!validation.ok) {
+      if (validation.error === "START_ODOMETER_REQUIRED") {
+        Alert.alert(
+          "Odómetro inicial obligatorio",
+          "Introduce un odómetro inicial entero y positivo.",
+        );
+        return;
+      }
+
+      if (
+        validation.error === "START_ODOMETER_INVALID" ||
+        validation.error === "END_ODOMETER_INVALID"
+      ) {
+        Alert.alert(
+          "Odómetro inválido",
+          "Los odómetros deben ser enteros y positivos.",
+        );
+        return;
+      }
+
+      Alert.alert(
+        "Odómetros incoherentes",
+        "El odómetro final no puede ser menor que el inicial.",
+      );
+      return;
+    }
+
+    if (startOdometer === null || editingWorkdayId === null) {
+      return;
+    }
+
+    await UpdateWorkday.execute({
+      id: editingWorkdayId,
+      startOdometer,
+      endOdometer,
+    });
+    closeWorkdayModal();
+    await refreshData();
+  };
+
+  const showProgressBlock = hasOperationalContext;
+  const showClosedState = !hasActiveWorkday;
+  const isLatestAvailableDate = isSameDay(selectedDate, new Date());
 
   return (
-    <SafeAreaView style={styles.container} edges={["bottom"]}>
-      <Text style={styles.title}>Taxi · Liquidación diaria</Text>
+    <SafeAreaView style={styles.screen} edges={["top", "bottom"]}>
+      <View style={styles.content}>
+        <View style={styles.contextBar}>
+          <View style={styles.contextBarTopRow}>
+            <Text style={styles.contextDate}>{formatDateLabel(selectedDate)}</Text>
 
-      {/* ===========================
-          BLOQUE A - CONTROL DÍA DE TRABAJO (HOY)
-      =========================== */}
-      <View style={styles.card}>
-        {activeWorkday ? (
-          <>
-            <Text style={{ fontWeight: "600" }}>Día de trabajo abierto</Text>
-            <Text>
-              Inicio: {new Date(activeWorkday.startTime).toLocaleString()}
-            </Text>
-
-            <View style={{ marginTop: 10 }}>
-              <Button
-                title="Cerrar día de trabajo"
-                color="#cc3333"
-                onPress={() => {
-                  Alert.alert(
-                    "Cerrar día de trabajo",
-                    "Una vez cerrado no podrás añadir más viajes a este día.\n\n¿Deseas continuar?",
-                    [
-                      { text: "Cancelar", style: "cancel" },
-                      {
-                        text: "Cerrar día",
-                        style: "destructive",
-                        onPress: async () => {
-                          await handleCloseWorkday();
-                        },
-                      },
-                    ],
-                  );
-                }}
-              />
+            <View style={styles.contextBarTopActions}>
+              <Text style={styles.contextStart}>
+                Inicio {formatTimeLabel(contextStartTime)}
+              </Text>
             </View>
-          </>
-        ) : (
-          <>
-            <Text style={{ fontWeight: "600" }}>
-              No hay día de trabajo abierto
-            </Text>
+          </View>
 
-            <View style={{ marginTop: 10 }}>
-              <Button
-                title="Abrir día de trabajo"
-                onPress={() => {
-                  Alert.alert(
-                    "Abrir día de trabajo",
-                    "¿Seguro que quieres abrir un nuevo día de trabajo?",
-                    [
-                      { text: "Cancelar", style: "cancel" },
-                      {
-                        text: "Abrir",
-                        onPress: async () => {
-                          await handleOpenWorkday();
-                        },
-                      },
-                    ],
-                  );
-                }}
-              />
+          <View style={styles.contextBarBottomRow}>
+            <View style={styles.contextBarBottomLeft}>
+              <Pressable
+                hitSlop={10}
+                onPress={() =>
+                  setSelectedDate((current) => addCalendarDays(current, -1))
+                }
+              >
+                <Text style={styles.dateNavigatorArrow}>‹</Text>
+              </Pressable>
+
+              <Pressable
+                hitSlop={10}
+                onPress={openDatePickerModal}
+                style={({ pressed }) => [
+                  styles.contextCalendarButton,
+                  pressed && styles.contextCalendarButtonPressed,
+                ]}
+                accessibilityRole="button"
+                accessibilityLabel="Abrir selector de fechas"
+              >
+                <Text style={styles.contextCalendarIcon}>📅</Text>
+              </Pressable>
+
+              <Pressable
+                hitSlop={10}
+                disabled={isLatestAvailableDate}
+                onPress={() =>
+                  setSelectedDate((current) => addCalendarDays(current, 1))
+                }
+                style={({ pressed }) => [
+                  isLatestAvailableDate && styles.dateNavigatorDisabled,
+                  pressed && !isLatestAvailableDate && styles.dateNavigatorPressed,
+                ]}
+              >
+                <Text
+                  style={[
+                    styles.dateNavigatorArrow,
+                    isLatestAvailableDate && styles.dateNavigatorArrowDisabled,
+                  ]}
+                >
+                  ›
+                </Text>
+              </Pressable>
             </View>
-          </>
-        )}
-      </View>
 
-      {/* Selector de fecha */}
-      <View style={styles.dateSelectorCompact}>
-        <Pressable
-          onPress={() =>
-            setSelectedDate((current) => addCalendarDays(current, -1))
-          }
-        >
-          <Text style={styles.dateArrow}>‹</Text>
-        </Pressable>
-
-        <Text style={styles.dateTextCompact}>
-          {selectedDate.toLocaleDateString()}
-        </Text>
-
-        <Pressable
-          onPress={() =>
-            setSelectedDate((current) => addCalendarDays(current, 1))
-          }
-        >
-          <Text style={styles.dateArrow}>›</Text>
-        </Pressable>
-      </View>
-
-      {/* ===========================
-          BLOQUE B - INFO DÍA DE TRABAJO (SOLO DÍAS ANTERIORES)
-      =========================== */}
-      {!todayProjection.isToday && (
-        <View style={[styles.card, { backgroundColor: "#f5f7fa" }]}>
-          <Text style={{ fontWeight: "600" }}>🚕 Día de trabajo</Text>
-
-          <Text>
-            Inicio:{" "}
-            {new Date(todayProjection.resolvedWorkdayInfo.startTime).toLocaleString()}
-          </Text>
-
-          <Text>
-            Fin:{" "}
-            {todayProjection.resolvedWorkdayInfo.endTime
-              ? new Date(todayProjection.resolvedWorkdayInfo.endTime).toLocaleString()
-              : "En curso"}
-          </Text>
-
-          {!todayProjection.resolvedWorkdayInfo.isClosed && (
-            <Text style={{ color: "#2ecc71", marginTop: 4 }}>
-              ● Día de trabajo abierto
-            </Text>
-          )}
-
-          {todayProjection.resolvedWorkdayInfo.isVirtual && (
-            <Text style={{ color: "#999", marginTop: 4 }}>
-              Día natural (sin cierre registrado)
-            </Text>
-          )}
-        </View>
-      )}
-
-      {/* ===========================
-          FILA ESTADO DEL DÍA
-      =========================== */}
-      <View style={styles.dayStatusRow}>
-        <View style={[styles.card, styles.cardToday, styles.cardCompact]}>
-          <Text style={styles.smallLabel}>Hoy</Text>
-          <Text style={styles.amount}>{todayProjection.totalToday.toFixed(2)} €</Text>
+            <View style={styles.contextBarBottomAction}>
+              {hasActiveWorkday ? (
+                <Pressable
+                  onPress={() => openWorkdayModal("close")}
+                  style={({ pressed }) => [
+                    styles.contextCloseWorkdayButton,
+                    pressed && styles.contextCloseWorkdayButtonPressed,
+                  ]}
+                >
+                  <Text style={styles.contextCloseWorkdayText}>Cerrar jornada</Text>
+                </Pressable>
+              ) : null}
+            </View>
+          </View>
         </View>
 
-        {todayProjection.dailyStatus && (
-          <View
-            style={[
-              styles.card,
-              styles.cardProgress,
-              styles.cardCompact,
-              { borderLeftWidth: 4, borderLeftColor: todayProjection.dailyStatus.color },
-            ]}
-          >
-            <Text style={styles.progressLine}>
-              {todayProjection.dailyStatus.label} · {todayProjection.dailyProgress?.toFixed(0)}% · faltan{" "}
-              {Math.max(goals.daily - todayProjection.totalToday, 0).toFixed(2)} €
-            </Text>
+        {showProgressBlock && (
+          <View style={styles.progressBlock}>
+            <View style={styles.progressLeft}>
+              <Text style={styles.progressLabel}>Recaudación</Text>
+              <Text
+                style={styles.progressAmount}
+                numberOfLines={1}
+                adjustsFontSizeToFit
+                minimumFontScale={0.72}
+              >
+                {formatMoney(todayProjection.totalToday)}
+              </Text>
+            </View>
 
-            <ProgressBar percent={todayProjection.dailyProgress} color={todayProjection.dailyStatus.color} />
+            <View style={styles.progressDivider} />
+
+            <View style={styles.progressRight}>
+              <Text style={styles.progressTopLine} numberOfLines={1}>
+                {progressPercent !== null && progressPercent >= 100 ? (
+                  <Text style={styles.progressTopReached}>Objetivo alcanzado</Text>
+                ) : (
+                  <>
+                    <Text style={styles.progressTopLabel}>Objetivo </Text>
+                    <Text style={styles.progressTopGoal}>
+                      {formatMoney(goals.daily).replace(" €", "\u00A0€")}
+                    </Text>
+                    <Text style={styles.progressTopSpacer}>   </Text>
+                    <Text style={styles.progressTopLabel}>Restan </Text>
+                    <Text style={styles.progressTopRemaining}>
+                      {formatMoney(remainingDaily).replace(" €", "\u00A0€")}
+                    </Text>
+                  </>
+                )}
+              </Text>
+
+              <View style={styles.progressMeterRow}>
+                <View style={styles.progressMeterWrap}>
+                  <ProgressBar
+                    percent={progressFill}
+                    color="#1f2937"
+                  />
+                </View>
+                <Text style={styles.progressPercentLabel}>
+                  {progressPercent === null ? "0%" : `${Math.round(progressPercent)}%`}
+                </Text>
+              </View>
+            </View>
           </View>
         )}
+
+        {showClosedState && (
+          <View style={styles.closedState}>
+            <Text style={styles.closedStateTitle}>Jornada cerrada</Text>
+            <Text style={styles.closedStateDescription}>
+              Abre la jornada para empezar a registrar servicios.
+            </Text>
+          </View>
+        )}
+
+        <Pressable
+          onPress={actionHandler}
+          style={({ pressed }) => [
+            styles.actionCard,
+            pressed && styles.actionCardPressed,
+          ]}
+        >
+          <View style={styles.actionCardLeftIcon}>
+            <Text style={styles.actionCardPlus}>+</Text>
+          </View>
+          <Text style={styles.actionCardLabel}>{actionLabel}</Text>
+          <Text style={styles.actionCardArrow}>›</Text>
+        </Pressable>
+
+        <View style={styles.registerArea}>
+          <TripHistory
+            trips={tripHistoryProjections}
+            onTripPress={(tripId) =>
+              router.push({
+                pathname: "/trip/edit",
+                params: { tripId },
+              })
+            }
+            />
+        </View>
       </View>
 
-      {/* Toggle resumen diario */}
-      <Pressable
-        onPress={() => setShowDailySummary(!showDailySummary)}
-        style={styles.summaryToggle}
-      >
-        <Text style={styles.summaryToggleText}>
-          {showDailySummary ? "Ocultar detalle diario" : "Ver detalle diario"}
-        </Text>
-      </Pressable>
+      <View style={styles.bottomNav}>
+        <Pressable
+          onPress={() => setSelectedDate(new Date())}
+          style={({ pressed }) => [
+            styles.bottomNavItem,
+            pressed && styles.bottomNavItemPressed,
+          ]}
+        >
+          <Text style={[styles.bottomNavLabel, styles.bottomNavLabelActive]}>
+            Home
+          </Text>
+        </Pressable>
 
-      {/* Resumen diario */}
-      {showDailySummary && (
-        <View style={styles.card}>
-          <Text style={styles.sectionTitle}>Resumen del día</Text>
+        <Pressable
+          onPress={() => router.push("/goals")}
+          style={({ pressed }) => [
+            styles.bottomNavItem,
+            pressed && styles.bottomNavItemPressed,
+          ]}
+        >
+          <Text style={styles.bottomNavLabel}>Metas</Text>
+        </Pressable>
 
-          <View style={styles.tableRow}>
-            <Text>Taxi</Text>
-            <Text>{(dailySummary?.taxi ?? 0).toFixed(2)} €</Text>
-          </View>
+        <Pressable
+          onPress={() => router.push("/summary")}
+          style={({ pressed }) => [
+            styles.bottomNavItem,
+            pressed && styles.bottomNavItemPressed,
+          ]}
+        >
+          <Text style={styles.bottomNavLabel}>Resumen</Text>
+        </Pressable>
 
-          <View style={styles.tableRow}>
-            <Text>Uber</Text>
-            <Text>{(dailySummary?.uber ?? 0).toFixed(2)} €</Text>
-          </View>
+        <Pressable
+          onPress={() => router.push("/settings")}
+          style={({ pressed }) => [
+            styles.bottomNavItem,
+            pressed && styles.bottomNavItemPressed,
+          ]}
+        >
+          <Text style={styles.bottomNavLabel}>Más</Text>
+        </Pressable>
+      </View>
 
-          <View style={styles.tableRow}>
-            <Text>Cabify</Text>
-            <Text>{(dailySummary?.cabify ?? 0).toFixed(2)} €</Text>
-          </View>
+      <Modal visible={workdayModalMode !== null} transparent animationType="slide">
+        <View style={styles.modalOverlay}>
+          <View style={styles.modalCard}>
+            <Text style={styles.modalTitle}>
+              {workdayModalMode === "open"
+                ? "Abrir día de trabajo"
+                : workdayModalMode === "close"
+                  ? "Cerrar día de trabajo"
+                  : "Editar odómetros"}
+            </Text>
 
-          <View style={styles.tableRow}>
-            <Text>FreeNow</Text>
-            <Text>{(dailySummary?.freeNow ?? 0).toFixed(2)} €</Text>
-          </View>
+            {(workdayModalMode === "open" || workdayModalMode === "edit") && (
+              <>
+                <Text>Odómetro inicial</Text>
+                <TextInput
+                  value={workdayStartOdometerInput}
+                  onChangeText={setWorkdayStartOdometerInput}
+                  keyboardType="number-pad"
+                  placeholder="123456"
+                  style={styles.input}
+                />
+              </>
+            )}
 
-          <View style={styles.tableRow}>
-            <Text>Efectivo (tú)</Text>
-            <Text>{(dailySummary?.efectivo ?? 0).toFixed(2)} €</Text>
-          </View>
+            {(workdayModalMode === "close" || workdayModalMode === "edit") && (
+              <>
+                <Text style={{ marginTop: 10 }}>
+                  Odómetro final
+                  {workdayModalMode === "close" ? " (opcional)" : ""}
+                </Text>
+                <TextInput
+                  value={workdayEndOdometerInput}
+                  onChangeText={setWorkdayEndOdometerInput}
+                  keyboardType="number-pad"
+                  placeholder="123789"
+                  style={styles.input}
+                />
+              </>
+            )}
 
-          <View style={styles.tableRow}>
-            <Text>Tarjeta</Text>
-            <Text>{(dailySummary?.tarjeta ?? 0).toFixed(2)} €</Text>
-          </View>
-
-          <View style={styles.tableRow}>
-            <Text>App</Text>
-            <Text>{(dailySummary?.app ?? 0).toFixed(2)} €</Text>
-          </View>
-
-          {/* ---------------------------
-    PROPINA (NO CUENTA COMO RECAUDACIÓN)
----------------------------- */}
-          <View
-            style={{
-              marginTop: 8,
-              paddingTop: 8,
-              borderTopWidth: 1,
-              borderTopColor: "#ccc",
-            }}
-          >
-            <Text style={{ fontWeight: "600", marginBottom: 4 }}>Propinas</Text>
-
-            <View style={styles.tableRow}>
-              <Text>Tarjeta</Text>
-              <Text>{(dailySummary?.propinaTarjeta ?? 0).toFixed(2)} €</Text>
-            </View>
-
-            <View style={styles.tableRow}>
-              <Text>Efectivo</Text>
-              <Text>{(dailySummary?.propinaEfectivo ?? 0).toFixed(2)} €</Text>
+            <View style={styles.modalButtons}>
+              <Pressable onPress={closeWorkdayModal} style={styles.modalButton}>
+                <Text style={styles.modalButtonText}>Cancelar</Text>
+              </Pressable>
+              <Pressable onPress={handleSaveWorkday} style={styles.modalButtonPrimary}>
+                <Text style={styles.modalButtonPrimaryText}>Guardar</Text>
+              </Pressable>
             </View>
           </View>
         </View>
-      )}
+      </Modal>
 
-      {/* Toggle metas */}
-      <Pressable
-        onPress={() => setShowGoals(!showGoals)}
-        style={styles.summaryToggle}
-      >
-        <Text style={styles.summaryToggleText}>
-          {showGoals ? "Ocultar metas" : "Ver metas"}
-        </Text>
-      </Pressable>
-
-      {showGoals && (
-        <View style={styles.card}>
-          <Text style={styles.sectionTitle}>Metas</Text>
-
-          <Text>
-            Día: {todayProjection.totalToday.toFixed(2)} € / {goals.daily.toFixed(2)} €
-          </Text>
-          {todayProjection.remainingDaily !== null && (
-            <Text>Te faltan {todayProjection.remainingDaily.toFixed(2)} € hoy</Text>
-          )}
-
-          <Text style={{ marginTop: 6 }}>
-            Semana: {weeklySummary?.total.toFixed(2)} € /{" "}
-            {goals.weekly.toFixed(2)} €
-          </Text>
-          {todayProjection.remainingWeekly !== null && (
-            <Text>Te faltan {todayProjection.remainingWeekly.toFixed(2)} € esta semana</Text>
-          )}
-
-          <Text style={{ marginTop: 6 }}>
-            Mes: {monthlySummary?.total.toFixed(2)} € /{" "}
-            {goals.monthly.toFixed(2)} €
-          </Text>
-          {todayProjection.remainingMonthly !== null && (
-            <Text>Te faltan {todayProjection.remainingMonthly.toFixed(2)} € este mes</Text>
-          )}
-        </View>
-      )}
-
-      <Button title="Editar metas" onPress={() => router.push("/goals")} />
-      <View style={{ height: 8 }} />
-      <Button title="Configurar semana" onPress={() => router.push("/settings")} />
-
-      {/* Toggle resumen */}
-      <Pressable
-        onPress={() => setShowSummary(!showSummary)}
-        style={styles.summaryToggle}
-      >
-        <Text style={styles.summaryToggleText}>
-          {showSummary ? "Ocultar resumen" : "Ver resumen semanal / mensual"}
-        </Text>
-      </Pressable>
-
-      {/* Resumen compacto */}
-      {showSummary && weeklySummary && monthlySummary && (
-        <View style={styles.card}>
-          <Text style={styles.sectionTitle}>Resumen</Text>
-          <View style={[styles.tableRow, { marginBottom: 6 }]}>
-            <Text style={{ fontWeight: "600" }}></Text>
-            <Text style={{ fontWeight: "600" }}>Semana</Text>
-            <Text style={{ fontWeight: "600" }}>Mes</Text>
-          </View>
-
-          {[
-            ["Total", "total"],
-            ["Taxi", "taxi"],
-            ["Uber", "uber"],
-            ["Cabify", "cabify"],
-            ["FreeNow", "freeNow"],
-            ["Efectivo", "efectivo"],
-            ["Tarjeta", "tarjeta"],
-            ["App", "app"],
-          ].map(([label, key]) => (
-            <View key={key} style={styles.tableRow}>
-              <Text>{label}</Text>
-              <Text>{weeklySummary[key].toFixed(2)} €</Text>
-              <Text>{monthlySummary[key].toFixed(2)} €</Text>
-            </View>
-          ))}
-        </View>
-      )}
-
-      {/* Botón principal */}
-      {activeWorkday ? (
-        !activeTripId ? (
-          <Button title="Iniciar viaje" onPress={handleStartTrip} />
-        ) : (
-          <Button title="Finalizar viaje" onPress={handleOpenFinish} />
-        )
-      ) : (
-        <Text style={{ textAlign: "center", color: "#777", marginBottom: 10 }}>
-          Abre un día de trabajo para empezar a registrar viajes
-        </Text>
-      )}
-
-      <Button
-        title="Añadir viaje manual"
-        onPress={() => {
-          setEditingTrip({
-            id: -1, // id ficticio para identificar manual
-            startTime: new Date().toISOString(),
-            endTime: new Date().toISOString(),
-            amount: null,
-            payment: PaymentType.CASH,
-            source: TripSource.TAXI,
-          } as any);
-          setAmountInput("");
-          setPayment(PaymentType.CASH);
-          setSource(TripSource.TAXI);
-          setShowFinishModal(true);
-        }}
-      />
-
-      <TripHistory
-        trips={tripHistoryProjections}
-        onTripPress={(tripId) =>
-          router.push({
-            pathname: "/trip/edit",
-            params: { tripId },
-          })
-        }
-      />
-
-      <Button
-        title="Exportar viajes (CSV)"
-        onPress={() => ExportService.exportTripsToCSV()}
-      />
-
-      {/* ===========================
-          MODAL FINALIZAR / EDITAR VIAJE
-      =========================== */}
       <Modal visible={showFinishModal} transparent animationType="slide">
         <View style={styles.modalOverlay}>
           <View style={styles.modalCard}>
@@ -548,8 +647,7 @@ export default function TodayScreen() {
               {editingTrip ? "Editar viaje" : "Finalizar viaje"}
             </Text>
 
-            {/* IMPORTE */}
-            <Text>Importe del Viaje(€)</Text>
+            <Text>Importe del viaje (€)</Text>
             <TextInput
               value={amountInput}
               onChangeText={setAmountInput}
@@ -559,7 +657,6 @@ export default function TodayScreen() {
               style={styles.input}
             />
 
-            {/* IMPORTE COBRADO (SOLO TARJETA) */}
             {payment === PaymentType.CARD && (
               <>
                 <Text style={{ marginTop: 10 }}>Importe cobrado (€)</Text>
@@ -573,7 +670,6 @@ export default function TodayScreen() {
               </>
             )}
 
-            {/* PROPINA EFECTIVO (SOLO CASH) */}
             {payment === PaymentType.CASH && (
               <>
                 <Text style={{ marginTop: 10 }}>Importe cobrado (€)</Text>
@@ -587,59 +683,60 @@ export default function TodayScreen() {
               </>
             )}
 
-            {/* FORMA DE PAGO */}
             <Text style={{ marginTop: 10 }}>Forma de pago</Text>
             <View style={styles.row}>
-              {[PaymentType.CASH, PaymentType.CARD, PaymentType.APP].map(
-                (p) => (
+              {[PaymentType.CASH, PaymentType.CARD, PaymentType.APP].map((p) => (
+                <Pressable
+                  key={p}
+                  onPress={() => setPayment(p)}
+                  style={({ pressed }) => [
+                    styles.chip,
+                    payment === p && styles.chipActive,
+                    pressed && styles.chipPressed,
+                  ]}
+                >
+                  <Text style={styles.chipText}>{p}</Text>
+                </Pressable>
+              ))}
+            </View>
+
+            <Text style={{ marginTop: 10 }}>Tipo de viaje</Text>
+            <View style={styles.row}>
+              {[TripSource.TAXI, TripSource.UBER, TripSource.CABIFY, TripSource.FREE_NOW].map(
+                (s) => (
                   <Pressable
-                    key={p}
-                    onPress={() => setPayment(p)}
-                    style={[styles.chip, payment === p && styles.chipActive]}
+                    key={s}
+                    onPress={() => setSource(s)}
+                    style={({ pressed }) => [
+                      styles.chip,
+                      source === s && styles.chipActive,
+                      pressed && styles.chipPressed,
+                    ]}
                   >
-                    <Text>{p}</Text>
+                    <Text style={styles.chipText}>{s}</Text>
                   </Pressable>
                 ),
               )}
             </View>
 
-            {/* TIPO DE VIAJE */}
-            <Text style={{ marginTop: 10 }}>Tipo de viaje</Text>
-            <View style={styles.row}>
-              {[
-                TripSource.TAXI,
-                TripSource.UBER,
-                TripSource.CABIFY,
-                TripSource.FREE_NOW,
-              ].map((s) => (
-                <Pressable
-                  key={s}
-                  onPress={() => setSource(s)}
-                  style={[styles.chip, source === s && styles.chipActive]}
-                >
-                  <Text>{s}</Text>
-                </Pressable>
-              ))}
-            </View>
-
-            {/* BOTONES */}
             <View style={styles.modalButtons}>
-              <Button
-                title="Cancelar"
+              <Pressable
                 onPress={() => {
                   setEditingTrip(null);
                   setShowFinishModal(false);
                 }}
-              />
-              <Button title="Guardar" onPress={handleSave} />
+                style={styles.modalButton}
+              >
+                <Text style={styles.modalButtonText}>Cancelar</Text>
+              </Pressable>
+              <Pressable onPress={handleSave} style={styles.modalButtonPrimary}>
+                <Text style={styles.modalButtonPrimaryText}>Guardar</Text>
+              </Pressable>
             </View>
 
-            {/* BORRAR SOLO SI EDITAMOS */}
             {editingTrip && (
               <View style={{ marginTop: 10 }}>
-                <Button
-                  title="Borrar viaje"
-                  color="red"
+                <Pressable
                   onPress={() => {
                     Alert.alert(
                       "Borrar viaje",
@@ -654,9 +751,104 @@ export default function TodayScreen() {
                       ],
                     );
                   }}
-                />
+                  style={styles.deleteButton}
+                >
+                  <Text style={styles.deleteButtonText}>Borrar viaje</Text>
+                </Pressable>
               </View>
             )}
+          </View>
+        </View>
+      </Modal>
+
+      <Modal visible={showDatePickerModal} transparent animationType="slide">
+        <View style={styles.modalOverlay}>
+          <View style={styles.modalCard}>
+            <View style={styles.calendarHeader}>
+              <Pressable
+                hitSlop={10}
+                onPress={() => setCalendarMonth((current) => addMonths(current, -1))}
+              >
+                <Text style={styles.calendarHeaderArrow}>‹</Text>
+              </Pressable>
+
+              <Text style={styles.modalTitle}>{getMonthLabel(calendarMonth)}</Text>
+
+              <Pressable
+                hitSlop={10}
+                onPress={() => setCalendarMonth((current) => addMonths(current, 1))}
+              >
+                <Text style={styles.calendarHeaderArrow}>›</Text>
+              </Pressable>
+            </View>
+
+            <View style={styles.calendarWeekdays}>
+              {["L", "M", "X", "J", "V", "S", "D"].map((label) => (
+                <Text key={label} style={styles.calendarWeekday}>
+                  {label}
+                </Text>
+              ))}
+            </View>
+
+            <View style={styles.calendarGrid}>
+              {Array.from({
+                length:
+                  (new Date(
+                    calendarMonth.getFullYear(),
+                    calendarMonth.getMonth(),
+                    1,
+                  ).getDay() +
+                    6) %
+                  7,
+              })
+                .fill(null)
+                .map((_, index) => (
+                  <View key={`empty-${index}`} style={styles.calendarCell} />
+                ))}
+
+              {Array.from({ length: getDaysInMonth(calendarMonth) }, (_, index) => {
+                const day = new Date(
+                  calendarMonth.getFullYear(),
+                  calendarMonth.getMonth(),
+                  index + 1,
+                  12,
+                  0,
+                  0,
+                  0,
+                );
+                const selected = isSameDay(day, selectedDate);
+
+                return (
+                  <Pressable
+                    key={day.toISOString()}
+                    onPress={() => {
+                      setSelectedDate(day);
+                      setShowDatePickerModal(false);
+                    }}
+                    style={({ pressed }) => [
+                      styles.calendarCell,
+                      selected && styles.calendarCellSelected,
+                      pressed && styles.calendarCellPressed,
+                    ]}
+                  >
+                    <Text
+                      style={[
+                        styles.calendarCellText,
+                        selected && styles.calendarCellTextSelected,
+                      ]}
+                    >
+                      {index + 1}
+                    </Text>
+                  </Pressable>
+                );
+              })}
+            </View>
+
+            <View style={styles.modalButtons}>
+              <Pressable onPress={closeDatePickerModal} style={styles.modalButton}>
+                <Text style={styles.modalButtonText}>Cancelar</Text>
+              </Pressable>
+            </View>
           </View>
         </View>
       </Modal>
@@ -664,54 +856,333 @@ export default function TodayScreen() {
   );
 }
 
-// ===================================================
-// ESTILOS
-// ===================================================
-
 const styles = StyleSheet.create({
-  container: { flex: 1, padding: 20, paddingTop: 60 },
-  title: { fontSize: 22, fontWeight: "bold", textAlign: "center" },
-
-  dateSelector: {
+  screen: {
+    flex: 1,
+    backgroundColor: "#F6F2EA",
+  },
+  content: {
+    flex: 1,
+    paddingHorizontal: 16,
+    paddingTop: 10,
+    paddingBottom: 24,
+  },
+  contextBar: {
+    gap: 8,
+    marginBottom: 6,
+  },
+  contextBarTopRow: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "flex-start",
+    gap: 12,
+  },
+  contextBarTopActions: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 10,
+    flexShrink: 0,
+  },
+  contextDate: {
+    fontSize: 17,
+    fontWeight: "700",
+    color: "#1F2937",
+    flexShrink: 1,
+  },
+  contextStart: {
+    fontSize: 13,
+    fontWeight: "700",
+    color: "#2ecc71",
+  },
+  contextCalendarButton: {
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    backgroundColor: "#EFE8DD",
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  contextCalendarButtonPressed: {
+    opacity: 0.75,
+  },
+  contextCalendarIcon: {
+    fontSize: 14,
+    color: "#2ecc71",
+  },
+  contextBarBottomRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+  },
+  contextBarBottomLeft: {
+    flex: 1,
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+  },
+  dateNavigator: {
     flexDirection: "row",
     justifyContent: "center",
     alignItems: "center",
-    marginBottom: 10,
+    flexShrink: 0,
   },
-  dateButton: { fontSize: 22, paddingHorizontal: 20 },
-  dateText: { fontWeight: "600" },
-
-  card: {
-    backgroundColor: "#eee",
-    padding: 16,
-    borderRadius: 8,
+  dateNavigatorArrow: {
+    fontSize: 22,
+    color: "#1F2937",
+    paddingHorizontal: 12,
+  },
+  dateNavigatorArrowDisabled: {
+    color: "#C3B8AA",
+  },
+  dateNavigatorPressed: {
+    opacity: 0.75,
+  },
+  dateNavigatorDisabled: {
+    opacity: 0.45,
+  },
+  dateNavigatorLabel: {
+    fontSize: 12,
+    fontWeight: "700",
+    color: "#6B7280",
+    letterSpacing: 0.3,
+  },
+  contextBarBottomAction: {
+    flexShrink: 0,
+    alignItems: "flex-end",
+  },
+  contextCloseWorkdayButton: {
+    paddingVertical: 6,
+    paddingHorizontal: 10,
+    borderRadius: 999,
+    backgroundColor: "#EFE8DD",
+  },
+  contextCloseWorkdayButtonPressed: {
+    opacity: 0.75,
+  },
+  contextCloseWorkdayText: {
+    fontSize: 12,
+    fontWeight: "700",
+    color: "#374151",
+  },
+  progressBlock: {
+    flexDirection: "row",
+    gap: 12,
+    paddingVertical: 14,
+    paddingHorizontal: 0,
+    marginBottom: 12,
+    alignItems: "center",
+  },
+  progressLeft: {
+    flex: 1,
+    justifyContent: "flex-start",
+    minHeight: 104,
+    paddingTop: 2,
+  },
+  progressDivider: {
+    width: StyleSheet.hairlineWidth,
+    alignSelf: "stretch",
+    backgroundColor: "rgba(17, 24, 39, 0.10)",
+  },
+  progressRight: {
+    flex: 2,
+    justifyContent: "space-between",
+    minHeight: 104,
+    paddingLeft: 10,
+  },
+  progressLabel: {
+    fontSize: 12,
+    fontWeight: "800",
+    letterSpacing: 0.6,
+    color: "#2ecc71",
+    textTransform: "uppercase",
+  },
+  progressAmount: {
+    fontSize: 34,
+    lineHeight: 38,
+    fontWeight: "900",
+    color: "#111827",
+    flexShrink: 1,
+  },
+  progressTopLine: {
+    fontSize: 13,
+    fontWeight: "700",
+    color: "#111827",
+    textAlign: "left",
+    flexWrap: "nowrap",
+  },
+  progressTopLabel: {
+    color: "#111827",
+  },
+  progressTopGoal: {
+    color: "#2ecc71",
+  },
+  progressTopRemaining: {
+    color: "#D97706",
+  },
+  progressTopReached: {
+    color: "#111827",
+    fontWeight: "800",
+  },
+  progressTopSpacer: {
+    color: "#111827",
+  },
+  progressMeterRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+    marginTop: 10,
+  },
+  progressMeterWrap: {
+    flex: 1,
+  },
+  progressRail: {
+    height: 12,
+    backgroundColor: "#E5E7EB",
+    borderRadius: 999,
+    overflow: "hidden",
+  },
+  progressFill: {
+    height: "100%",
+    borderRadius: 999,
+  },
+  progressPercentLabel: {
+    minWidth: 42,
+    textAlign: "right",
+    fontSize: 26,
+    fontWeight: "900",
+    color: "#2ecc71",
+    lineHeight: 30,
+  },
+  closedState: {
+    backgroundColor: "#FFFFFF",
+    borderRadius: 18,
+    borderWidth: 1,
+    borderStyle: "dashed",
+    borderColor: "#D7CFC2",
+    paddingVertical: 16,
+    paddingHorizontal: 16,
     marginBottom: 12,
   },
-  amount: { fontSize: 23, fontWeight: "bold" },
-
-  sectionTitle: { fontWeight: "600", marginBottom: 6 },
-  summaryToggle: { alignSelf: "center", marginBottom: 10 },
-  summaryToggleText: { color: "#0066cc", fontWeight: "600" },
-
-  tableRow: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-    marginVertical: 2,
+  closedStateTitle: {
+    fontSize: 17,
+    fontWeight: "800",
+    color: "#111827",
   },
-
-  modalOverlay: {
+  closedStateDescription: {
+    marginTop: 4,
+    fontSize: 13,
+    lineHeight: 18,
+    color: "#4B5563",
+  },
+  actionCard: {
+    backgroundColor: "#1c7c43",
+    borderRadius: 20,
+    borderWidth: 0,
+    paddingVertical: 18,
+    paddingHorizontal: 16,
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    minHeight: 64,
+    marginBottom: 12,
+    shadowColor: "#1c7c43",
+    shadowOpacity: 0.22,
+    shadowRadius: 12,
+    shadowOffset: {
+      width: 0,
+      height: 6,
+    },
+    elevation: 5,
+  },
+  actionCardPressed: {
+    transform: [{ scale: 0.995 }],
+    opacity: 0.95,
+  },
+  actionCardLabel: {
     flex: 1,
-    backgroundColor: "rgba(0,0,0,0.4)",
-    justifyContent: "center",
-    padding: 20,
+    fontSize: 21,
+    lineHeight: 24,
+    fontWeight: "900",
+    color: "#FFFFFF",
+    textAlign: "center",
+    paddingHorizontal: 12,
   },
-  modalCard: { backgroundColor: "#fff", borderRadius: 12, padding: 20 },
-  modalTitle: { fontWeight: "bold", marginBottom: 10 },
-  input: { borderWidth: 1, borderColor: "#ccc", padding: 8, borderRadius: 6 },
-  modalButtons: {
+  actionCardLeftIcon: {
+    width: 34,
+    height: 34,
+    borderRadius: 17,
+    alignItems: "center",
+    justifyContent: "center",
+    backgroundColor: "#FFFFFF",
+    flexShrink: 0,
+  },
+  actionCardPlus: {
+    fontSize: 24,
+    lineHeight: 24,
+    fontWeight: "900",
+    color: "#1c7c43",
+    marginTop: -1,
+  },
+  actionCardArrow: {
+    fontSize: 26,
+    lineHeight: 26,
+    fontWeight: "900",
+    color: "#FFFFFF",
+    flexShrink: 0,
+  },
+  utilityRow: {
     flexDirection: "row",
-    justifyContent: "space-between",
-    marginTop: 10,
+    flexWrap: "wrap",
+    gap: 8,
+    marginBottom: 12,
+  },
+  utilityPill: {
+    paddingVertical: 8,
+    paddingHorizontal: 12,
+    borderRadius: 999,
+    backgroundColor: "#FFFFFF",
+    borderWidth: 1,
+    borderColor: "#D7D2C9",
+  },
+  utilityPillPressed: {
+    opacity: 0.8,
+  },
+  utilityPillText: {
+    fontSize: 12,
+    fontWeight: "700",
+    color: "#374151",
+  },
+  registerArea: {
+    flex: 1,
+    minHeight: 0,
+    marginBottom: 10,
+  },
+  bottomNav: {
+    flexDirection: "row",
+    borderTopWidth: 1,
+    borderTopColor: "#DDD7CB",
+    backgroundColor: "#F7F3EC",
+    paddingHorizontal: 8,
+    paddingTop: 8,
+    paddingBottom: 10,
+  },
+  bottomNavItem: {
+    flex: 1,
+    alignItems: "center",
+    justifyContent: "center",
+    paddingVertical: 8,
+    borderRadius: 12,
+  },
+  bottomNavItemPressed: {
+    backgroundColor: "#EEE7DC",
+  },
+  bottomNavLabel: {
+    fontSize: 12,
+    fontWeight: "700",
+    color: "#6B7280",
+  },
+  bottomNavLabelActive: {
+    color: "#111827",
   },
   row: {
     flexDirection: "row",
@@ -721,86 +1192,139 @@ const styles = StyleSheet.create({
   },
   chip: {
     paddingVertical: 12,
-    paddingHorizontal: 16,
-    backgroundColor: "#eee",
+    paddingHorizontal: 14,
+    backgroundColor: "#F0ECE5",
     borderRadius: 22,
+    borderWidth: 1,
+    borderColor: "#E1D9CC",
+  },
+  chipPressed: {
+    opacity: 0.85,
   },
   chipActive: {
-    backgroundColor: "#4da6ff",
+    backgroundColor: "#111827",
+    borderColor: "#111827",
   },
-
-  progressContainer: {
-    height: 10,
-    backgroundColor: "#ddd",
-    borderRadius: 5,
-    overflow: "hidden",
-    marginVertical: 6,
+  chipText: {
+    color: "#111827",
+    fontWeight: "700",
   },
-  progressFill: {
-    height: "100%",
-    borderRadius: 5,
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: "rgba(0,0,0,0.42)",
+    justifyContent: "center",
+    padding: 20,
   },
-
-  dailyCompact: {
-    borderLeftWidth: 4,
-    paddingVertical: 10,
+  modalCard: {
+    backgroundColor: "#fff",
+    borderRadius: 18,
+    padding: 18,
   },
-
-  dailyCompactText: {
-    fontWeight: "600",
-    marginBottom: 6,
+  modalTitle: {
+    fontWeight: "900",
+    fontSize: 18,
+    marginBottom: 12,
+    color: "#111827",
   },
-
-  dateSelectorCompact: {
+  calendarHeader: {
     flexDirection: "row",
     alignItems: "center",
-    justifyContent: "center",
-    marginBottom: 6,
+    justifyContent: "space-between",
+    marginBottom: 12,
   },
-
-  dateArrow: {
+  calendarHeaderArrow: {
     fontSize: 20,
-    paddingHorizontal: 12,
-    color: "#333",
+    fontWeight: "900",
+    color: "#111827",
+    paddingHorizontal: 8,
   },
-
-  dateTextCompact: {
-    fontWeight: "600",
-    fontSize: 14,
-    minWidth: 110,
+  calendarWeekdays: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    marginBottom: 8,
+  },
+  calendarWeekday: {
+    width: 34,
     textAlign: "center",
+    fontSize: 11,
+    fontWeight: "800",
+    color: "#6B7280",
   },
-
-  dayStatusRow: {
+  calendarGrid: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    gap: 6,
+    marginBottom: 8,
+  },
+  calendarCell: {
+    width: 34,
+    height: 34,
+    borderRadius: 10,
+    alignItems: "center",
+    justifyContent: "center",
+    backgroundColor: "#F3EEE6",
+  },
+  calendarCellPressed: {
+    opacity: 0.8,
+  },
+  calendarCellSelected: {
+    backgroundColor: "#111827",
+  },
+  calendarCellText: {
+    fontSize: 13,
+    fontWeight: "800",
+    color: "#1F2937",
+  },
+  calendarCellTextSelected: {
+    color: "#FFFFFF",
+  },
+  input: {
+    borderWidth: 1,
+    borderColor: "#D1D5DB",
+    padding: 10,
+    borderRadius: 10,
+    marginTop: 6,
+  },
+  modalButtons: {
     flexDirection: "row",
     gap: 10,
+    marginTop: 14,
   },
-
-  cardToday: {
-    flex: 0.33, // ~33%
+  modalButton: {
+    flex: 1,
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: "#D1D5DB",
     paddingVertical: 12,
+    alignItems: "center",
+    justifyContent: "center",
   },
-
-  cardProgress: {
-    flex: 0.67, // ~67%
+  modalButtonText: {
+    fontWeight: "700",
+    color: "#374151",
+  },
+  modalButtonPrimary: {
+    flex: 1,
+    borderRadius: 12,
+    backgroundColor: "#111827",
     paddingVertical: 12,
+    alignItems: "center",
+    justifyContent: "center",
   },
-
-  smallLabel: {
-    fontSize: 12,
-    color: "#555",
-    marginBottom: 2,
+  modalButtonPrimaryText: {
+    fontWeight: "800",
+    color: "#fff",
   },
-
-  progressLine: {
-    fontSize: 12,
-    fontWeight: "600",
-    marginBottom: 4,
+  deleteButton: {
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: "#DC2626",
+    paddingVertical: 12,
+    alignItems: "center",
+    justifyContent: "center",
   },
-
-  cardCompact: {
-    paddingVertical: 8,
-    paddingHorizontal: 12,
-    marginBottom: 8,
+  deleteButtonText: {
+    fontWeight: "800",
+    color: "#DC2626",
   },
 });

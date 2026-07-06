@@ -5,6 +5,12 @@ import { getApplicationPersistence } from "../ports/persistence";
 import { WeekConfigurationService } from "./WeekConfigurationService";
 
 type Summary = {
+  servicesTotal: number;
+  servicesTaxi: number;
+  servicesUber: number;
+  servicesCabify: number;
+  servicesFreeNow: number;
+  servicesOther: number;
   total: number;
   taxi: number;
   uber: number;
@@ -19,6 +25,12 @@ type Summary = {
 
 function emptySummary(includeTips = false): Summary {
   return {
+    servicesTotal: 0,
+    servicesTaxi: 0,
+    servicesUber: 0,
+    servicesCabify: 0,
+    servicesFreeNow: 0,
+    servicesOther: 0,
     total: 0,
     taxi: 0,
     uber: 0,
@@ -45,6 +57,14 @@ function accumulateSummary(summary: Summary, trip: {
 }) {
   const amount = trip.amount ?? 0;
   const chargedAmount = trip.chargedAmount ?? amount;
+
+  summary.servicesTotal += 1;
+
+  if (trip.source === TripSource.TAXI) summary.servicesTaxi += 1;
+  if (trip.source === TripSource.UBER) summary.servicesUber += 1;
+  if (trip.source === TripSource.CABIFY) summary.servicesCabify += 1;
+  if (trip.source === TripSource.FREE_NOW) summary.servicesFreeNow += 1;
+  if (trip.source === TripSource.CUSTOM) summary.servicesOther += 1;
 
   summary.total += amount;
 

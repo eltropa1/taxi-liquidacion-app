@@ -142,13 +142,13 @@ export function useTripActions({
     [refreshData, setEditingTrip, setShowFinishModal],
   );
 
-  const handleOpenWorkday = useCallback(async () => {
-    await OpenWorkday.execute();
+  const handleOpenWorkday = useCallback(async (startOdometer: number) => {
+    await OpenWorkday.execute(startOdometer);
     await refreshData();
   }, [refreshData]);
 
-  const handleCloseWorkday = useCallback(async () => {
-    await CloseWorkday.execute();
+  const handleCloseWorkday = useCallback(async (endOdometer?: number | null) => {
+    await CloseWorkday.execute(endOdometer);
     await refreshData();
   }, [refreshData]);
 

@@ -1,0 +1,175 @@
+{
+  "title": "TaxiGeo Validation Report",
+  "summary": "VALIDACIÓN FALLIDA",
+  "context": {
+    "mode": "validate:full",
+    "rootDir": "C:/Users/monic/Desktop/geo/taxi-liquidacion-app",
+    "androidSdkRoot": "C:/Users/monic/AppData/Local/Android/Sdk",
+    "adbPath": "C:/Users/monic/AppData/Local/Android/Sdk/platform-tools/adb.exe",
+    "emulatorPath": "C:/Users/monic/AppData/Local/Android/Sdk/emulator/emulator.exe",
+    "avdName": "TaxiGeoPixel6",
+    "apkPath": "C:/Users/monic/Desktop/geo/taxi-liquidacion-app/android/app/build/outputs/apk/debug/app-debug.apk",
+    "packageName": "com.taxiliquidacionapp",
+    "mainActivity": ".MainActivity"
+  },
+  "result": {
+    "ok": false,
+    "phase": "failed",
+    "steps": [
+      {
+        "id": "typescript",
+        "label": "TypeScript",
+        "status": "passed",
+        "startedAt": "2026-07-03T00:19:20.697Z",
+        "endedAt": "2026-07-03T00:19:30.376Z",
+        "message": "OK"
+      },
+      {
+        "id": "jest",
+        "label": "Jest",
+        "status": "passed",
+        "startedAt": "2026-07-03T00:19:30.376Z",
+        "endedAt": "2026-07-03T00:19:41.086Z",
+        "message": "OK"
+      },
+      {
+        "id": "preflight",
+        "label": "Preflight Android y Maestro",
+        "status": "passed",
+        "startedAt": "2026-07-03T00:19:41.086Z",
+        "endedAt": "2026-07-03T00:19:41.468Z",
+        "message": "OK"
+      },
+      {
+        "id": "android",
+        "label": "Android emulator",
+        "status": "passed",
+        "startedAt": "2026-07-03T00:19:41.468Z",
+        "endedAt": "2026-07-03T00:19:41.673Z",
+        "message": "OK"
+      },
+      {
+        "id": "install",
+        "label": "Install app",
+        "status": "passed",
+        "startedAt": "2026-07-03T00:19:41.673Z",
+        "endedAt": "2026-07-03T00:19:47.681Z",
+        "message": "OK"
+      },
+      {
+        "id": "launch",
+        "label": "Launch app",
+        "status": "passed",
+        "startedAt": "2026-07-03T00:19:47.681Z",
+        "endedAt": "2026-07-03T00:19:59.524Z",
+        "message": "OK"
+      },
+      {
+        "id": "smoke",
+        "label": "Maestro smoke",
+        "status": "failed",
+        "startedAt": "2026-07-03T00:19:59.524Z",
+        "endedAt": "2026-07-03T00:29:59.600Z",
+        "message": "Maestro agotó el tiempo máximo permitido sin completar el smoke.",
+        "details": [
+          "bootstrap"
+        ]
+      },
+      {
+        "id": "collect",
+        "label": "Collect",
+        "status": "passed",
+        "startedAt": "2026-07-03T00:29:59.600Z",
+        "endedAt": "2026-07-03T00:30:02.887Z",
+        "message": "Artefactos persistidos tras un smoke fallido.",
+        "details": [
+          "C:\\Users\\monic\\Desktop\\geo\\taxi-liquidacion-app\\tests\\e2e\\screenshots\\latest\\smoke.app-launch.png"
+        ]
+      },
+      {
+        "id": "report",
+        "label": "Report",
+        "status": "passed",
+        "startedAt": "2026-07-03T00:30:02.887Z",
+        "endedAt": "2026-07-03T00:30:02.888Z",
+        "message": "Resumen preparado para persistencia."
+      },
+      {
+        "id": "failed",
+        "label": "Failed",
+        "status": "failed",
+        "startedAt": "2026-07-03T00:30:02.888Z",
+        "endedAt": "2026-07-03T00:30:02.888Z",
+        "message": "Maestro agotó el tiempo máximo permitido sin completar el smoke."
+      }
+    ],
+    "artifacts": [
+      {
+        "kind": "apk",
+        "label": "Development APK",
+        "path": "C:\\Users\\monic\\Desktop\\geo\\taxi-liquidacion-app\\android\\app\\build\\outputs\\apk\\debug\\app-debug.apk",
+        "description": "APK usada para instalación en el emulador."
+      },
+      {
+        "kind": "build",
+        "label": "adb",
+        "path": "C:\\Users\\monic\\AppData\\Local\\Android\\Sdk\\platform-tools\\adb.exe",
+        "description": "Herramienta ADB localizada para la fase Android."
+      },
+      {
+        "kind": "emulator",
+        "label": "emulator",
+        "path": "C:\\Users\\monic\\AppData\\Local\\Android\\Sdk\\emulator\\emulator.exe",
+        "description": "Binario del emulador Android."
+      },
+      {
+        "kind": "flow",
+        "label": "Smoke flow",
+        "path": "C:\\Users\\monic\\Desktop\\geo\\taxi-liquidacion-app\\tests\\e2e\\flows\\smoke.app-launch.yaml",
+        "description": "Flow Maestro mínimo para validar arranque y Home."
+      },
+      {
+        "kind": "config",
+        "label": "Maestro config",
+        "path": "C:\\Users\\monic\\Desktop\\geo\\taxi-liquidacion-app\\tests\\e2e\\config\\maestro.yaml",
+        "description": "Configuración mínima desacoplada para ejecutar el smoke."
+      },
+      {
+        "kind": "screenshot",
+        "label": "Smoke screenshot",
+        "path": "C:\\Users\\monic\\Desktop\\geo\\taxi-liquidacion-app\\tests\\e2e\\screenshots\\latest\\smoke.app-launch.png",
+        "description": "Captura asociada al smoke."
+      },
+      {
+        "kind": "report",
+        "label": "Smoke report JSON",
+        "path": "C:\\Users\\monic\\Desktop\\geo\\taxi-liquidacion-app\\tests\\e2e\\reports\\latest\\smoke.app-launch.json",
+        "description": "Resultado persistido del smoke."
+      },
+      {
+        "kind": "report",
+        "label": "Smoke report Markdown",
+        "path": "C:\\Users\\monic\\Desktop\\geo\\taxi-liquidacion-app\\tests\\e2e\\reports\\latest\\smoke.app-launch.md",
+        "description": "Resumen legible del smoke."
+      },
+      {
+        "kind": "log",
+        "label": "Maestro log",
+        "path": "C:\\Users\\monic\\Desktop\\geo\\taxi-liquidacion-app\\tests\\e2e\\logs\\latest\\maestro.log",
+        "description": "Log de ejecución generado por Maestro."
+      }
+    ],
+    "errors": [
+      {
+        "stepId": "smoke",
+        "message": "Maestro agotó el tiempo máximo permitido sin completar el smoke.",
+        "details": [
+          "bootstrap"
+        ]
+      }
+    ],
+    "startedAt": "2026-07-03T00:19:20.388Z",
+    "endedAt": "2026-07-03T00:30:02.888Z",
+    "durationMs": 642499.4237
+  }
+}

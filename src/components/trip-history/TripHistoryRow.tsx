@@ -1,5 +1,4 @@
 import { Pressable, StyleSheet, Text, View } from "react-native";
-import { MaterialCommunityIcons } from "@expo/vector-icons";
 
 import type { TripVisualProjection } from "../../presentation";
 
@@ -19,34 +18,20 @@ export function TripHistoryRow({ trip, onPress }: TripHistoryRowProps) {
       onPress={handlePress}
       style={({ pressed }) => [styles.container, pressed && styles.pressed]}
     >
-      <View
-        style={[
-          styles.row,
-          { backgroundColor: trip.platform.surfaceColor },
-        ]}
-      >
+      <View style={styles.row}>
         <View style={styles.identityCluster}>
-          <View style={styles.iconSlot}>
-            <Text
-              style={[
-                styles.serviceIcon,
-                { color: trip.platform.onSurfaceColor },
-              ]}
-              numberOfLines={1}
-            >
-              {trip.serviceType?.icon ?? "·"}
-            </Text>
-          </View>
-
           <View
             style={[
-              styles.platformBadge,
-              { borderColor: trip.platform.onSurfaceColor },
+              styles.platformChip,
+              {
+                backgroundColor: trip.platform.surfaceColor,
+                borderColor: trip.platform.onSurfaceColor,
+              },
             ]}
           >
             <Text
               style={[
-                styles.platformInitial,
+                styles.platformChipText,
                 { color: trip.platform.onSurfaceColor },
               ]}
               numberOfLines={1}
@@ -56,17 +41,17 @@ export function TripHistoryRow({ trip, onPress }: TripHistoryRowProps) {
           </View>
 
           <View style={styles.iconSlot}>
-            <MaterialCommunityIcons
-              name={getPaymentIconName(trip.paymentMethod?.id)}
-              size={13}
-              color={trip.platform.onSurfaceColor}
-              accessibilityIgnoresInvertColors
-            />
+            <Text
+              style={styles.paymentIcon}
+              numberOfLines={1}
+            >
+              {trip.paymentMethod?.icon ?? "·"}
+            </Text>
           </View>
         </View>
 
         <Text
-          style={[styles.schedule, { color: trip.platform.onSurfaceColor }]}
+          style={styles.schedule}
           numberOfLines={1}
           ellipsizeMode="tail"
         >
@@ -74,17 +59,11 @@ export function TripHistoryRow({ trip, onPress }: TripHistoryRowProps) {
         </Text>
 
         <View style={styles.rightCluster}>
-          <Text
-            style={[styles.amount, { color: trip.platform.onSurfaceColor }]}
-            numberOfLines={1}
-          >
+          <Text style={styles.amount} numberOfLines={1}>
             {trip.amount.label}
           </Text>
 
-          <Text
-            style={[styles.navigation, { color: trip.platform.onSurfaceColor }]}
-            numberOfLines={1}
-          >
+          <Text style={styles.navigation} numberOfLines={1}>
             {trip.navigationGlyph}
           </Text>
         </View>
@@ -98,59 +77,60 @@ const styles = StyleSheet.create({
     marginBottom: 0,
   },
   pressed: {
-    opacity: 0.7,
+    opacity: 0.78,
   },
   row: {
     flexDirection: "row",
     alignItems: "center",
-    paddingVertical: 2,
-    paddingHorizontal: 8,
-    borderRadius: 6,
-    minHeight: 34,
-    overflow: "hidden",
-    gap: 4,
+    paddingVertical: 8,
+    paddingHorizontal: 4,
+    gap: 10,
+    backgroundColor: "transparent",
   },
   identityCluster: {
     flexDirection: "row",
     alignItems: "center",
-    gap: 3,
+    gap: 8,
     flexShrink: 0,
   },
   iconSlot: {
-    width: 16,
+    width: 20,
     alignItems: "center",
     justifyContent: "center",
     flexShrink: 0,
   },
-  serviceIcon: {
-    fontSize: 13,
-    fontWeight: "700",
-    includeFontPadding: false,
-    textAlignVertical: "center",
-  },
-  platformBadge: {
-    minWidth: 17,
-    height: 17,
-    paddingHorizontal: 2,
-    borderRadius: 5,
-    borderWidth: 1,
+  platformChip: {
+    width: 26,
+    height: 26,
+    borderRadius: 6,
+    borderWidth: 0.8,
     alignItems: "center",
     justifyContent: "center",
+    shadowColor: "#000000",
+    shadowOpacity: 0.05,
+    shadowRadius: 1,
+    shadowOffset: {
+      width: 0,
+      height: 0,
+    },
+    elevation: 1,
   },
-  platformInitial: {
-    fontSize: 10,
-    fontWeight: "700",
-    includeFontPadding: false,
-    textAlignVertical: "center",
+  platformChipText: {
+    fontSize: 11,
+    fontWeight: "800",
+    letterSpacing: 0.1,
   },
   paymentIcon: {
-    fontSize: 12,
+    fontSize: 15,
+    fontWeight: "700",
+    color: "#111827",
     includeFontPadding: false,
     textAlignVertical: "center",
   },
   schedule: {
-    fontSize: 10,
-    fontWeight: "600",
+    fontSize: 13,
+    fontWeight: "700",
+    color: "#111827",
     flex: 1,
     minWidth: 0,
     textAlign: "center",
@@ -158,38 +138,21 @@ const styles = StyleSheet.create({
   rightCluster: {
     flexDirection: "row",
     alignItems: "center",
-    gap: 3,
+    gap: 8,
     flexShrink: 0,
     marginLeft: "auto",
   },
   amount: {
-    fontSize: 13,
+    fontSize: 14,
     fontWeight: "800",
+    color: "#111827",
     flexShrink: 0,
     textAlign: "right",
   },
   navigation: {
-    fontSize: 15,
+    fontSize: 16,
     fontWeight: "700",
+    color: "#6B7280",
     flexShrink: 0,
   },
 });
-
-function getPaymentIconName(paymentMethodId?: string | null) {
-  switch (paymentMethodId) {
-    case "cash":
-      return "cash";
-    case "card":
-      return "credit-card-outline";
-    case "bizum":
-      return "qrcode-scan";
-    case "app":
-      return "cellphone";
-    case "companyVoucher":
-      return "briefcase-outline";
-    case "other":
-      return "tag-outline";
-    default:
-      return "circle-small";
-  }
-}

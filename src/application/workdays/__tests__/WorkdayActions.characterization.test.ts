@@ -11,8 +11,11 @@ describe("Workday actions characterization", () => {
     workdayRepository: {
       getOpenWorkday: jest.fn(),
       openWorkdayIfNeeded: jest.fn(),
+      getMostRecentWorkday: jest.fn(),
       openWorkday: jest.fn(),
       closeCurrentWorkday: jest.fn(),
+      updateWorkdayOdometers: jest.fn(),
+      setEndOdometerIfMissing: jest.fn(),
       getWorkdayForDate: jest.fn(),
       getWorkdayInfoForDate: jest.fn(),
       assignTripToCurrentWorkday: jest.fn(),
@@ -29,17 +32,50 @@ describe("Workday actions characterization", () => {
     jest.clearAllMocks();
   });
 
-  it("opens a workday by delegating to the official repository port", async () => {
-    await OpenWorkday.execute();
+  it("opens a workday and backfills the previous one when needed", async () => {
+    persistence.workdayRepository.getMostRecentWorkday.mockResolvedValue({
+      id: 12,
+      startTime: "2026-07-01T07:00:00.000Z",
+      endTime: null,
+      startOdometer: 1000,
+      endOdometer: null,
+      isClosed: false,
+      createdAt: "2026-07-01T07:00:00.000Z",
+    });
 
-    expect(persistence.workdayRepository.openWorkday).toHaveBeenCalledTimes(1);
+    await OpenWorkday.execute(1234);
+
+    expect(persistence.workdayRepository.setEndOdometerIfMissing).toHaveBeenCalledWith(
+      { id: 12, endOdometer: 1234 },
+    );
+    expect(persistence.workdayRepository.openWorkday).toHaveBeenCalledWith(1234);
   });
 
-  it("closes every open workday in the current runtime state", async () => {
-    await CloseWorkday.execute();
+  it("does not backfill a previous workday that already has an odometer", async () => {
+    persistence.workdayRepository.getMostRecentWorkday.mockResolvedValue({
+      id: 12,
+      startTime: "2026-07-01T07:00:00.000Z",
+      endTime: "2026-07-01T08:30:00.000Z",
+      startOdometer: 1000,
+      endOdometer: 1100,
+      isClosed: true,
+      createdAt: "2026-07-01T07:00:00.000Z",
+    });
+
+    await OpenWorkday.execute(1234);
+
+    expect(persistence.workdayRepository.setEndOdometerIfMissing).not.toHaveBeenCalled();
+    expect(persistence.workdayRepository.openWorkday).toHaveBeenCalledWith(1234);
+  });
+
+  it("closes the current workday with the optional odometer", async () => {
+    await CloseWorkday.execute(1300);
 
     expect(persistence.workdayRepository.closeCurrentWorkday).toHaveBeenCalledTimes(
       1,
+    );
+    expect(persistence.workdayRepository.closeCurrentWorkday).toHaveBeenCalledWith(
+      1300,
     );
   });
 });

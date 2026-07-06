@@ -1,9 +1,8 @@
 import {
   calculateProgress,
   calculateRemainingAmount,
-  calculateTripTotalsByPayment,
-  calculateTripTotalsBySource,
 } from "../../domain/trips/tripEconomics";
+import { calculateWorkdayKilometers } from "../../domain/workdays/workdayOdometer";
 import { PaymentType, TripSource } from "../../constants/enums";
 
 export type TodayTripRow = {
@@ -22,17 +21,27 @@ export type TodayGoals = Readonly<{
 }>;
 
 export type TodayWorkdayInfo = Readonly<{
+  id: number;
   startTime: string;
   endTime: string | null;
+  startOdometer: number | null;
+  endOdometer: number | null;
   isClosed: boolean;
 }>;
 
 export type TodayActiveWorkday = {
   id: number;
   startTime: string;
+  startOdometer: number | null;
 } | null | undefined;
 
 export type TodayDailySummary = {
+  servicesTotal: number;
+  servicesTaxi: number;
+  servicesUber: number;
+  servicesCabify: number;
+  servicesFreeNow: number;
+  servicesOther: number;
   total: number;
   taxi: number;
   uber: number;
@@ -62,6 +71,9 @@ export type TodayScreenProjection = Readonly<{
   resolvedWorkdayInfo: Readonly<{
     startTime: string;
     endTime: string | null;
+    startOdometer: number | null;
+    endOdometer: number | null;
+    workedKilometers: number | null;
     isClosed: boolean;
     isVirtual: boolean;
   }>;
@@ -69,8 +81,6 @@ export type TodayScreenProjection = Readonly<{
   remainingDaily: number | null;
   remainingWeekly: number | null;
   remainingMonthly: number | null;
-  totalsBySource: ReturnType<typeof calculateTripTotalsBySource>;
-  totalsByPayment: ReturnType<typeof calculateTripTotalsByPayment>;
   dailyProgress: number | null;
   weeklyProgress: number | null;
   monthlyProgress: number | null;
@@ -92,11 +102,17 @@ function buildResolvedWorkdayInfo(
 ) {
   return workdayInfo
     ? {
-        startTime: workdayInfo.startTime,
-        endTime: workdayInfo.endTime,
-        isClosed: workdayInfo.isClosed,
-        isVirtual: false,
-      }
+      startTime: workdayInfo.startTime,
+      endTime: workdayInfo.endTime,
+      startOdometer: workdayInfo.startOdometer,
+      endOdometer: workdayInfo.endOdometer,
+      workedKilometers: calculateWorkdayKilometers(
+        workdayInfo.startOdometer,
+        workdayInfo.endOdometer,
+      ),
+      isClosed: workdayInfo.isClosed,
+      isVirtual: false,
+    }
     : {
         startTime: new Date(
           selectedDate.getFullYear(),
@@ -114,6 +130,9 @@ function buildResolvedWorkdayInfo(
           59,
           59,
         ).toISOString(),
+        startOdometer: null,
+        endOdometer: null,
+        workedKilometers: null,
         isClosed: true,
         isVirtual: true,
       };
@@ -148,10 +167,6 @@ export function buildTodayScreenProjection(
       ? calculateRemainingAmount(data.monthlySummary.total, data.goals.monthly)
       : null;
 
-  const tripList = [...data.trips];
-  const totalsBySource = calculateTripTotalsBySource(tripList);
-  const totalsByPayment = calculateTripTotalsByPayment(tripList);
-
   const dailyProgress = calculateProgress(totalToday, data.goals.daily);
   const weeklyProgress = calculateProgress(
     data.weeklySummary?.total ?? 0,
@@ -169,8 +184,6 @@ export function buildTodayScreenProjection(
     remainingDaily,
     remainingWeekly,
     remainingMonthly,
-    totalsBySource,
-    totalsByPayment,
     dailyProgress,
     weeklyProgress,
     monthlyProgress,

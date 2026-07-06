@@ -10,6 +10,7 @@ export function TripHistory({ trips, onTripPress }: TripHistoryProps) {
       <FlatList
         data={trips}
         keyExtractor={(item) => String(item.id)}
+        style={styles.list}
         contentContainerStyle={styles.listContent}
         ItemSeparatorComponent={() => <View style={styles.separator} />}
         renderItem={({ item }) => (
@@ -25,12 +26,15 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
   },
+  list: {
+    flex: 1,
+  },
   listContent: {
     paddingTop: 0,
-    paddingBottom: 0,
+    paddingBottom: 8,
   },
   separator: {
-    height: StyleSheet.hairlineWidth,
-    backgroundColor: "rgba(255, 255, 255, 0.65)",
+    height: 8,
+    backgroundColor: "rgba(17, 24, 39, 0.025)",
   },
 });

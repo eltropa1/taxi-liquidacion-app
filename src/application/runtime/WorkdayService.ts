@@ -6,15 +6,19 @@ export class WorkdayService {
   }
 
   static async openWorkdayIfNeeded() {
-    return getApplicationPersistence().workdayRepository.openWorkdayIfNeeded();
+    return getApplicationPersistence().workdayRepository.getOpenWorkday();
   }
 
-  static async openWorkday() {
-    return getApplicationPersistence().workdayRepository.openWorkday();
+  static async openWorkday(startOdometer: number) {
+    return getApplicationPersistence().workdayRepository.openWorkday(
+      startOdometer,
+    );
   }
 
-  static async closeCurrentWorkday() {
-    await getApplicationPersistence().workdayRepository.closeCurrentWorkday();
+  static async closeCurrentWorkday(endOdometer?: number | null) {
+    await getApplicationPersistence().workdayRepository.closeCurrentWorkday(
+      endOdometer ?? null,
+    );
   }
 
   static async getWorkdayForDate(date: Date) {

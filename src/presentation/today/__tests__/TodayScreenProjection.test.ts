@@ -29,11 +29,18 @@ describe("buildTodayScreenProjection", () => {
       monthlySummary: { total: 30 },
       goals: { daily: 15, weekly: 40, monthly: 100 },
       workdayInfo: {
+        id: 9,
         startTime: "2026-07-01T08:00:00.000Z",
         endTime: null,
+        startOdometer: 1200,
+        endOdometer: 1234,
         isClosed: false,
       },
-      activeWorkday: { id: 9, startTime: "2026-07-01T08:00:00.000Z" },
+      activeWorkday: {
+        id: 9,
+        startTime: "2026-07-01T08:00:00.000Z",
+        startOdometer: 1200,
+      },
       dailySummary: null,
     });
 
@@ -43,7 +50,29 @@ describe("buildTodayScreenProjection", () => {
     expect(projection.remainingWeekly).toBe(20);
     expect(projection.dailyStatus?.label).toBe("Vas bien");
     expect(projection.resolvedWorkdayInfo.isVirtual).toBe(false);
-    expect(projection.totalsBySource.taxi).toBe(12);
-    expect(projection.totalsByPayment.efectivo).toBe(12);
+    expect(projection.resolvedWorkdayInfo.workedKilometers).toBe(34);
+  });
+
+  it("keeps legacy workdays without odometers safe", () => {
+    const projection = buildTodayScreenProjection({
+      selectedDate: new Date("2026-06-30T00:00:00.000Z"),
+      activeTripId: null,
+      trips: [],
+      weeklySummary: null,
+      monthlySummary: null,
+      goals: { daily: 0, weekly: 0, monthly: 0 },
+      workdayInfo: {
+        id: 22,
+        startTime: "2026-06-30T08:00:00.000Z",
+        endTime: null,
+        startOdometer: null,
+        endOdometer: null,
+        isClosed: true,
+      },
+      activeWorkday: null,
+      dailySummary: null,
+    });
+
+    expect(projection.resolvedWorkdayInfo.workedKilometers).toBeNull();
   });
 });
