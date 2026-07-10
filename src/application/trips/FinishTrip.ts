@@ -7,6 +7,7 @@ import {
 } from "../../domain/trips/canonical";
 import { getApplicationRuntime } from "../runtime";
 import { getApplicationPersistence } from "../ports/persistence";
+import { captureTripGeoEnrichment } from "./tripGeoEnrichment";
 
 export type FinishTripResult = Readonly<{
   finalized: boolean;
@@ -59,7 +60,7 @@ function mapEconomicsFromLegacyInput(input: {
   const collectedAmount =
     input.payment === PaymentType.CASH
       ? input.amount + (input.cashTip ?? 0)
-      : input.payment === PaymentType.CARD &&
+      : (input.payment === PaymentType.CARD || input.payment === PaymentType.APP) &&
           typeof input.chargedAmount === "number"
         ? input.chargedAmount
         : input.amount;
@@ -151,7 +152,7 @@ export class FinishTrip {
     const classification = mapClassificationFromLegacyInput(completionInput);
     const economics = mapEconomicsFromLegacyInput(completionInput);
 
-    // 1️⃣ Cerrar viaje en dominio
+    // Camino crítico: cerrar el viaje y fijar el hecho económico.
     trip.finish(endedAt);
     trip.completeInformation({
       classification,
@@ -173,7 +174,7 @@ export class FinishTrip {
         : null;
 
     await tripRepository.runInTransaction(async () => {
-      // 2️⃣ Persistir el estado resultante de forma atómica
+      // Camino crítico: persistir el registro del servicio.
       await tripRepository.updateTripTimes({
         id: Number(trip.id),
         startTime: trip.chronology.startedAt,
@@ -191,25 +192,15 @@ export class FinishTrip {
       });
     });
 
-    try {
-      const runtime = getApplicationRuntime();
-      const location = await runtime.geoLocation.getCurrentLocation();
-      const geoSnapshot = runtime.geoAdministrativeResolver.resolve(
-        location.latitude,
-        location.longitude,
-      );
+    // Camino de enriquecimiento: snapshot GEO posterior al registro.
+    void captureTripGeoEnrichment({
+      tripId: Number(trip.id),
+      kind: "END",
+      runtime: getApplicationRuntime(),
+      snapshotRepository: tripGeoSnapshotRepository,
+      errorLabel: "Error capturando snapshot GEO de fin de viaje",
+    });
 
-      await tripGeoSnapshotRepository.insert({
-        tripId: Number(trip.id),
-        kind: "END",
-        snapshot: geoSnapshot,
-        createdAt: new Date().toISOString(),
-      });
-
-      return { finalized: true, enrichmentSaved: true };
-    } catch (error) {
-      console.error("Error capturando snapshot GEO de fin de viaje", error);
-      return { finalized: true, enrichmentSaved: false };
-    }
+    return { finalized: true, enrichmentSaved: true };
   }
 }

@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useMemo, useRef, useState } from "react";
 import {
   Alert,
   Modal,
@@ -13,8 +13,12 @@ import { router } from "expo-router";
 import { SafeAreaView } from "react-native-safe-area-context";
 
 import { TripHistory } from "../src/components/trip-history";
+import {
+  CompleteServiceFlowController,
+  type CompleteServiceFlowControllerHandle,
+} from "../src/components/trips/CompleteServiceFlowController";
 import { PaymentType, TripSource } from "../src/constants/enums";
-import { useTodayScreen, type TodayTripRow } from "../src/hooks/useTodayScreen";
+import { useTodayScreen } from "../src/hooks/useTodayScreen";
 import { useTripActions } from "../src/hooks/useTripActions";
 import { buildTodayScreenProjection, toTripVisualProjection } from "../src/presentation";
 import { UpdateWorkday } from "../src/application/workdays/UpdateWorkday";
@@ -116,17 +120,7 @@ export default function TodayScreen() {
   const [lastPayment, setLastPayment] = useState<PaymentType>(PaymentType.CASH);
   const [lastSource, setLastSource] = useState<TripSource>(TripSource.TAXI);
 
-  const [showFinishModal, setShowFinishModal] = useState(false);
-  const [amountInput, setAmountInput] = useState("");
-  const [payment, setPayment] = useState<PaymentType>(PaymentType.CASH);
-  const [source, setSource] = useState<TripSource>(TripSource.TAXI);
-
-  const [editingTrip, setEditingTrip] = useState<TodayTripRow | null>(null);
   const [selectedDate, setSelectedDate] = useState<Date>(new Date());
-
-  const [customSource, setCustomSource] = useState("");
-  const [chargedAmountInput, setChargedAmountInput] = useState("");
-  const [cashTipInput, setCashTipInput] = useState("");
 
   type WorkdayModalMode = "open" | "close" | "edit" | null;
   const [workdayModalMode, setWorkdayModalMode] =
@@ -154,19 +148,18 @@ export default function TodayScreen() {
 
   const {
     handleStartTrip,
-    handleSaveTrip,
-    handleDeleteTrip,
+    handleCloseActiveTrip,
     handleOpenWorkday,
     handleCloseWorkday,
   } = useTripActions({
     refreshData,
     setLastPayment,
     setLastSource,
-    setEditingTrip,
-    setShowFinishModal,
-    setAmountInput,
-    setCustomSource,
   });
+
+  const completeServiceFlowRef = useRef<CompleteServiceFlowControllerHandle | null>(
+    null,
+  );
 
   const tripHistoryProjections = useMemo(
     () => trips.map((trip) => toTripVisualProjection(trip)),
@@ -219,6 +212,10 @@ export default function TodayScreen() {
       ? handleOpenFinish
       : handleStartTrip;
 
+  const handleActionPress = () => {
+    actionHandler();
+  };
+
   const contextStartTime = workdayInfo?.startTime ?? activeWorkday?.startTime ?? null;
 
   function openDatePickerModal() {
@@ -260,31 +257,15 @@ export default function TodayScreen() {
     setWorkdayEndOdometerInput("");
   };
 
-  function handleOpenFinish() {
-    setEditingTrip(null);
-    setPayment(lastPayment);
-    setSource(lastSource);
-    setCustomSource("");
-    setAmountInput("");
-    setShowFinishModal(true);
-    setChargedAmountInput("");
-    setCashTipInput("");
-  }
-
-  const handleSave = async () => {
-    await handleSaveTrip({
-      editingTrip,
-      amountInput,
-      payment,
-      chargedAmountInput,
-      cashTipInput,
-      source,
-      customSource,
-    });
-  };
-
-  const handleDelete = async () => {
-    await handleDeleteTrip({ editingTrip });
+  async function handleOpenFinish() {
+    const result = await handleCloseActiveTrip();
+    if (result.finalized && result.tripId !== null) {
+      completeServiceFlowRef.current?.openForTrip({
+        tripId: result.tripId,
+        payment: lastPayment,
+        source: lastSource,
+      });
+    }
   };
 
   const handleSaveWorkday = async () => {
@@ -518,7 +499,7 @@ export default function TodayScreen() {
         )}
 
         <Pressable
-          onPress={actionHandler}
+          onPress={handleActionPress}
           style={({ pressed }) => [
             styles.actionCard,
             pressed && styles.actionCardPressed,
@@ -640,126 +621,13 @@ export default function TodayScreen() {
         </View>
       </Modal>
 
-      <Modal visible={showFinishModal} transparent animationType="slide">
-        <View style={styles.modalOverlay}>
-          <View style={styles.modalCard}>
-            <Text style={styles.modalTitle}>
-              {editingTrip ? "Editar viaje" : "Finalizar viaje"}
-            </Text>
-
-            <Text>Importe del viaje (€)</Text>
-            <TextInput
-              value={amountInput}
-              onChangeText={setAmountInput}
-              keyboardType="decimal-pad"
-              placeholder="0,00"
-              autoFocus
-              style={styles.input}
-            />
-
-            {payment === PaymentType.CARD && (
-              <>
-                <Text style={{ marginTop: 10 }}>Importe cobrado (€)</Text>
-                <TextInput
-                  value={chargedAmountInput}
-                  onChangeText={setChargedAmountInput}
-                  keyboardType="decimal-pad"
-                  placeholder={amountInput || "0,00"}
-                  style={styles.input}
-                />
-              </>
-            )}
-
-            {payment === PaymentType.CASH && (
-              <>
-                <Text style={{ marginTop: 10 }}>Importe cobrado (€)</Text>
-                <TextInput
-                  value={cashTipInput}
-                  onChangeText={setCashTipInput}
-                  keyboardType="decimal-pad"
-                  placeholder="0,00"
-                  style={styles.input}
-                />
-              </>
-            )}
-
-            <Text style={{ marginTop: 10 }}>Forma de pago</Text>
-            <View style={styles.row}>
-              {[PaymentType.CASH, PaymentType.CARD, PaymentType.APP].map((p) => (
-                <Pressable
-                  key={p}
-                  onPress={() => setPayment(p)}
-                  style={({ pressed }) => [
-                    styles.chip,
-                    payment === p && styles.chipActive,
-                    pressed && styles.chipPressed,
-                  ]}
-                >
-                  <Text style={styles.chipText}>{p}</Text>
-                </Pressable>
-              ))}
-            </View>
-
-            <Text style={{ marginTop: 10 }}>Tipo de viaje</Text>
-            <View style={styles.row}>
-              {[TripSource.TAXI, TripSource.UBER, TripSource.CABIFY, TripSource.FREE_NOW].map(
-                (s) => (
-                  <Pressable
-                    key={s}
-                    onPress={() => setSource(s)}
-                    style={({ pressed }) => [
-                      styles.chip,
-                      source === s && styles.chipActive,
-                      pressed && styles.chipPressed,
-                    ]}
-                  >
-                    <Text style={styles.chipText}>{s}</Text>
-                  </Pressable>
-                ),
-              )}
-            </View>
-
-            <View style={styles.modalButtons}>
-              <Pressable
-                onPress={() => {
-                  setEditingTrip(null);
-                  setShowFinishModal(false);
-                }}
-                style={styles.modalButton}
-              >
-                <Text style={styles.modalButtonText}>Cancelar</Text>
-              </Pressable>
-              <Pressable onPress={handleSave} style={styles.modalButtonPrimary}>
-                <Text style={styles.modalButtonPrimaryText}>Guardar</Text>
-              </Pressable>
-            </View>
-
-            {editingTrip && (
-              <View style={{ marginTop: 10 }}>
-                <Pressable
-                  onPress={() => {
-                    Alert.alert(
-                      "Borrar viaje",
-                      "Esta acción no se puede deshacer.\n\n¿Seguro que quieres borrar este viaje?",
-                      [
-                        { text: "Cancelar", style: "cancel" },
-                        {
-                          text: "Borrar",
-                          style: "destructive",
-                          onPress: handleDelete,
-                        },
-                      ],
-                    );
-                  }}
-                  style={styles.deleteButton}
-                >
-                  <Text style={styles.deleteButtonText}>Borrar viaje</Text>
-                </Pressable>
-              </View>
-            )}
-          </View>
-        </View>
-      </Modal>
+      <CompleteServiceFlowController
+        ref={completeServiceFlowRef}
+        refreshData={refreshData}
+        setLastPayment={setLastPayment}
+        setLastSource={setLastSource}
+        onCompleteLater={refreshData}
+      />
 
       <Modal visible={showDatePickerModal} transparent animationType="slide">
         <View style={styles.modalOverlay}>
@@ -1202,8 +1070,9 @@ const styles = StyleSheet.create({
     opacity: 0.85,
   },
   chipActive: {
-    backgroundColor: "#111827",
+    backgroundColor: "#F6F2EA",
     borderColor: "#111827",
+    borderWidth: 1.5,
   },
   chipText: {
     color: "#111827",

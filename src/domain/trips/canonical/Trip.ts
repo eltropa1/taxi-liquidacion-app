@@ -2,6 +2,7 @@ import { TripChronology } from "./TripChronology";
 import { TripDomainError } from "./TripDomainError";
 import { TripEconomics } from "./TripEconomics";
 import { TripServiceClassification } from "./TripServiceClassification";
+import { Service } from "../../services/canonical";
 
 export type TripStatus =
   | "inProgress"
@@ -27,6 +28,7 @@ type TripConstructionParams = {
   workdayId?: string | null;
   classification?: TripServiceClassification | null;
   economics?: TripEconomics | null;
+  service?: Service | null;
 };
 
 type TripCorrectionParams = {
@@ -41,15 +43,19 @@ export class Trip {
   private readonly identity: string;
   private chronologyValue: TripChronology;
   private workdayIdValue: string | null;
-  private classificationValue: TripServiceClassification | null;
-  private economicsValue: TripEconomics | null;
+  private serviceValue: Service | null;
 
   private constructor(params: TripConstructionParams) {
     this.identity = normalizeIdentity(params.id);
     this.chronologyValue = params.chronology;
     this.workdayIdValue = normalizeWorkdayReference(params.workdayId);
-    this.classificationValue = params.classification ?? null;
-    this.economicsValue = params.economics ?? null;
+    this.serviceValue =
+      params.service !== undefined
+        ? params.service
+        : Service.fromLegacyState({
+            classification: params.classification ?? null,
+            economics: params.economics ?? null,
+          });
 
     this.ensureAggregateStateIsValid();
   }
@@ -66,6 +72,7 @@ export class Trip {
       workdayId: params.workdayId,
       classification: params.classification ?? null,
       economics: null,
+      service: null,
     });
 
     trip.ensureCreatedByStart();
@@ -85,8 +92,15 @@ export class Trip {
       id: params.id,
       chronology: TripChronology.close(params.startedAt, params.endedAt),
       workdayId: params.workdayId,
-      classification: params.classification ?? null,
-      economics: params.economics ?? null,
+      service:
+        params.economics === undefined || params.economics === null
+          ? Service.createIncomplete({
+              classification: params.classification ?? null,
+            })
+          : Service.createCompleted({
+              classification: params.classification ?? null,
+              economics: params.economics,
+            }),
     });
 
     trip.ensureCreatedByRegisterCompleted();
@@ -107,11 +121,15 @@ export class Trip {
   }
 
   get classification() {
-    return this.classificationValue;
+    return this.serviceValue?.classification ?? null;
   }
 
   get economics() {
-    return this.economicsValue;
+    return this.serviceValue?.economics ?? null;
+  }
+
+  get service() {
+    return this.serviceValue;
   }
 
   get status(): TripStatus {
@@ -119,7 +137,7 @@ export class Trip {
       return "inProgress";
     }
 
-    if (this.economicsValue === null) {
+    if (this.serviceValue === null || this.serviceValue.isIncomplete()) {
       return "closedPendingInformation";
     }
 
@@ -158,16 +176,23 @@ export class Trip {
     const nextClassification =
       params.classification !== undefined
         ? params.classification
-        : this.classificationValue;
+        : this.classification;
 
     const nextEconomics =
-      params.economics !== undefined ? params.economics : this.economicsValue;
+      params.economics !== undefined ? params.economics : this.economics;
 
-    this.ensureStateIsValid(this.chronologyValue, nextEconomics);
+    const currentService =
+      this.serviceValue ??
+      Service.createIncomplete({ classification: this.classification });
+    const nextService = currentService.completeInformation({
+      classification: nextClassification,
+      economics: nextEconomics,
+    });
+
+    this.ensureStateIsValid(this.chronologyValue, nextService);
 
     this.workdayIdValue = nextWorkdayId;
-    this.classificationValue = nextClassification;
-    this.economicsValue = nextEconomics;
+    this.serviceValue = nextService;
   }
 
   correct(params: TripCorrectionParams) {
@@ -184,21 +209,28 @@ export class Trip {
     const nextClassification =
       params.classification !== undefined
         ? params.classification
-        : this.classificationValue;
+        : this.classification;
 
     const nextEconomics =
-      params.economics !== undefined ? params.economics : this.economicsValue;
+      params.economics !== undefined ? params.economics : this.economics;
 
-    this.ensureStateIsValid(nextChronology, nextEconomics);
+    const currentService =
+      this.serviceValue ??
+      Service.createIncomplete({ classification: this.classification });
+    const nextService = currentService.completeInformation({
+      classification: nextClassification,
+      economics: nextEconomics,
+    });
+
+    this.ensureStateIsValid(nextChronology, nextService);
 
     this.chronologyValue = nextChronology;
     this.workdayIdValue = nextWorkdayId;
-    this.classificationValue = nextClassification;
-    this.economicsValue = nextEconomics;
+    this.serviceValue = nextService;
   }
 
   private ensureAggregateStateIsValid() {
-    this.ensureStateIsValid(this.chronologyValue, this.economicsValue);
+    this.ensureStateIsValid(this.chronologyValue, this.serviceValue);
   }
 
   private ensureCreatedByStart() {
@@ -219,9 +251,9 @@ export class Trip {
 
   private ensureStateIsValid(
     chronology: TripChronology,
-    economics: TripEconomics | null,
+    service: Service | null,
   ) {
-    const status = this.resolveStatusFromState(chronology, economics);
+    const status = this.resolveStatusFromState(chronology, service);
 
     switch (status) {
       case "inProgress":
@@ -231,9 +263,9 @@ export class Trip {
           );
         }
 
-        if (economics !== null) {
+        if (service !== null && service.isCompleted()) {
           throw new TripDomainError(
-            "An in-progress trip cannot contain economics information",
+            "An in-progress trip cannot contain completed service information",
           );
         }
 
@@ -246,9 +278,9 @@ export class Trip {
           );
         }
 
-        if (economics !== null) {
+        if (service !== null && service.isCompleted()) {
           throw new TripDomainError(
-            "A finished trip pending information cannot contain economics information",
+            "A finished trip pending information cannot contain completed service information",
           );
         }
 
@@ -261,7 +293,7 @@ export class Trip {
           );
         }
 
-        if (economics === null) {
+        if (service === null || service.isIncomplete()) {
           throw new TripDomainError(
             "A completed trip must contain economics information",
           );
@@ -273,13 +305,13 @@ export class Trip {
 
   private resolveStatusFromState(
     chronology: TripChronology,
-    economics: TripEconomics | null,
+    service: Service | null,
   ): TripStatus {
     if (chronology.isOpen()) {
       return "inProgress";
     }
 
-    if (economics === null) {
+    if (service === null || service.isIncomplete()) {
       return "closedPendingInformation";
     }
 

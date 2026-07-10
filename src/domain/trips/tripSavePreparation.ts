@@ -41,7 +41,7 @@ export function prepareTripSaveData(
   if (amount === null) return null;
 
   const chargedAmountValue =
-    input.payment === PaymentType.CARD
+    input.payment === PaymentType.CARD || input.payment === PaymentType.APP
       ? parseOptionalAmountInput(input.chargedAmountInput)
       : undefined;
 

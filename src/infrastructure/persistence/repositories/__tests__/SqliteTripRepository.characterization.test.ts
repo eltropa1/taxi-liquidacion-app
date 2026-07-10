@@ -21,8 +21,38 @@ describe("SqliteTripRepository", () => {
 
     expect(result).toEqual({ id: 99 });
     expect(db.runAsync).toHaveBeenCalledWith(
-      expect.stringContaining("INSERT INTO trips (startTime, source, createdAt, workdayId)"),
+      expect.stringContaining(
+        "INSERT INTO trips (startTime, source, createdAt, workdayId)",
+      ),
       [expect.any(String), TripSource.TAXI, expect.any(String), 12],
+    );
+  });
+
+  it("persists a manual trip with a completed service state by default", async () => {
+    const db = createDatabase();
+    const repository = new SqliteTripRepository(db as any);
+
+    await repository.createManualTrip({
+      startTime: new Date("2026-07-01T09:00:00.000Z"),
+      endTime: new Date("2026-07-01T09:20:00.000Z"),
+      amount: 21,
+      payment: PaymentType.CASH,
+      source: TripSource.CABIFY,
+      workdayId: 12,
+    });
+
+    expect(db.runAsync).toHaveBeenCalledWith(
+      expect.stringContaining("INSERT INTO trips (\n        startTime,\n        endTime,\n        serviceStatus,"),
+      [
+        "2026-07-01T09:00:00.000Z",
+        "2026-07-01T09:20:00.000Z",
+        "completed",
+        21,
+        PaymentType.CASH,
+        TripSource.CABIFY,
+        expect.any(String),
+        12,
+      ],
     );
   });
 
@@ -60,8 +90,29 @@ describe("SqliteTripRepository", () => {
     );
     expect(db.runAsync).toHaveBeenNthCalledWith(
       3,
-      expect.stringContaining("UPDATE trips\n      SET amount = ?, payment = ?, source = ?, customSource = ?, chargedAmount = ?, cashTip = ?"),
-      [21, PaymentType.CASH, TripSource.CABIFY, null, null, null, 55],
+      expect.stringContaining("UPDATE trips\n      SET amount = ?, payment = ?, source = ?, customSource = ?, chargedAmount = ?, cashTip = ?, serviceStatus = ?"),
+      [21, PaymentType.CASH, TripSource.CABIFY, null, null, null, "completed", 55],
+    );
+  });
+
+  it("updates a service directly through the explicit service write path", async () => {
+    const db = createDatabase();
+    const repository = new SqliteTripRepository(db as any);
+
+    await repository.updateTripService({
+      id: 77,
+      serviceStatus: "incomplete",
+      source: TripSource.UBER,
+      customSource: "Uber",
+      amount: null,
+      payment: null,
+      chargedAmount: null,
+      cashTip: null,
+    });
+
+    expect(db.runAsync).toHaveBeenCalledWith(
+      expect.stringContaining("UPDATE trips\n      SET amount = ?, payment = ?, source = ?, customSource = ?, chargedAmount = ?, cashTip = ?, serviceStatus = ?"),
+      [null, null, TripSource.UBER, "Uber", null, null, "incomplete", 77],
     );
   });
 

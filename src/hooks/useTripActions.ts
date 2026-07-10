@@ -3,6 +3,7 @@ import { Alert } from "react-native";
 
 import { PaymentType, TripSource } from "../constants/enums";
 import { prepareTripSaveData } from "../domain/trips/tripSavePreparation";
+import { CloseTrip } from "../application/trips/CloseTrip";
 import { StartTrip } from "../application/trips/StartTrip";
 import { FinishTrip } from "../application/trips/FinishTrip";
 import { CreateManualTrip } from "../application/trips/CreateManualTrip";
@@ -16,10 +17,10 @@ type UseTripActionsParams = {
   refreshData: () => Promise<void>;
   setLastPayment: Dispatch<SetStateAction<PaymentType>>;
   setLastSource: Dispatch<SetStateAction<TripSource>>;
-  setEditingTrip: Dispatch<SetStateAction<TodayTripRow | null>>;
-  setShowFinishModal: Dispatch<SetStateAction<boolean>>;
-  setAmountInput: Dispatch<SetStateAction<string>>;
-  setCustomSource: Dispatch<SetStateAction<string>>;
+  setEditingTrip?: Dispatch<SetStateAction<TodayTripRow | null>>;
+  setShowFinishModal?: Dispatch<SetStateAction<boolean>>;
+  setAmountInput?: Dispatch<SetStateAction<string>>;
+  setCustomSource?: Dispatch<SetStateAction<string>>;
 };
 
 type SaveTripInput = {
@@ -28,6 +29,15 @@ type SaveTripInput = {
   payment: PaymentType;
   chargedAmountInput: string;
   cashTipInput: string;
+  source: TripSource;
+  customSource: string;
+};
+
+type CompleteClosedTripInput = {
+  tripId: number;
+  amountInput: string;
+  payment: PaymentType;
+  collectedAmountInput: string;
   source: TripSource;
   customSource: string;
 };
@@ -45,10 +55,37 @@ export function useTripActions({
   setAmountInput,
   setCustomSource,
 }: UseTripActionsParams) {
-  const handleStartTrip = useCallback(async () => {
-    await StartTrip.execute();
+  const refreshScreenReadModel = useCallback(async () => {
     await refreshData();
   }, [refreshData]);
+
+  const triggerScreenRefresh = useCallback(() => {
+    void refreshScreenReadModel().catch(console.error);
+  }, [refreshScreenReadModel]);
+
+  const handleStartTrip = useCallback(async () => {
+    await StartTrip.execute();
+    triggerScreenRefresh();
+  }, [triggerScreenRefresh]);
+
+  const handleCloseActiveTrip = useCallback(async () => {
+    // Camino crítico: cerrar el viaje y registrar el servicio pendiente.
+    const result = await CloseTrip.execute();
+
+    if (result.finalized) {
+      if (!result.enrichmentSaved) {
+        Alert.alert(
+          "Viaje finalizado",
+          "No se pudo guardar el enriquecimiento de ubicación, pero el viaje sí quedó finalizado.",
+        );
+      }
+    }
+
+    // Camino de lectura: refrescar la pantalla tras el cierre.
+    triggerScreenRefresh();
+
+    return result;
+  }, [triggerScreenRefresh]);
 
   const handleSaveTrip = useCallback(
     async (input: SaveTripInput) => {
@@ -82,6 +119,7 @@ export function useTripActions({
         );
       } else {
         try {
+          // Camino crítico: registrar el servicio con sus datos esenciales.
           const result = await FinishTrip.execute(
             preparedTrip.amount,
             input.payment,
@@ -111,15 +149,16 @@ export function useTripActions({
         }
       }
 
-      setEditingTrip(null);
-      setShowFinishModal(false);
-      setAmountInput("");
-      setCustomSource("");
+      setEditingTrip?.(null);
+      setShowFinishModal?.(false);
+      setAmountInput?.("");
+      setCustomSource?.("");
 
-      await refreshData();
+      // Camino de lectura: refrescar el estado visible de la pantalla.
+      triggerScreenRefresh();
     },
     [
-      refreshData,
+      triggerScreenRefresh,
       setAmountInput,
       setCustomSource,
       setEditingTrip,
@@ -129,32 +168,72 @@ export function useTripActions({
     ],
   );
 
+  const handleCompleteClosedTrip = useCallback(
+    async (input: CompleteClosedTripInput) => {
+      const preparedTrip = prepareTripSaveData({
+        amountInput: input.amountInput,
+        payment: input.payment,
+        chargedAmountInput:
+          input.payment === PaymentType.CARD || input.payment === PaymentType.APP
+            ? input.collectedAmountInput
+            : "",
+        cashTipInput:
+          input.payment === PaymentType.CASH ? input.collectedAmountInput : "",
+        source: input.source,
+        customSource: input.customSource,
+      });
+
+      if (!preparedTrip) return false;
+
+      await UpdateTrip.execute(
+        input.tripId,
+        preparedTrip.amount,
+        input.payment,
+        preparedTrip.finalSource as any,
+        undefined,
+        preparedTrip.chargedAmountValue,
+        preparedTrip.cashTip,
+        "completed",
+      );
+
+      setLastPayment(input.payment);
+      setLastSource(input.source);
+      // Camino de lectura: refrescar la pantalla tras registrar el servicio cerrado.
+      triggerScreenRefresh();
+
+      return true;
+    },
+    [triggerScreenRefresh, setLastPayment, setLastSource],
+  );
+
   const handleDeleteTrip = useCallback(
     async ({ editingTrip }: DeleteTripInput) => {
       if (!editingTrip) return;
 
       await DeleteTrip.execute(editingTrip.id);
-      setEditingTrip(null);
-      setShowFinishModal(false);
+      setEditingTrip?.(null);
+      setShowFinishModal?.(false);
 
-      await refreshData();
+      triggerScreenRefresh();
     },
-    [refreshData, setEditingTrip, setShowFinishModal],
+    [triggerScreenRefresh, setEditingTrip, setShowFinishModal],
   );
 
   const handleOpenWorkday = useCallback(async (startOdometer: number) => {
     await OpenWorkday.execute(startOdometer);
-    await refreshData();
-  }, [refreshData]);
+    triggerScreenRefresh();
+  }, [triggerScreenRefresh]);
 
   const handleCloseWorkday = useCallback(async (endOdometer?: number | null) => {
     await CloseWorkday.execute(endOdometer);
-    await refreshData();
-  }, [refreshData]);
+    triggerScreenRefresh();
+  }, [triggerScreenRefresh]);
 
   return {
     handleStartTrip,
+    handleCloseActiveTrip,
     handleSaveTrip,
+    handleCompleteClosedTrip,
     handleDeleteTrip,
     handleOpenWorkday,
     handleCloseWorkday,

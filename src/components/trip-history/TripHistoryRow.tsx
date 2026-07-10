@@ -13,6 +13,8 @@ export function TripHistoryRow({ trip, onPress }: TripHistoryRowProps) {
     onPress?.(trip.id);
   };
 
+  const isPendingCompletion = trip.amount.value === null;
+
   return (
     <Pressable
       onPress={handlePress}
@@ -41,12 +43,14 @@ export function TripHistoryRow({ trip, onPress }: TripHistoryRowProps) {
           </View>
 
           <View style={styles.iconSlot}>
-            <Text
-              style={styles.paymentIcon}
-              numberOfLines={1}
-            >
-              {trip.paymentMethod?.icon ?? "·"}
-            </Text>
+            {trip.paymentMethod?.icon ? (
+              <Text
+                style={styles.paymentIcon}
+                numberOfLines={1}
+              >
+                {trip.paymentMethod.icon}
+              </Text>
+            ) : null}
           </View>
         </View>
 
@@ -59,9 +63,17 @@ export function TripHistoryRow({ trip, onPress }: TripHistoryRowProps) {
         </Text>
 
         <View style={styles.rightCluster}>
-          <Text style={styles.amount} numberOfLines={1}>
-            {trip.amount.label}
-          </Text>
+          {isPendingCompletion ? (
+            <View style={styles.pendingChip}>
+              <Text style={styles.pendingChipText} numberOfLines={1}>
+                Pendiente
+              </Text>
+            </View>
+          ) : (
+            <Text style={styles.amount} numberOfLines={1}>
+              {trip.amount.label}
+            </Text>
+          )}
 
           <Text style={styles.navigation} numberOfLines={1}>
             {trip.navigationGlyph}
@@ -148,6 +160,27 @@ const styles = StyleSheet.create({
     color: "#111827",
     flexShrink: 0,
     textAlign: "right",
+  },
+  pendingChip: {
+    minWidth: 76,
+    minHeight: 24,
+    paddingHorizontal: 10,
+    paddingVertical: 3,
+    borderRadius: 999,
+    alignItems: "center",
+    justifyContent: "center",
+    backgroundColor: "#EFE8DD",
+    borderWidth: 1,
+    borderColor: "#D9D1C4",
+  },
+  pendingChipText: {
+    fontSize: 11,
+    lineHeight: 14,
+    fontWeight: "800",
+    letterSpacing: 0.2,
+    color: "#7C5A1C",
+    includeFontPadding: false,
+    textAlignVertical: "center",
   },
   navigation: {
     fontSize: 16,

@@ -3,6 +3,7 @@ import { Trip } from "../../domain/trips/canonical";
 import { TripServiceClassification } from "../../domain/trips/canonical";
 import { getApplicationRuntime } from "../runtime";
 import { getApplicationPersistence } from "../ports/persistence";
+import { captureTripGeoEnrichment } from "./tripGeoEnrichment";
 
 /**
  * Caso de uso: iniciar un viaje.
@@ -25,7 +26,6 @@ export class StartTrip {
       serviceLabel: TripSource.TAXI,
     });
 
-    // 1️⃣ Persistir la apertura del viaje
     const insertResult = await tripRepository.createStartedTrip({
       startedAt,
       source: TripSource.TAXI,
@@ -33,7 +33,6 @@ export class StartTrip {
       createdAt: startedAt,
     });
 
-    // 2️⃣ Representar el viaje ya persistido mediante el aggregate canónico
     const trip = Trip.start({
       id: String(insertResult.id),
       startedAt,
@@ -41,26 +40,14 @@ export class StartTrip {
       classification,
     });
 
-    // El camino crítico termina aquí: la UI puede refrescar inmediatamente.
-    // El snapshot GEO se captura en segundo plano para no bloquear la respuesta visual.
     void (async () => {
-      try {
-        const runtime = getApplicationRuntime();
-        const location = await runtime.geoLocation.getCurrentLocation();
-        const geoSnapshot = runtime.geoAdministrativeResolver.resolve(
-          location.latitude,
-          location.longitude,
-        );
-
-        await tripGeoSnapshotRepository.insert({
-          tripId: Number(trip.id),
-          kind: "START",
-          snapshot: geoSnapshot,
-          createdAt: new Date().toISOString(),
-        });
-      } catch (error) {
-        console.error("Error capturando snapshot GEO de inicio", error);
-      }
+      await captureTripGeoEnrichment({
+        tripId: Number(trip.id),
+        kind: "START",
+        runtime: getApplicationRuntime(),
+        snapshotRepository: tripGeoSnapshotRepository,
+        errorLabel: "Error capturando snapshot GEO de inicio",
+      });
     })();
   }
 }

@@ -1,4 +1,5 @@
 import { PaymentType, TripSource } from "../../../constants/enums";
+import type { ServiceStatus } from "../../../domain/services";
 import {
   Trip,
   TripEconomics,
@@ -10,6 +11,7 @@ export type TripRecordRow = {
   id: number;
   startTime: string;
   endTime: string | null;
+  serviceStatus: ServiceStatus | null;
   amount: number | null;
   payment: PaymentType | null;
   source: TripSource;
@@ -34,6 +36,7 @@ export type TripPersistenceRecord = {
   id: number;
   startTime: string;
   endTime: string | null;
+  serviceStatus: ServiceStatus | null;
   amount: number | null;
   payment: PaymentType | null;
   source: TripSource;
@@ -90,6 +93,22 @@ function mapEconomics(row: TripRecordRow) {
     paymentMethodId,
     collectedAmount,
   });
+}
+
+function resolveServiceStatus(
+  row: Pick<TripRecordRow, "endTime" | "serviceStatus" | "amount" | "payment">,
+): ServiceStatus | null {
+  if (row.serviceStatus) {
+    return row.serviceStatus;
+  }
+
+  if (row.endTime === null) {
+    return null;
+  }
+
+  return row.amount !== null && row.payment !== null
+    ? "completed"
+    : "incomplete";
 }
 
 function mapClassificationFromLegacyInput(input: LegacyTripCompletionInput) {
@@ -166,6 +185,7 @@ export class TripRecordMapper {
   static toCanonicalTrip(row: TripRecordRow) {
     const classification = mapClassification(row);
     const economics = mapEconomics(row);
+    const serviceStatus = resolveServiceStatus(row);
     const workdayId =
       row.workdayId !== null ? String(row.workdayId) : null;
 
@@ -178,13 +198,16 @@ export class TripRecordMapper {
       });
     }
 
+    const nextEconomics =
+      serviceStatus === "incomplete" ? null : economics;
+
     return Trip.registerCompleted({
       id: String(row.id),
       startedAt: new Date(row.startTime),
       endedAt: new Date(row.endTime),
       workdayId,
       classification,
-      economics,
+      economics: nextEconomics,
     });
   }
 
@@ -201,6 +224,7 @@ export class TripRecordMapper {
       trip.economics?.paymentMethodId ?? null,
     );
     const persistedAmount = trip.economics?.fareAmount ?? null;
+    const persistedServiceStatus = trip.service?.status ?? null;
     const persistedChargedAmount =
       persistedPayment === PaymentType.CARD
         ? trip.economics?.collectedAmount ?? null
@@ -214,6 +238,7 @@ export class TripRecordMapper {
       id: Number(trip.id),
       startTime: trip.chronology.startedAt.toISOString(),
       endTime: trip.chronology.endedAt?.toISOString() ?? null,
+      serviceStatus: persistedServiceStatus,
       amount: persistedAmount,
       payment: persistedPayment,
       source: persistedSource.source,

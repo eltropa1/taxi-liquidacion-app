@@ -1,10 +1,12 @@
 import { PaymentType, TripSource } from "../../../constants/enums";
 import type { Trip } from "../../../domain/trips/canonical";
+import type { ServiceStatus } from "../../../domain/services";
 
 export type TripPersistenceRecord = Readonly<{
   id: number;
   startTime: string;
   endTime: string | null;
+  serviceStatus: ServiceStatus | null;
   amount: number | null;
   payment: PaymentType | null;
   source: TripSource;
@@ -30,6 +32,7 @@ export type TripListRecord = Readonly<{
   payment: PaymentType | null;
   chargedAmount?: number | null;
   cashTip?: number | null;
+  serviceStatus?: ServiceStatus | null;
 }>;
 
 export type TripExportRecord = Readonly<{
@@ -55,6 +58,7 @@ export type TripManualInput = Readonly<{
   source: TripSource;
   workdayId: number;
   createdAt?: Date;
+  serviceStatus?: ServiceStatus;
 }>;
 
 export type TripUpdateInput = Readonly<{
@@ -65,6 +69,7 @@ export type TripUpdateInput = Readonly<{
   customSource?: string | null;
   chargedAmount?: number | null;
   cashTip?: number | null;
+  serviceStatus?: ServiceStatus | null;
 }>;
 
 export type TripTimeUpdateInput = Readonly<{
@@ -91,6 +96,18 @@ export type TripEditedInput = Readonly<{
   customSource?: string | null;
   chargedAmount?: number | null;
   cashTip?: number | null;
+  serviceStatus?: ServiceStatus | null;
+}>;
+
+export type TripServiceUpdateInput = Readonly<{
+  id: number;
+  serviceStatus: ServiceStatus;
+  source: TripSource;
+  customSource?: string | null;
+  amount?: number | null;
+  payment?: PaymentType | null;
+  chargedAmount?: number | null;
+  cashTip?: number | null;
 }>;
 
 export interface TripRepositoryPort {
@@ -113,6 +130,8 @@ export interface TripRepositoryPort {
   findAllTripsForExport(): Promise<TripExportRecord[]>;
 
   updateTrip(input: TripUpdateInput): Promise<void>;
+
+  updateTripService(input: TripServiceUpdateInput): Promise<void>;
 
   updateTripTimes(input: TripTimeUpdateInput): Promise<void>;
 

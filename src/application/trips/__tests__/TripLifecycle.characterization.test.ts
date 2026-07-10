@@ -8,6 +8,7 @@ import {
   configureApplicationPersistence,
   resetApplicationPersistence,
 } from "../../ports/persistence";
+import { CloseTrip } from "../CloseTrip";
 import { CreateManualTrip } from "../CreateManualTrip";
 import { DeleteTrip } from "../DeleteTrip";
 import { FinishTrip } from "../FinishTrip";
@@ -25,6 +26,7 @@ describe("Trip lifecycle characterization", () => {
       findActiveTrip: jest.fn(),
       findCanonicalTripById: jest.fn(),
       updateTrip: jest.fn(),
+      updateTripService: jest.fn(),
       updateTripTimes: jest.fn(),
       updateTripManualZones: jest.fn(),
       updateEditedTrip: jest.fn(),
@@ -174,6 +176,7 @@ describe("Trip lifecycle characterization", () => {
       persistence.tripRepository.findCanonicalTripById.mockResolvedValue(trip);
 
       await FinishTrip.execute(12.5, PaymentType.CASH, TripSource.TAXI);
+      await flushPromises();
 
       expect(persistence.tripRepository.runInTransaction).toHaveBeenCalledTimes(1);
       expect(persistence.tripRepository.updateTripTimes).toHaveBeenCalledWith(
@@ -226,8 +229,9 @@ describe("Trip lifecycle characterization", () => {
         FinishTrip.execute(12.5, PaymentType.CASH, TripSource.TAXI),
       ).resolves.toEqual({
         finalized: true,
-        enrichmentSaved: false,
+        enrichmentSaved: true,
       });
+      await flushPromises();
 
       expect(persistence.tripRepository.runInTransaction).toHaveBeenCalledTimes(1);
       expect(persistence.tripRepository.updateTripTimes).toHaveBeenCalledTimes(1);
@@ -259,13 +263,63 @@ describe("Trip lifecycle characterization", () => {
         FinishTrip.execute(12.5, PaymentType.CASH, TripSource.TAXI),
       ).resolves.toEqual({
         finalized: true,
-        enrichmentSaved: false,
+        enrichmentSaved: true,
       });
+      await flushPromises();
 
       expect(persistence.tripRepository.runInTransaction).toHaveBeenCalledTimes(1);
       expect(persistence.tripRepository.updateTripTimes).toHaveBeenCalledTimes(1);
       expect(persistence.tripRepository.updateTrip).toHaveBeenCalledTimes(1);
       expect(persistence.tripGeoSnapshotRepository.insert).toHaveBeenCalledTimes(1);
+    });
+  });
+
+  describe("CloseTrip", () => {
+    it("closes the active trip and stores it as incomplete", async () => {
+      const trip = Trip.start({
+        id: "99",
+        startedAt: new Date("2026-07-01T10:00:00.000Z"),
+        workdayId: "7",
+        classification: TripServiceClassification.create({
+          platformId: TripSource.TAXI,
+          serviceLabel: TripSource.TAXI,
+        }),
+      });
+
+      persistence.tripRepository.findActiveTrip.mockResolvedValue({
+        id: 99,
+        startTime: "2026-07-01T10:00:00.000Z",
+      });
+      persistence.tripRepository.findCanonicalTripById.mockResolvedValue(trip);
+
+      await CloseTrip.execute();
+      await flushPromises();
+
+      expect(persistence.tripRepository.runInTransaction).toHaveBeenCalledTimes(1);
+      expect(persistence.tripRepository.updateTripTimes).toHaveBeenCalledWith(
+        expect.objectContaining({
+          id: 99,
+          startTime: expect.any(Date),
+          endTime: expect.any(Date),
+        }),
+      );
+      expect(persistence.tripRepository.updateTripService).toHaveBeenCalledWith(
+        expect.objectContaining({
+          id: 99,
+          serviceStatus: "incomplete",
+          source: TripSource.TAXI,
+          amount: null,
+          payment: null,
+        }),
+      );
+      expect(geoLocationService.getCurrentLocation).toHaveBeenCalledTimes(1);
+      expect(mockedGeoResolve).toHaveBeenCalledWith(40.4168, -3.7038);
+      expect(persistence.tripGeoSnapshotRepository.insert).toHaveBeenCalledWith(
+        expect.objectContaining({
+          tripId: 99,
+          kind: "END",
+        }),
+      );
     });
   });
 
@@ -333,6 +387,27 @@ describe("Trip lifecycle characterization", () => {
           customSource: null,
           chargedAmount: null,
           cashTip: null,
+          serviceStatus: undefined,
+        }),
+      );
+    });
+
+    it("marks a saved closed trip as completed", async () => {
+      await UpdateTrip.execute(
+        33,
+        21,
+        PaymentType.CASH,
+        TripSource.CABIFY,
+        undefined,
+        undefined,
+        undefined,
+        "completed",
+      );
+
+      expect(persistence.tripRepository.updateTrip).toHaveBeenCalledWith(
+        expect.objectContaining({
+          id: 33,
+          serviceStatus: "completed",
         }),
       );
     });

@@ -10,6 +10,7 @@ export class UpdateTrip {
     customSource?: string,
     chargedAmount?: number,
     cashTip?: number,
+    serviceStatus?: "incomplete" | "completed",
   ): Promise<void> {
     const { tripRepository } = getApplicationPersistence();
 
@@ -21,6 +22,7 @@ export class UpdateTrip {
       customSource: customSource ?? null,
       chargedAmount: chargedAmount ?? null,
       cashTip: cashTip ?? null,
+      serviceStatus,
     });
   }
 

@@ -18,6 +18,7 @@ export async function runMigrations() {
       id INTEGER PRIMARY KEY AUTOINCREMENT,
       startTime TEXT NOT NULL,
       endTime TEXT,
+      serviceStatus TEXT,
       pickupLocationId INTEGER,
       pickupCustomText TEXT,
       destinationLocationId INTEGER,
@@ -66,6 +67,7 @@ export async function runMigrations() {
   await ensureColumn(tripColumns, "workdayId", `ALTER TABLE trips ADD COLUMN workdayId INTEGER;`);
   await ensureColumn(tripColumns, "customSource", `ALTER TABLE trips ADD COLUMN customSource TEXT;`);
   await ensureColumn(tripColumns, "cashTip", `ALTER TABLE trips ADD COLUMN cashTip REAL;`);
+  await ensureColumn(tripColumns, "serviceStatus", `ALTER TABLE trips ADD COLUMN serviceStatus TEXT;`);
   await ensureColumn(
     workdayColumns,
     "startOdometer",
@@ -86,6 +88,16 @@ export async function runMigrations() {
     "manualDropoffZone",
     `ALTER TABLE trips ADD COLUMN manualDropoffZone TEXT;`,
   );
+
+  await db.execAsync(`
+    UPDATE trips
+    SET serviceStatus = CASE
+      WHEN endTime IS NULL THEN NULL
+      WHEN amount IS NOT NULL AND payment IS NOT NULL THEN 'completed'
+      ELSE 'incomplete'
+    END
+    WHERE serviceStatus IS NULL;
+  `);
 
   await db.execAsync(TRIP_GEO_SNAPSHOTS_SCHEMA);
 

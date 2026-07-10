@@ -8,6 +8,7 @@ import type {
   TripRepositoryPort,
   TripStartInput,
   TripTimeUpdateInput,
+  TripServiceUpdateInput,
   TripUpdateInput,
 } from "../../../application/ports/persistence";
 import type { Trip } from "../../../domain/trips/canonical";
@@ -61,6 +62,7 @@ export class SqliteTripRepository implements TripRepositoryPort {
       INSERT INTO trips (
         startTime,
         endTime,
+        serviceStatus,
         amount,
         payment,
         source,
@@ -72,6 +74,7 @@ export class SqliteTripRepository implements TripRepositoryPort {
       [
         input.startTime.toISOString(),
         input.endTime.toISOString(),
+        input.serviceStatus ?? "completed",
         input.amount,
         input.payment,
         input.source,
@@ -102,6 +105,7 @@ export class SqliteTripRepository implements TripRepositoryPort {
         id,
         startTime,
         endTime,
+        serviceStatus,
         amount,
         payment,
         source,
@@ -125,6 +129,7 @@ export class SqliteTripRepository implements TripRepositoryPort {
         id,
         startTime,
         endTime,
+        serviceStatus,
         amount,
         payment,
         source,
@@ -150,6 +155,7 @@ export class SqliteTripRepository implements TripRepositoryPort {
         id,
         startTime,
         endTime,
+        serviceStatus,
         amount,
         source,
         payment,
@@ -178,6 +184,7 @@ export class SqliteTripRepository implements TripRepositoryPort {
         id,
         startTime,
         endTime,
+        serviceStatus,
         amount,
         source,
         payment,
@@ -210,7 +217,7 @@ export class SqliteTripRepository implements TripRepositoryPort {
     await this.database.runAsync(
       `
       UPDATE trips
-      SET amount = ?, payment = ?, source = ?, customSource = ?, chargedAmount = ?, cashTip = ?
+      SET amount = ?, payment = ?, source = ?, customSource = ?, chargedAmount = ?, cashTip = ?, serviceStatus = ?
       WHERE id = ?
       `,
       [
@@ -220,6 +227,27 @@ export class SqliteTripRepository implements TripRepositoryPort {
         input.customSource ?? null,
         input.chargedAmount ?? null,
         input.cashTip ?? null,
+        input.serviceStatus ?? "completed",
+        input.id,
+      ],
+    );
+  }
+
+  async updateTripService(input: TripServiceUpdateInput): Promise<void> {
+    await this.database.runAsync(
+      `
+      UPDATE trips
+      SET amount = ?, payment = ?, source = ?, customSource = ?, chargedAmount = ?, cashTip = ?, serviceStatus = ?
+      WHERE id = ?
+      `,
+      [
+        input.amount ?? null,
+        input.payment ?? null,
+        input.source,
+        input.customSource ?? null,
+        input.chargedAmount ?? null,
+        input.cashTip ?? null,
+        input.serviceStatus,
         input.id,
       ],
     );
@@ -270,6 +298,7 @@ export class SqliteTripRepository implements TripRepositoryPort {
       customSource: input.customSource,
       chargedAmount: input.chargedAmount,
       cashTip: input.cashTip,
+      serviceStatus: input.serviceStatus ?? "completed",
     });
   }
 

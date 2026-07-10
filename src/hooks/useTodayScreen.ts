@@ -2,12 +2,11 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { useFocusEffect } from "expo-router";
 
 import { PaymentType, TripSource } from "../constants/enums";
+import { GoalService, SummaryService } from "../application/runtime";
 import {
-  GoalService,
-  SummaryService,
-  TripQueryService,
-  WorkdayService,
-} from "../application/runtime";
+  loadTodayScreenCriticalState,
+  loadTodayScreenEnrichmentState,
+} from "./todayScreenLoaders";
 
 export type TodayTripRow = {
   id: number;
@@ -71,41 +70,32 @@ type TodayScreenState = {
 };
 
 export async function loadTodayScreenData(selectedDate: Date) {
-  const activePromise = TripQueryService.getActiveTrip();
-  const weekSummaryPromise = SummaryService.getWeekSummary(selectedDate);
-  const monthSummaryPromise = SummaryService.getMonthSummary();
-  const workdayPromise = WorkdayService.getOpenWorkday();
-  const workdayInfoPromise = WorkdayService.getWorkdayInfoForDate(selectedDate);
+  const weekSummaryPromise = SummaryService.getWeekSummary(selectedDate).then(
+    (result) => {
+      return result;
+    },
+  );
+  const monthSummaryPromise = SummaryService.getMonthSummary().then((result) => {
+    return result;
+  });
 
-  const [active, weekSummary, monthSummary, workday, wd] = await Promise.all([
-    activePromise,
+  const [criticalState, weeklySummary, monthlySummary] = await Promise.all([
+    loadTodayScreenCriticalState(selectedDate),
     weekSummaryPromise,
     monthSummaryPromise,
-    workdayPromise,
-    workdayInfoPromise,
   ]);
 
-  let trips: TodayTripRow[] = [];
-  let dailySummary: TodayDailySummary = null;
-
-  if (wd) {
-    const tripsPromise = TripQueryService.getTripsForWorkday(wd.id);
-    const dailySummaryPromise = SummaryService.getSummaryForWorkday(wd.id);
-
-    [trips, dailySummary] = await Promise.all([
-      tripsPromise as Promise<TodayTripRow[]>,
-      dailySummaryPromise,
-    ]);
-  }
+  const workdayId = criticalState.workdayInfo?.id ?? null;
+  const enrichmentWithWorkday = await loadTodayScreenEnrichmentState(workdayId);
 
   return {
-    activeTripId: active ? active.id : null,
-    trips,
-    weeklySummary: weekSummary,
-    monthlySummary: monthSummary,
-    workdayInfo: wd,
-    activeWorkday: workday,
-    dailySummary,
+    activeTripId: criticalState.activeTripId,
+    trips: enrichmentWithWorkday.trips as TodayTripRow[],
+    weeklySummary,
+    monthlySummary,
+    workdayInfo: criticalState.workdayInfo,
+    activeWorkday: criticalState.activeWorkday,
+    dailySummary: enrichmentWithWorkday.dailySummary as TodayDailySummary,
   };
 }
 
@@ -153,9 +143,20 @@ export function useTodayScreen(selectedDate: Date): TodayScreenState {
     refreshData().catch(console.error);
   }, [refreshData]);
 
-  useFocusEffect(() => {
-    GoalService.getGoals().then(setGoals);
-  });
+  useFocusEffect(
+    useCallback(() => {
+      GoalService.getGoals().then((nextGoals) => {
+        setGoals((previousGoals) => {
+          const hasChanged =
+            previousGoals.daily !== nextGoals.daily ||
+            previousGoals.weekly !== nextGoals.weekly ||
+            previousGoals.monthly !== nextGoals.monthly;
+
+          return hasChanged ? nextGoals : previousGoals;
+        });
+      });
+    }, []),
+  );
 
   useFocusEffect(
     useCallback(() => {
