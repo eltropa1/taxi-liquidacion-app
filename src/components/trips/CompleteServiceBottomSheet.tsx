@@ -1,6 +1,5 @@
-import { useEffect, useMemo, useState } from "react";
+import { useMemo } from "react";
 import {
-  Keyboard,
   KeyboardAvoidingView,
   Modal,
   Platform,
@@ -69,7 +68,6 @@ export function CompleteServiceBottomSheet({
   onCompleteLater,
 }: CompleteServiceBottomSheetProps) {
   const insets = useSafeAreaInsets();
-  const [keyboardHeight, setKeyboardHeight] = useState(0);
 
   const platforms = useMemo(
     () => {
@@ -89,23 +87,6 @@ export function CompleteServiceBottomSheet({
     [],
   );
 
-  useEffect(() => {
-    const showEvent = Platform.OS === "ios" ? "keyboardWillShow" : "keyboardDidShow";
-    const hideEvent = Platform.OS === "ios" ? "keyboardWillHide" : "keyboardDidHide";
-
-    const showSubscription = Keyboard.addListener(showEvent, (event) => {
-      setKeyboardHeight(event.endCoordinates.height);
-    });
-    const hideSubscription = Keyboard.addListener(hideEvent, () => {
-      setKeyboardHeight(0);
-    });
-
-    return () => {
-      showSubscription.remove();
-      hideSubscription.remove();
-    };
-  }, []);
-
   if (!visible) {
     return null;
   }
@@ -115,7 +96,7 @@ export function CompleteServiceBottomSheet({
       <View style={styles.overlay}>
         <KeyboardAvoidingView
           style={styles.keyboardAvoiding}
-          behavior={Platform.OS === "ios" ? "padding" : "height"}
+          behavior={Platform.OS === "ios" ? "padding" : undefined}
           keyboardVerticalOffset={0}
         >
           <View style={styles.sheet}>
@@ -128,7 +109,6 @@ export function CompleteServiceBottomSheet({
                   styles.scrollContent,
                   {
                     paddingBottom: insets.bottom + 12,
-                    paddingTop: keyboardHeight > 0 ? 12 : 0,
                   },
                 ]}
                 keyboardShouldPersistTaps="handled"
