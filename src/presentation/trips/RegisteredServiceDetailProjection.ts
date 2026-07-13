@@ -256,6 +256,16 @@ export function prepareRegisteredServiceCorrection(
   };
 }
 
+export function isRegisteredServiceCorrectionFormDirty(
+  trip: RegisteredServiceRecord,
+  form: RegisteredServiceCorrectionForm,
+): boolean {
+  return (
+    JSON.stringify(normalizeTripForComparison(trip)) !==
+    JSON.stringify(normalizeFormForComparison(trip, form))
+  );
+}
+
 export function isRegisteredServiceCorrectionDirty(
   trip: RegisteredServiceRecord,
   command: RegisteredServiceCorrectionCommand,
@@ -300,6 +310,55 @@ function normalizeCommandForComparison(command: RegisteredServiceCorrectionComma
     manualPickupZone: normalizeOptionalText(command.manualPickupZone),
     manualDropoffZone: normalizeOptionalText(command.manualDropoffZone),
   };
+}
+
+function normalizeFormForComparison(
+  trip: RegisteredServiceRecord,
+  form: RegisteredServiceCorrectionForm,
+) {
+  const amount = parseComparableDecimalInput(form.amountInput);
+  const chargedAmount =
+    form.payment === PaymentType.CARD
+      ? parseComparableDecimalInput(form.chargedAmountInput)
+      : null;
+  const cashTotal =
+    form.payment === PaymentType.CASH
+      ? parseComparableDecimalInput(form.cashTotalReceivedInput)
+      : null;
+  const cashTip =
+    typeof amount === "number" && typeof cashTotal === "number"
+      ? cashTotal - amount
+      : cashTotal;
+
+  return {
+    amount,
+    payment: form.payment,
+    chargedAmount,
+    cashTip,
+    source: form.source,
+    customSource:
+      form.source === TripSource.CUSTOM
+        ? normalizeOptionalText(form.customSourceInput)
+        : null,
+    startTime: normalizeComparableTime(trip.startTime, form.startTimeInput),
+    endTime: normalizeComparableTime(trip.startTime, form.endTimeInput),
+    manualPickupZone: normalizeOptionalText(form.manualPickupZone),
+    manualDropoffZone: normalizeOptionalText(form.manualDropoffZone),
+  };
+}
+
+function parseComparableDecimalInput(value: string): number | string | null {
+  const trimmed = value.trim();
+  if (trimmed === "") return null;
+  const parsed = parseDecimalInput(trimmed);
+  return parsed === null ? `invalid:${trimmed}` : parsed;
+}
+
+function normalizeComparableTime(baseValue: string, input: string): string | null {
+  const parsed = parseTimeOnBaseDate(baseValue, input);
+  if (parsed) return parsed.toISOString();
+  const trimmed = input.trim();
+  return trimmed === "" ? null : `invalid:${trimmed}`;
 }
 
 function parseDecimalInput(value: string): number | null {

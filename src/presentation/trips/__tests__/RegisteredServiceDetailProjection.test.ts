@@ -1,6 +1,7 @@
 import { PaymentType, TripSource } from "../../../constants/enums";
 import {
   createRegisteredServiceCorrectionForm,
+  isRegisteredServiceCorrectionFormDirty,
   prepareRegisteredServiceCorrection,
 } from "../RegisteredServiceDetailProjection";
 
@@ -76,6 +77,30 @@ describe("RegisteredServiceDetailProjection", () => {
     if (prepared.ok) {
       expect(prepared.dirty).toBe(false);
     }
+  });
+
+  it("keeps dirty tracking active even when a changed form is invalid", () => {
+    const form = {
+      ...createRegisteredServiceCorrectionForm(completedTrip),
+      amountInput: "",
+    };
+
+    expect(isRegisteredServiceCorrectionFormDirty(completedTrip, form)).toBe(
+      true,
+    );
+  });
+
+  it("does not mark semantically equivalent numeric form values as dirty", () => {
+    const form = {
+      ...createRegisteredServiceCorrectionForm(completedTrip),
+      amountInput: "10.00",
+      cashTotalReceivedInput: "12,00",
+      customSourceInput: "  Radio Taxi  ",
+    };
+
+    expect(isRegisteredServiceCorrectionFormDirty(completedTrip, form)).toBe(
+      false,
+    );
   });
 
   it("rejects empty amount, invalid numbers and end time before start", () => {

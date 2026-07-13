@@ -23,6 +23,7 @@ import { NeighborhoodSelector } from "../../src/components/forms/NeighborhoodSel
 import {
   buildRegisteredServiceDetailProjection,
   createRegisteredServiceCorrectionForm,
+  isRegisteredServiceCorrectionFormDirty,
   prepareRegisteredServiceCorrection,
   resolveEffectiveNeighborhoodName,
   resolveTripEditSnapshotZones,
@@ -47,13 +48,17 @@ export default function RegisteredServiceDetailScreen() {
   const [showDropoffSelector, setShowDropoffSelector] = useState(false);
   const [saveError, setSaveError] = useState<string | null>(null);
   const confirmingDiscardRef = useRef(false);
+  const allowNavigationRef = useRef(false);
 
   const prepared = useMemo(() => {
     if (!trip || !form) return null;
     return prepareRegisteredServiceCorrection(trip, form);
   }, [trip, form]);
 
-  const isDirty = mode === "correction" && prepared?.ok === true && prepared.dirty;
+  const isDirty =
+    mode === "correction" && trip && form
+      ? isRegisteredServiceCorrectionFormDirty(trip, form)
+      : false;
 
   const projection = useMemo(() => {
     if (!trip) return null;
@@ -146,6 +151,7 @@ export default function RegisteredServiceDetailScreen() {
 
   useEffect(() => {
     const subscription = navigation.addListener("beforeRemove", (event) => {
+      if (allowNavigationRef.current) return;
       if (!isDirty) return;
       event.preventDefault();
       requestDiscard(() => navigation.dispatch(event.data.action));
@@ -156,6 +162,7 @@ export default function RegisteredServiceDetailScreen() {
 
   useEffect(() => {
     const subscription = BackHandler.addEventListener("hardwareBackPress", () => {
+      if (allowNavigationRef.current) return false;
       if (!isDirty) return false;
       requestDiscard(navigateBack);
       return true;
@@ -211,6 +218,7 @@ export default function RegisteredServiceDetailScreen() {
         return;
       }
 
+      allowNavigationRef.current = true;
       navigateBack();
     } catch (error) {
       console.error("Error saving registered service correction", error);
