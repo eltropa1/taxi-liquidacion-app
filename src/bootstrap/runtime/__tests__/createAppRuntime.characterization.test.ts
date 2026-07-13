@@ -24,6 +24,15 @@ jest.mock("../../../infrastructure/runtime", () => ({
   GeoAdministrativeResolverAdapter: class {
     resolve = jest.fn();
   },
+  ExpoAttachmentFileStorage: class {
+    resolveUri = jest.fn();
+  },
+  CryptoIdGenerator: class {
+    generateId = jest.fn();
+  },
+  SystemClock: class {
+    now = jest.fn();
+  },
 }));
 
 const mockedInitializePersistence =
@@ -47,6 +56,12 @@ describe("createAppRuntime", () => {
     expect(runtime.persistence.tripRepository).toBeDefined();
     expect(runtime.persistence.workdayRepository).toBeDefined();
     expect(runtime.persistence.tripGeoSnapshotRepository).toBeDefined();
+    expect(runtime.persistence.recordNoteRepository).toBeDefined();
+    expect(runtime.persistence.recordAttachmentRepository).toBeDefined();
+    expect(runtime.application.attachmentFileStorage).toBeDefined();
+    expect(runtime.application.idGenerator).toBeDefined();
+    expect(runtime.application.clock).toBeDefined();
+    expect(runtime.application.recordOwnerResolver).toBeDefined();
 
     await runtime.persistence.tripRepository.createStartedTrip({
       startedAt: new Date("2026-07-01T08:00:00.000Z"),

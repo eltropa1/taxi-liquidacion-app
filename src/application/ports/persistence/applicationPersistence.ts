@@ -1,11 +1,15 @@
 import type { TripGeoSnapshotRepositoryPort } from "./tripGeoSnapshotRepositoryPort";
 import type { TripRepositoryPort } from "./tripRepositoryPort";
 import type { WorkdayRepositoryPort } from "./workdayRepositoryPort";
+import type { RecordAttachmentRepositoryPort } from "./recordAttachmentRepositoryPort";
+import type { RecordNoteRepositoryPort } from "./recordNoteRepositoryPort";
 
 export type ApplicationPersistence = Readonly<{
   tripRepository: TripRepositoryPort;
   workdayRepository: WorkdayRepositoryPort;
   tripGeoSnapshotRepository: TripGeoSnapshotRepositoryPort;
+  recordNoteRepository?: RecordNoteRepositoryPort;
+  recordAttachmentRepository?: RecordAttachmentRepositoryPort;
 }>;
 
 let currentApplicationPersistence: ApplicationPersistence | null = null;

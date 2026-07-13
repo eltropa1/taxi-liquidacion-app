@@ -11,10 +11,14 @@ import {
 import {
   AsyncStorageGoalStorage,
   AsyncStorageWeekConfigurationStorage,
+  CryptoIdGenerator,
+  ExpoAttachmentFileStorage,
   ExpoGeoLocationPort,
   ExpoTripCsvExporter,
   GeoAdministrativeResolverAdapter,
+  SystemClock,
 } from "../../infrastructure/runtime";
+import { ApplicationRecordOwnerResolver } from "../../application/records";
 
 export type AppRuntime = Readonly<{
   initializedAt: string;
@@ -39,6 +43,10 @@ export async function createAppRuntime(): Promise<AppRuntime> {
     geoLocation: new ExpoGeoLocationPort(),
     geoAdministrativeResolver: new GeoAdministrativeResolverAdapter(),
     tripCsvExporter: new ExpoTripCsvExporter(),
+    attachmentFileStorage: new ExpoAttachmentFileStorage(),
+    idGenerator: new CryptoIdGenerator(),
+    clock: new SystemClock(),
+    recordOwnerResolver: new ApplicationRecordOwnerResolver(),
   });
 
   configureApplicationRuntime(application);

@@ -4,3 +4,7 @@ export * from "./geoLocationPort";
 export * from "./geoAdministrativeResolverPort";
 export * from "./tripCsvExporterPort";
 export * from "./geoTypes";
+export * from "./idGeneratorPort";
+export * from "./clockPort";
+export * from "./attachmentFileStoragePort";
+export * from "./recordOwnerResolverPort";

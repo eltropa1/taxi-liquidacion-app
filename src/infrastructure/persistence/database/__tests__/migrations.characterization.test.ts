@@ -49,5 +49,17 @@ describe("runMigrations", () => {
     expect(execAsync).toHaveBeenCalledWith(
       expect.stringContaining("SET serviceStatus = CASE"),
     );
+    expect(execAsync).toHaveBeenCalledWith(
+      expect.stringContaining("CREATE TABLE IF NOT EXISTS record_notes"),
+    );
+    expect(execAsync).toHaveBeenCalledWith(
+      expect.stringContaining("CREATE TABLE IF NOT EXISTS record_attachments"),
+    );
+    expect(execAsync).toHaveBeenCalledWith(
+      expect.stringContaining("CREATE INDEX IF NOT EXISTS idx_record_attachments_owner"),
+    );
+    expect(execAsync).not.toHaveBeenCalledWith(
+      expect.stringContaining("CREATE TABLE IF NOT EXISTS services"),
+    );
   });
 });

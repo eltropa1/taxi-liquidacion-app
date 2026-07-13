@@ -1,5 +1,11 @@
 import { getDatabase } from "./database";
-import { TRIP_GEO_SNAPSHOTS_SCHEMA } from "./schema";
+import {
+  RECORD_ATTACHMENTS_INDEXES,
+  RECORD_ATTACHMENTS_SCHEMA,
+  RECORD_NOTES_INDEXES,
+  RECORD_NOTES_SCHEMA,
+  TRIP_GEO_SNAPSHOTS_SCHEMA,
+} from "./schema";
 
 export async function runMigrations() {
   const db = getDatabase();
@@ -100,6 +106,10 @@ export async function runMigrations() {
   `);
 
   await db.execAsync(TRIP_GEO_SNAPSHOTS_SCHEMA);
+  await db.execAsync(RECORD_NOTES_SCHEMA);
+  await db.execAsync(RECORD_NOTES_INDEXES);
+  await db.execAsync(RECORD_ATTACHMENTS_SCHEMA);
+  await db.execAsync(RECORD_ATTACHMENTS_INDEXES);
 
   const tripsWithoutWorkday = await db.getAllAsync<any>(`
     SELECT * FROM trips

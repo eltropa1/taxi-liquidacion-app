@@ -1,7 +1,11 @@
 import type {
   GoalStoragePort,
+  AttachmentFileStoragePort,
+  ClockPort,
   GeoAdministrativeResolverPort,
   GeoLocationPort,
+  IdGeneratorPort,
+  RecordOwnerResolverPort,
   TripCsvExporterPort,
   WeekConfigurationStoragePort,
 } from "../ports/runtime";
@@ -12,6 +16,10 @@ export type ApplicationRuntime = Readonly<{
   geoLocation: GeoLocationPort;
   geoAdministrativeResolver: GeoAdministrativeResolverPort;
   tripCsvExporter: TripCsvExporterPort;
+  attachmentFileStorage?: AttachmentFileStoragePort;
+  idGenerator?: IdGeneratorPort;
+  clock?: ClockPort;
+  recordOwnerResolver?: RecordOwnerResolverPort;
 }>;
 
 let currentApplicationRuntime: ApplicationRuntime | null = null;
