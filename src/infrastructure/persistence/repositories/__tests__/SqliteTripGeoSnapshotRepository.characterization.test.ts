@@ -46,4 +46,16 @@ describe("SqliteTripGeoSnapshotRepository", () => {
       },
     ]);
   });
+
+  it("deletes every GEO snapshot for a trip", async () => {
+    const db = createDatabase();
+    const repository = new SqliteTripGeoSnapshotRepository(db as any);
+
+    await repository.deleteSnapshotsForTrip(8);
+
+    expect(db.runAsync).toHaveBeenCalledWith(
+      expect.stringContaining("DELETE FROM trip_geo_snapshots"),
+      [8],
+    );
+  });
 });

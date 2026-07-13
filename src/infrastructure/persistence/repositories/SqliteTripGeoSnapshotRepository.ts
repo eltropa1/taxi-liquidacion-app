@@ -83,4 +83,14 @@ export class SqliteTripGeoSnapshotRepository
       createdAt: row.createdAt,
     }));
   }
+
+  async deleteSnapshotsForTrip(tripId: number): Promise<void> {
+    await this.database.runAsync(
+      `
+      DELETE FROM trip_geo_snapshots
+      WHERE tripId = ?
+      `,
+      [tripId],
+    );
+  }
 }

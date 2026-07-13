@@ -17,4 +17,6 @@ export interface TripGeoSnapshotRepositoryPort {
   getSnapshotsForWorkday(
     workdayId: number,
   ): Promise<Array<TripGeoSnapshotRecord>>;
+
+  deleteSnapshotsForTrip(tripId: number): Promise<void>;
 }

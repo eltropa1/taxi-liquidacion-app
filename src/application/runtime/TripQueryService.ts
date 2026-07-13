@@ -1,11 +1,13 @@
 import { Trip } from "../../domain/trips/canonical";
 import type { PaymentType, TripSource } from "../../constants/enums";
+import type { ServiceStatus } from "../../domain/services";
 import { getApplicationPersistence } from "../ports/persistence";
 
 type TripRow = {
   id: number;
   startTime: string;
   endTime: string | null;
+  serviceStatus: ServiceStatus | null;
   amount: number | null;
   payment: PaymentType | null;
   source: TripSource;
@@ -14,6 +16,7 @@ type TripRow = {
   cashTip: number | null;
   manualPickupZone: string | null;
   manualDropoffZone: string | null;
+  workdayId: number | null;
 };
 
 export class TripQueryService {

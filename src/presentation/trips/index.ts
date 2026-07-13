@@ -11,3 +11,4 @@ export {
   resolveTripEditClock,
   resolveTripEditSnapshotZones,
 } from "./TripEditProjection";
+export * from "./RegisteredServiceDetailProjection";
