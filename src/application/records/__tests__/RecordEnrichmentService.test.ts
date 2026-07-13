@@ -423,6 +423,31 @@ describe("RecordEnrichmentService", () => {
     expect(attachments.attachments.get("att-1")?.status).toBe("deleting");
   });
 
+  it("resolves ready attachment URIs without exposing storage keys to callers", async () => {
+    await RecordEnrichmentService.importAttachment({
+      ownerType: "registered_service",
+      ownerId: "12",
+      sourceUri: "content://ticket",
+      originalName: "ticket.pdf",
+      source: "document",
+    });
+
+    await expect(
+      RecordEnrichmentService.resolveAttachmentUri("att-1"),
+    ).resolves.toEqual({
+      ok: true,
+      uri: "file:///app/geotaxi/attachments/registered_service/12/att-1.pdf",
+      mimeType: "application/pdf",
+      originalName: "ticket.pdf",
+    });
+
+    storage.files.delete("attachments/registered_service/12/att-1.pdf");
+    await expect(
+      RecordEnrichmentService.resolveAttachmentUri("att-1"),
+    ).resolves.toEqual({ ok: false, error: "MISSING" });
+    expect(attachments.attachments.get("att-1")?.status).toBe("missing");
+  });
+
   it("deletes owner enrichment without blocking on filesystem cleanup", async () => {
     notes.notes.set("registered_service:12", {
       id: 1,

@@ -79,6 +79,15 @@ export type ReconcileAttachmentsOptions = Readonly<{
   temporaryMaxAgeMs?: number;
 }>;
 
+export type ResolvedAttachmentUriResult =
+  | Readonly<{
+      ok: true;
+      uri: string;
+      mimeType: string;
+      originalName: string | null;
+    }>
+  | Readonly<{ ok: false; error: "NOT_FOUND" | "NOT_READY" | "MISSING" }>;
+
 const DEFAULT_PENDING_MAX_AGE_MS = 24 * 60 * 60 * 1000;
 const DEFAULT_TEMPORARY_MAX_AGE_MS = 24 * 60 * 60 * 1000;
 
@@ -286,6 +295,37 @@ export class RecordEnrichmentService {
     } catch {
       return { deleted: false, pendingFilesystemCleanup: true };
     }
+  }
+
+  static async resolveAttachmentUri(
+    id: string,
+  ): Promise<ResolvedAttachmentUriResult> {
+    const { attachmentRepository } = getRecordRepositories();
+    const attachment = await attachmentRepository.findById(id);
+    if (!attachment) {
+      return { ok: false, error: "NOT_FOUND" };
+    }
+
+    if (attachment.status !== "ready") {
+      return { ok: false, error: "NOT_READY" };
+    }
+
+    const storage = getFileStorage();
+    if (!(await storage.exists(attachment.storageKey))) {
+      await attachmentRepository.updateStatusIfCurrent(
+        attachment.id,
+        "ready",
+        "missing",
+      );
+      return { ok: false, error: "MISSING" };
+    }
+
+    return {
+      ok: true,
+      uri: storage.resolveUri(attachment.storageKey),
+      mimeType: attachment.mimeType,
+      originalName: attachment.originalName,
+    };
   }
 
   static async deleteEnrichmentForOwner(input: {

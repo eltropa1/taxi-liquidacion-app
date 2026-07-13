@@ -20,6 +20,7 @@ import { CorrectRegisteredService } from "../../src/application/trips/CorrectReg
 import { DeleteRegisteredServiceRecord } from "../../src/application/trips/DeleteRegisteredServiceRecord";
 import { PaymentType, TripSource } from "../../src/constants/enums";
 import { NeighborhoodSelector } from "../../src/components/forms/NeighborhoodSelector";
+import { RecordEnrichmentSection } from "../../src/components/records/RecordEnrichmentSection";
 import {
   buildRegisteredServiceDetailProjection,
   createRegisteredServiceCorrectionForm,
@@ -47,6 +48,7 @@ export default function RegisteredServiceDetailScreen() {
   const [showPickupSelector, setShowPickupSelector] = useState(false);
   const [showDropoffSelector, setShowDropoffSelector] = useState(false);
   const [saveError, setSaveError] = useState<string | null>(null);
+  const [enrichmentDirty, setEnrichmentDirty] = useState(false);
   const confirmingDiscardRef = useRef(false);
   const allowNavigationRef = useRef(false);
 
@@ -59,11 +61,20 @@ export default function RegisteredServiceDetailScreen() {
     mode === "correction" && trip && form
       ? isRegisteredServiceCorrectionFormDirty(trip, form)
       : false;
+  const hasNavigationDirtyState = Boolean(isDirty || enrichmentDirty);
 
   const projection = useMemo(() => {
     if (!trip) return null;
     return buildRegisteredServiceDetailProjection({ trip, snapshots });
   }, [trip, snapshots]);
+
+  const enrichmentOwner = useMemo(() => {
+    if (!trip) return null;
+    return {
+      ownerType: "registered_service" as const,
+      ownerId: String(trip.id),
+    };
+  }, [trip?.id]);
 
   const correctionZones = useMemo(() => {
     const geo = resolveTripEditSnapshotZones(snapshots);
@@ -119,7 +130,37 @@ export default function RegisteredServiceDetailScreen() {
     });
   }, [load]);
 
-  const requestDiscard = useCallback(
+  const requestNavigationDiscard = useCallback(
+    (onDiscard: () => void) => {
+      if (!hasNavigationDirtyState) {
+        onDiscard();
+        return;
+      }
+
+      if (confirmingDiscardRef.current) return;
+      confirmingDiscardRef.current = true;
+      Alert.alert("Descartar los cambios sin guardar?", "", [
+        {
+          text: "Seguir en pantalla",
+          style: "cancel",
+          onPress: () => {
+            confirmingDiscardRef.current = false;
+          },
+        },
+        {
+          text: "Descartar cambios",
+          style: "destructive",
+          onPress: () => {
+            confirmingDiscardRef.current = false;
+            onDiscard();
+          },
+        },
+      ]);
+    },
+    [hasNavigationDirtyState],
+  );
+
+  const requestCorrectionDiscard = useCallback(
     (onDiscard: () => void) => {
       if (!isDirty) {
         onDiscard();
@@ -128,7 +169,7 @@ export default function RegisteredServiceDetailScreen() {
 
       if (confirmingDiscardRef.current) return;
       confirmingDiscardRef.current = true;
-      Alert.alert("¿Descartar las correcciones realizadas?", "", [
+      Alert.alert("Descartar las correcciones realizadas?", "", [
         {
           text: "Seguir corrigiendo",
           style: "cancel",
@@ -152,24 +193,24 @@ export default function RegisteredServiceDetailScreen() {
   useEffect(() => {
     const subscription = navigation.addListener("beforeRemove", (event) => {
       if (allowNavigationRef.current) return;
-      if (!isDirty) return;
+      if (!hasNavigationDirtyState) return;
       event.preventDefault();
-      requestDiscard(() => navigation.dispatch(event.data.action));
+      requestNavigationDiscard(() => navigation.dispatch(event.data.action));
     });
 
     return subscription;
-  }, [isDirty, navigation, requestDiscard]);
+  }, [hasNavigationDirtyState, navigation, requestNavigationDiscard]);
 
   useEffect(() => {
     const subscription = BackHandler.addEventListener("hardwareBackPress", () => {
       if (allowNavigationRef.current) return false;
-      if (!isDirty) return false;
-      requestDiscard(navigateBack);
+      if (!hasNavigationDirtyState) return false;
+      requestNavigationDiscard(navigateBack);
       return true;
     });
 
     return () => subscription.remove();
-  }, [isDirty, requestDiscard]);
+  }, [hasNavigationDirtyState, requestNavigationDiscard]);
 
   function updateForm(
     updater: (current: RegisteredServiceCorrectionForm) => RegisteredServiceCorrectionForm,
@@ -186,7 +227,7 @@ export default function RegisteredServiceDetailScreen() {
   }
 
   function cancelCorrection() {
-    requestDiscard(() => {
+    requestCorrectionDiscard(() => {
       if (trip) {
         setForm(createRegisteredServiceCorrectionForm(trip));
       }
@@ -234,7 +275,9 @@ export default function RegisteredServiceDetailScreen() {
     if (!trip || deleting) return;
     Alert.alert(
       "Eliminar registro completo",
-      "Se eliminara el servicio registrado, el viaje operativo asociado y los enriquecimientos dependientes. Esta accion no se puede deshacer.",
+      enrichmentDirty
+        ? "Se eliminara el servicio registrado, el viaje operativo asociado y los enriquecimientos dependientes. La nota sin guardar se perdera. Esta accion no se puede deshacer."
+        : "Se eliminara el servicio registrado, el viaje operativo asociado y los enriquecimientos dependientes. Esta accion no se puede deshacer.",
       [
         { text: "Cancelar", style: "cancel" },
         {
@@ -290,7 +333,10 @@ export default function RegisteredServiceDetailScreen() {
         contentContainerStyle={styles.content}
         keyboardShouldPersistTaps="handled"
       >
-        <Pressable onPress={() => requestDiscard(navigateBack)} style={styles.back}>
+        <Pressable
+          onPress={() => requestNavigationDiscard(navigateBack)}
+          style={styles.back}
+        >
           <Text style={styles.backText}>Volver</Text>
         </Pressable>
 
@@ -354,15 +400,6 @@ export default function RegisteredServiceDetailScreen() {
               <Button title="Corregir" onPress={startCorrection} />
             </View>
 
-            <View style={styles.dangerZone}>
-              <Text style={styles.dangerTitle}>Zona destructiva</Text>
-              <Button
-                title={deleting ? "Eliminando..." : "Eliminar registro completo"}
-                color="#b42318"
-                disabled={deleting}
-                onPress={confirmDelete}
-              />
-            </View>
           </>
         ) : (
           <>
@@ -540,6 +577,25 @@ export default function RegisteredServiceDetailScreen() {
             </View>
           </>
         )}
+
+        {enrichmentOwner ? (
+          <RecordEnrichmentSection
+            owner={enrichmentOwner}
+            onDirtyChange={setEnrichmentDirty}
+          />
+        ) : null}
+
+        {mode === "view" ? (
+          <View style={styles.dangerZone}>
+            <Text style={styles.dangerTitle}>Zona destructiva</Text>
+            <Button
+              title={deleting ? "Eliminando..." : "Eliminar registro completo"}
+              color="#b42318"
+              disabled={deleting}
+              onPress={confirmDelete}
+            />
+          </View>
+        ) : null}
 
         <NeighborhoodSelector
           visible={showPickupSelector}
