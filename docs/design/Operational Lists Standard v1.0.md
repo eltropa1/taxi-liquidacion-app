@@ -140,14 +140,14 @@ Avoid independent edit buttons inside the row unless there is a strong product r
 For Trip History V2:
 
 - tapping a pending row opens service completion;
-- tapping a registered row opens trip/service correction;
+- tapping a registered row opens `Detalle del servicio`;
 - no separate edit button is required;
 - the chevron indicates navigability.
 
 Functional rule:
 
 - `PENDIENTE` -> `Completar servicio`.
-- `REGISTRADO` -> `Editar / corregir`.
+- `REGISTRADO` -> `Detalle del servicio`.
 
 ---
 
