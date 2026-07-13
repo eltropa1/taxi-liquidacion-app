@@ -1,9 +1,11 @@
 import type { PaymentType } from "../../constants/enums";
+import type { ServiceStatus } from "../../domain/services";
 
 export type TripVisualProjectionInput = Readonly<{
   readonly id: number;
   readonly startTime: string;
   readonly endTime: string | null;
+  readonly serviceStatus?: ServiceStatus | null;
   readonly amount: number | null;
   readonly source: string;
   readonly payment: PaymentType | null;
@@ -49,5 +51,6 @@ export type TripVisualProjection = Readonly<{
     readonly value: number | null;
     readonly label: string;
   }>;
+  readonly isPendingCompletion: boolean;
   readonly navigationGlyph: string;
 }>;

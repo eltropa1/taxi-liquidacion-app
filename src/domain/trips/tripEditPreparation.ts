@@ -58,7 +58,10 @@ const buildTimeFromBaseDate = (
 };
 
 const parseAmountInput = (value: string) => {
-  return Number(value.replace(",", "."));
+  if (value.trim() === "") return null;
+
+  const amount = Number(value.replace(",", "."));
+  return Number.isFinite(amount) ? amount : null;
 };
 
 export function prepareTripEditSaveData(
@@ -80,7 +83,7 @@ export function prepareTripEditSaveData(
   }
 
   const amount = parseAmountInput(input.amountInput);
-  if (isNaN(amount)) {
+  if (amount === null) {
     return { ok: false, error: "INVALID_AMOUNT" };
   }
 
@@ -93,7 +96,7 @@ export function prepareTripEditSaveData(
 
     if (input.chargedAmountInput.trim() !== "") {
       const parsed = parseAmountInput(input.chargedAmountInput);
-      if (isNaN(parsed)) {
+      if (parsed === null) {
         return { ok: false, error: "INVALID_CARD_AMOUNT_FORMAT" };
       }
       resolvedChargedAmount = parsed;
@@ -111,7 +114,7 @@ export function prepareTripEditSaveData(
 
     if (input.cashTipInput.trim() !== "") {
       const parsed = parseAmountInput(input.cashTipInput);
-      if (isNaN(parsed)) {
+      if (parsed === null) {
         return { ok: false, error: "INVALID_CASH_AMOUNT_FORMAT" };
       }
       resolvedCashCharged = parsed;

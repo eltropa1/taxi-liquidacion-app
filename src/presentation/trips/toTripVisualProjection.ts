@@ -118,6 +118,14 @@ function formatAmount(amount: number | null) {
   return `${amount.toFixed(2)} €`;
 }
 
+function isPendingCompletion(trip: TripVisualProjectionInput) {
+  if (trip.serviceStatus !== undefined && trip.serviceStatus !== null) {
+    return trip.serviceStatus === "incomplete";
+  }
+
+  return trip.endTime !== null && trip.amount === null && trip.payment === null;
+}
+
 export function toTripVisualProjection(
   trip: TripVisualProjectionInput,
 ): TripVisualProjection {
@@ -140,6 +148,7 @@ export function toTripVisualProjection(
       value: trip.amount,
       label: formatAmount(trip.amount),
     }),
+    isPendingCompletion: isPendingCompletion(trip),
     navigationGlyph,
   });
 }

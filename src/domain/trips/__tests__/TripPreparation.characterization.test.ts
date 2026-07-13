@@ -35,6 +35,62 @@ describe("Trip preparation characterization", () => {
       ).toBeNull();
     });
 
+    it("requires an explicitly entered amount for service completion", () => {
+      for (const amountInput of ["", "   "]) {
+        expect(
+          prepareTripSaveData({
+            amountInput,
+            payment: PaymentType.CASH,
+            chargedAmountInput: "",
+            cashTipInput: "",
+            source: TripSource.TAXI,
+            customSource: "",
+          }),
+        ).toBeNull();
+      }
+    });
+
+    it("accepts explicit zero and negative service amounts", () => {
+      const cases = [
+        ["0", 0],
+        ["0,00", 0],
+        ["-33", -33],
+        ["-33,00", -33],
+      ] as const;
+
+      for (const [amountInput, expectedAmount] of cases) {
+        expect(
+          prepareTripSaveData({
+            amountInput,
+            payment: PaymentType.CASH,
+            chargedAmountInput: "",
+            cashTipInput: "",
+            source: TripSource.TAXI,
+            customSource: "",
+          }),
+        ).toEqual(
+          expect.objectContaining({
+            amount: expectedAmount,
+          }),
+        );
+      }
+    });
+
+    it("rejects non-finite service amounts", () => {
+      for (const amountInput of ["Infinity", "-Infinity", "NaN"]) {
+        expect(
+          prepareTripSaveData({
+            amountInput,
+            payment: PaymentType.CASH,
+            chargedAmountInput: "",
+            cashTipInput: "",
+            source: TripSource.TAXI,
+            customSource: "",
+          }),
+        ).toBeNull();
+      }
+    });
+
     it("computes cash tip as the positive difference between charged and fare amount", () => {
       expect(
         prepareTripSaveData({
@@ -105,6 +161,52 @@ describe("Trip preparation characterization", () => {
           existingCashTip: null,
         }),
       ).toEqual({ ok: false, error: "CHARGED_AMOUNT_TOO_LOW" });
+    });
+
+    it("rejects empty edit amounts instead of converting them to zero", () => {
+      for (const amountInput of ["", "   "]) {
+        expect(
+          prepareTripEditSaveData({
+            tripStartTime: "2026-07-01T08:00:00.000Z",
+            amountInput,
+            payment: PaymentType.CASH,
+            chargedAmountInput: "",
+            cashTipInput: "",
+            startTimeInput: "08:15",
+            endTimeInput: "08:45",
+            existingChargedAmount: null,
+            existingCashTip: null,
+          }),
+        ).toEqual({ ok: false, error: "INVALID_AMOUNT" });
+      }
+    });
+
+    it("accepts explicit zero and negative edit amounts", () => {
+      const cases = [
+        ["0", 0],
+        ["0,00", 0],
+        ["-33", -33],
+        ["-33,00", -33],
+      ] as const;
+
+      for (const [amountInput, expectedAmount] of cases) {
+        const result = prepareTripEditSaveData({
+          tripStartTime: "2026-07-01T08:00:00.000Z",
+          amountInput,
+          payment: PaymentType.CASH,
+          chargedAmountInput: "",
+          cashTipInput: "",
+          startTimeInput: "08:15",
+          endTimeInput: "08:45",
+          existingChargedAmount: null,
+          existingCashTip: null,
+        });
+
+        expect(result.ok).toBe(true);
+        if (result.ok) {
+          expect(result.value.amount).toBe(expectedAmount);
+        }
+      }
     });
   });
 });

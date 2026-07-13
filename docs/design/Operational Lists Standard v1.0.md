@@ -139,9 +139,15 @@ Avoid independent edit buttons inside the row unless there is a strong product r
 
 For Trip History V2:
 
-- tapping the row opens trip editing;
+- tapping a pending row opens service completion;
+- tapping a registered row opens trip/service correction;
 - no separate edit button is required;
 - the chevron indicates navigability.
+
+Functional rule:
+
+- `PENDIENTE` -> `Completar servicio`.
+- `REGISTRADO` -> `Editar / corregir`.
 
 ---
 
@@ -160,7 +166,7 @@ For Trip History V2:
 | Platform chip | Platform |
 | Payment icon | Payment method |
 | Text | Time and operational data |
-| Amount | Economic result |
+| Amount or pending chip | Service registration state / economic result |
 | Chevron | Navigability |
 
 These meanings must not be mixed.
@@ -175,7 +181,7 @@ The approved order for Trip History V2 is:
 2. payment method icon;
 3. start time → end time;
 4. flexible space;
-5. amount;
+5. amount or pending chip;
 6. chevron.
 
 Do not invent data.
@@ -191,6 +197,7 @@ Trip History V2 may show:
 - start time;
 - end time;
 - amount;
+- pending state when the service is incomplete;
 - navigation affordance.
 
 ---

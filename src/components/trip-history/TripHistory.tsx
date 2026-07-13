@@ -4,7 +4,11 @@ import { TripHistoryEmptyState } from "./TripHistoryEmptyState";
 import { TripHistoryRow } from "./TripHistoryRow";
 import type { TripHistoryProps } from "./TripHistory.types";
 
-export function TripHistory({ trips, onTripPress }: TripHistoryProps) {
+export function TripHistory({
+  trips,
+  onRegisteredTripPress,
+  onPendingTripPress,
+}: TripHistoryProps) {
   return (
     <View style={styles.container}>
       <FlatList
@@ -14,7 +18,11 @@ export function TripHistory({ trips, onTripPress }: TripHistoryProps) {
         contentContainerStyle={styles.listContent}
         ItemSeparatorComponent={() => <View style={styles.separator} />}
         renderItem={({ item }) => (
-          <TripHistoryRow trip={item} onPress={onTripPress} />
+          <TripHistoryRow
+            trip={item}
+            onRegisteredPress={onRegisteredTripPress}
+            onPendingPress={onPendingTripPress}
+          />
         )}
         ListEmptyComponent={<TripHistoryEmptyState />}
       />

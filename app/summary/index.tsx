@@ -569,7 +569,7 @@ export default function SummaryScreen() {
         <SummaryCard title="Historial operativo">
           <TripHistory
             trips={tripHistoryProjections}
-            onTripPress={(tripId) =>
+            onRegisteredTripPress={(tripId) =>
               router.push({
                 pathname: "/trip/edit",
                 params: { tripId },

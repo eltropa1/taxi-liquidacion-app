@@ -59,6 +59,19 @@ function formatTimeLabel(value: string | null | undefined) {
   });
 }
 
+function platformIdToTripSource(platformId: string) {
+  switch (platformId) {
+    case "uber":
+      return TripSource.UBER;
+    case "cabify":
+      return TripSource.CABIFY;
+    case "freeNow":
+      return TripSource.FREE_NOW;
+    default:
+      return TripSource.TAXI;
+  }
+}
+
 function getProgressPercent(current: number, goal: number) {
   if (goal <= 0) return null;
   return (current / goal) * 100;
@@ -515,7 +528,14 @@ export default function TodayScreen() {
         <View style={styles.registerArea}>
           <TripHistory
             trips={tripHistoryProjections}
-            onTripPress={(tripId) =>
+            onPendingTripPress={(trip) =>
+              completeServiceFlowRef.current?.openForPendingService({
+                tripId: trip.id,
+                payment: lastPayment,
+                source: platformIdToTripSource(trip.platform.id),
+              })
+            }
+            onRegisteredTripPress={(tripId) =>
               router.push({
                 pathname: "/trip/edit",
                 params: { tripId },

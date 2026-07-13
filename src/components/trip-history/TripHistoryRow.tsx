@@ -1,19 +1,30 @@
 import { Pressable, StyleSheet, Text, View } from "react-native";
 
 import type { TripVisualProjection } from "../../presentation";
+import { getTripHistoryPressIntent } from "./tripHistoryInteraction";
 
 type TripHistoryRowProps = {
   readonly trip: TripVisualProjection;
-  readonly onPress?: (tripId: number) => void;
+  readonly onRegisteredPress?: (tripId: number) => void;
+  readonly onPendingPress?: (trip: TripVisualProjection) => void;
 };
 
-export function TripHistoryRow({ trip, onPress }: TripHistoryRowProps) {
+export function TripHistoryRow({
+  trip,
+  onRegisteredPress,
+  onPendingPress,
+}: TripHistoryRowProps) {
   const handlePress = () => {
-    if (!trip.schedule.endTime) return;
-    onPress?.(trip.id);
-  };
+    const intent = getTripHistoryPressIntent(trip);
+    if (intent === "completePendingService") {
+      onPendingPress?.(trip);
+      return;
+    }
 
-  const isPendingCompletion = trip.amount.value === null;
+    if (intent === "editRegisteredService") {
+      onRegisteredPress?.(trip.id);
+    }
+  };
 
   return (
     <Pressable
@@ -63,7 +74,7 @@ export function TripHistoryRow({ trip, onPress }: TripHistoryRowProps) {
         </Text>
 
         <View style={styles.rightCluster}>
-          {isPendingCompletion ? (
+          {trip.isPendingCompletion ? (
             <View style={styles.pendingChip}>
               <Text style={styles.pendingChipText} numberOfLines={1}>
                 Pendiente

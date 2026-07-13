@@ -7,7 +7,8 @@ import {
 describe("TripEditProjection", () => {
   it("resolves neighborhood names and clocks for the edit screen", () => {
     expect(resolveEffectiveNeighborhoodName("016", null)).toBe("Sol");
-    expect(resolveTripEditClock("2026-07-01T08:05:00.000Z")).toBe("09:05");
+    const localTripTime = new Date(2026, 6, 1, 9, 5, 0, 0).toISOString();
+    expect(resolveTripEditClock(localTripTime)).toBe("09:05");
     expect(
       resolveTripEditSnapshotZones([
         {

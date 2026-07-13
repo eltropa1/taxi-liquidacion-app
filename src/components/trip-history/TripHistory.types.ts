@@ -2,5 +2,6 @@ import type { TripVisualProjection } from "../../presentation";
 
 export type TripHistoryProps = {
   readonly trips: readonly TripVisualProjection[];
-  readonly onTripPress?: (tripId: number) => void;
+  readonly onRegisteredTripPress?: (tripId: number) => void;
+  readonly onPendingTripPress?: (trip: TripVisualProjection) => void;
 };

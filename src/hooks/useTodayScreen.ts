@@ -2,6 +2,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { useFocusEffect } from "expo-router";
 
 import { PaymentType, TripSource } from "../constants/enums";
+import type { ServiceStatus } from "../domain/services";
 import { GoalService, SummaryService } from "../application/runtime";
 import {
   loadTodayScreenCriticalState,
@@ -12,6 +13,7 @@ export type TodayTripRow = {
   id: number;
   startTime: string;
   endTime: string | null;
+  serviceStatus?: ServiceStatus | null;
   amount: number | null;
   source: TripSource;
   payment: PaymentType | null;

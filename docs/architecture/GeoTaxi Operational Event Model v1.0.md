@@ -178,6 +178,14 @@ Incluye, cuando corresponda, la documentación de:
 - el importe cobrado;
 - la propina, cuando exista.
 
+Regla económica:
+
+- un importe introducido explícitamente puede ser positivo, cero o negativo;
+- `0` y `0,00` son importes válidos cuando el taxista los introduce;
+- importes negativos como `-33` o `-33,00` son válidos para reflejar movimientos correctores;
+- un campo de importe vacío no equivale a cero;
+- el registro económico debe distinguir entre ausencia de importe e importe numérico explícito.
+
 El Servicio describe cómo queda documentado económicamente un hecho operativo.
 
 Es una construcción administrativa sobre uno o varios hechos operativos relacionados.

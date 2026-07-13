@@ -17,15 +17,17 @@ export type TripSavePreparationResult = {
 };
 
 function parseAmountInput(input: string) {
+  if (input.trim() === "") return null;
+
   const amount = Number(input.replace(",", "."));
-  return isNaN(amount) ? null : amount;
+  return Number.isFinite(amount) ? amount : null;
 }
 
 function parseOptionalAmountInput(input: string) {
   if (input.trim() === "") return undefined;
 
   const amount = Number(input.replace(",", "."));
-  return isNaN(amount) ? null : amount;
+  return Number.isFinite(amount) ? amount : null;
 }
 
 function resolveFinalSource(source: TripSource, customSource: string) {

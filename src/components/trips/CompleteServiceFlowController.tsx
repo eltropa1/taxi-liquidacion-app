@@ -19,6 +19,7 @@ export type OpenCompleteServiceFlowParams = Readonly<{
 
 export type CompleteServiceFlowControllerHandle = Readonly<{
   openForTrip: (params: OpenCompleteServiceFlowParams) => void;
+  openForPendingService: (params: OpenCompleteServiceFlowParams) => void;
 }>;
 
 type CompleteServiceFlowControllerProps = Readonly<{
@@ -107,6 +108,7 @@ export const CompleteServiceFlowController = forwardRef<
     ref,
     () => ({
       openForTrip,
+      openForPendingService: openForTrip,
     }),
     [openForTrip],
   );

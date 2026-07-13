@@ -4,11 +4,13 @@ import {
 } from "../../domain/trips/tripEconomics";
 import { calculateWorkdayKilometers } from "../../domain/workdays/workdayOdometer";
 import { PaymentType, TripSource } from "../../constants/enums";
+import type { ServiceStatus } from "../../domain/services";
 
 export type TodayTripRow = {
   id: number;
   startTime: string;
   endTime: string | null;
+  serviceStatus?: ServiceStatus | null;
   amount: number | null;
   source: TripSource;
   payment: PaymentType | null;
