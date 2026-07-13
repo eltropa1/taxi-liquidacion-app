@@ -1,6 +1,9 @@
 import { PaymentType, TripSource } from "../../../constants/enums";
 import {
+  buildRegisteredServiceDetailProjection,
   createRegisteredServiceCorrectionForm,
+  formatPaymentTypeLabel,
+  formatTripSourceLabel,
   isRegisteredServiceCorrectionFormDirty,
   prepareRegisteredServiceCorrection,
 } from "../RegisteredServiceDetailProjection";
@@ -22,6 +25,23 @@ const completedTrip = {
 };
 
 describe("RegisteredServiceDetailProjection", () => {
+  it("projects product labels instead of raw enum values", () => {
+    const projection = buildRegisteredServiceDetailProjection({
+      trip: {
+        ...completedTrip,
+        payment: PaymentType.APP,
+        source: TripSource.FREE_NOW,
+        customSource: null,
+      },
+      snapshots: [],
+    });
+
+    expect(projection.paymentLabel).toBe("App");
+    expect(projection.sourceLabel).toBe("Free Now");
+    expect(formatPaymentTypeLabel(PaymentType.CARD)).toBe("Tarjeta");
+    expect(formatTripSourceLabel(TripSource.CUSTOM)).toBe("Otra");
+  });
+
   it("initializes cash total from amount plus cashTip and preserves custom source", () => {
     expect(createRegisteredServiceCorrectionForm(completedTrip)).toEqual(
       expect.objectContaining({

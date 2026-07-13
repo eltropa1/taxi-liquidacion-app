@@ -32,11 +32,11 @@ export type RecordEnrichmentProjection = Readonly<{
 }>;
 
 const statusLabels: Record<AttachmentStatus, string> = {
-  pending: "Importando",
+  pending: "Importando...",
   ready: "Disponible",
-  failed: "Error",
+  failed: "No se pudo anadir",
   missing: "Archivo no disponible",
-  deleting: "Eliminando",
+  deleting: "Eliminando...",
 };
 
 export function buildRecordEnrichmentProjection(input: {

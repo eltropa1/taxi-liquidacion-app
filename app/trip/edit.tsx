@@ -1,16 +1,11 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import type React from "react";
 import {
   Alert,
   BackHandler,
-  Button,
   KeyboardAvoidingView,
   Platform,
-  Pressable,
   ScrollView,
-  StyleSheet,
   Text,
-  TextInput,
   View,
 } from "react-native";
 import { router, useLocalSearchParams, useNavigation } from "expo-router";
@@ -22,8 +17,23 @@ import { PaymentType, TripSource } from "../../src/constants/enums";
 import { NeighborhoodSelector } from "../../src/components/forms/NeighborhoodSelector";
 import { RecordEnrichmentSection } from "../../src/components/records/RecordEnrichmentSection";
 import {
+  CorrectionActionBar,
+  DestructiveRecordSection,
+  DetailSection,
+  DetailTextInput,
+  Field,
+  ReadRow,
+  RegisteredServiceDetailHeader,
+  SegmentedControl,
+  ServiceEconomicSummary,
+  ZoneCorrectionRow,
+  detailStyles,
+} from "../../src/components/trips/RegisteredServiceDetailLayout";
+import {
   buildRegisteredServiceDetailProjection,
   createRegisteredServiceCorrectionForm,
+  formatPaymentTypeLabel,
+  formatTripSourceLabel,
   isRegisteredServiceCorrectionFormDirty,
   prepareRegisteredServiceCorrection,
   resolveEffectiveNeighborhoodName,
@@ -139,23 +149,27 @@ export default function RegisteredServiceDetailScreen() {
 
       if (confirmingDiscardRef.current) return;
       confirmingDiscardRef.current = true;
-      Alert.alert("Descartar los cambios sin guardar?", "", [
-        {
-          text: "Seguir en pantalla",
-          style: "cancel",
-          onPress: () => {
-            confirmingDiscardRef.current = false;
+      Alert.alert(
+        "Descartar los cambios?",
+        "Los cambios sin guardar no se conservaran.",
+        [
+          {
+            text: "Seguir en pantalla",
+            style: "cancel",
+            onPress: () => {
+              confirmingDiscardRef.current = false;
+            },
           },
-        },
-        {
-          text: "Descartar cambios",
-          style: "destructive",
-          onPress: () => {
-            confirmingDiscardRef.current = false;
-            onDiscard();
+          {
+            text: "Descartar cambios",
+            style: "destructive",
+            onPress: () => {
+              confirmingDiscardRef.current = false;
+              onDiscard();
+            },
           },
-        },
-      ]);
+        ],
+      );
     },
     [hasNavigationDirtyState],
   );
@@ -169,23 +183,27 @@ export default function RegisteredServiceDetailScreen() {
 
       if (confirmingDiscardRef.current) return;
       confirmingDiscardRef.current = true;
-      Alert.alert("Descartar las correcciones realizadas?", "", [
-        {
-          text: "Seguir corrigiendo",
-          style: "cancel",
-          onPress: () => {
-            confirmingDiscardRef.current = false;
+      Alert.alert(
+        "Descartar las correcciones?",
+        "Los cambios realizados en el servicio no se guardaran.",
+        [
+          {
+            text: "Seguir corrigiendo",
+            style: "cancel",
+            onPress: () => {
+              confirmingDiscardRef.current = false;
+            },
           },
-        },
-        {
-          text: "Descartar cambios",
-          style: "destructive",
-          onPress: () => {
-            confirmingDiscardRef.current = false;
-            onDiscard();
+          {
+            text: "Descartar",
+            style: "destructive",
+            onPress: () => {
+              confirmingDiscardRef.current = false;
+              onDiscard();
+            },
           },
-        },
-      ]);
+        ],
+      );
     },
     [isDirty],
   );
@@ -274,14 +292,14 @@ export default function RegisteredServiceDetailScreen() {
   function confirmDelete() {
     if (!trip || deleting) return;
     Alert.alert(
-      "Eliminar registro completo",
+      "Eliminar el registro completo?",
       enrichmentDirty
-        ? "Se eliminara el servicio registrado, el viaje operativo asociado y los enriquecimientos dependientes. La nota sin guardar se perdera. Esta accion no se puede deshacer."
-        : "Se eliminara el servicio registrado, el viaje operativo asociado y los enriquecimientos dependientes. Esta accion no se puede deshacer.",
+        ? "Se eliminaran el servicio, el viaje asociado, sus ubicaciones detectadas, la nota y los adjuntos. La nota sin guardar se perdera."
+        : "Se eliminaran el servicio, el viaje asociado, sus ubicaciones detectadas, la nota y los adjuntos.",
       [
         { text: "Cancelar", style: "cancel" },
         {
-          text: "Eliminar registro completo",
+          text: "Eliminar registro",
           style: "destructive",
           onPress: deleteRecord,
         },
@@ -316,134 +334,162 @@ export default function RegisteredServiceDetailScreen() {
 
   if (loading || !projection || !trip || !form) {
     return (
-      <View style={styles.centered}>
+      <View style={detailStyles.centered}>
         <Text>Cargando detalle del servicio...</Text>
       </View>
     );
   }
 
   const errors = prepared && !prepared.ok ? prepared.errors : {};
+  const paymentOptions = [
+    PaymentType.CASH,
+    PaymentType.CARD,
+    PaymentType.APP,
+  ].map((payment) => ({
+    value: payment,
+    label: formatPaymentTypeLabel(payment),
+  }));
+  const sourceOptions = [
+    TripSource.TAXI,
+    TripSource.UBER,
+    TripSource.CABIFY,
+    TripSource.FREE_NOW,
+    TripSource.CUSTOM,
+  ].map((source) => ({
+    value: source,
+    label: formatTripSourceLabel(source),
+  }));
 
   return (
     <KeyboardAvoidingView
-      style={styles.screen}
-      behavior={Platform.OS === "ios" ? "padding" : undefined}
+      style={detailStyles.screen}
+      behavior={Platform.OS === "ios" ? "padding" : "height"}
     >
-      <ScrollView
-        contentContainerStyle={styles.content}
-        keyboardShouldPersistTaps="handled"
-      >
-        <Pressable
-          onPress={() => requestNavigationDiscard(navigateBack)}
-          style={styles.back}
+      <View style={detailStyles.screen}>
+        <ScrollView
+          contentContainerStyle={[
+            detailStyles.content,
+            mode === "correction" && detailStyles.contentWithBar,
+          ]}
+          keyboardShouldPersistTaps="handled"
         >
-          <Text style={styles.backText}>Volver</Text>
-        </Pressable>
+          <RegisteredServiceDetailHeader
+            title={projection.title}
+            status={projection.statusLabel}
+            schedule={projection.scheduleLabel}
+            mode={mode}
+            onBack={() => requestNavigationDiscard(navigateBack)}
+            onCorrect={startCorrection}
+          />
 
-        <View style={styles.header}>
-          <Text style={styles.status}>{projection.statusLabel}</Text>
-          <Text style={styles.title}>{projection.title}</Text>
-          <Text style={styles.subtitle}>{projection.scheduleLabel}</Text>
-        </View>
+          <ServiceEconomicSummary
+            amount={projection.amountLabel}
+            payment={projection.paymentLabel}
+            source={projection.customSourceLabel ?? projection.sourceLabel}
+            chargedAmount={projection.chargedAmountLabel}
+            cashTotal={projection.cashTotalReceivedLabel}
+            cashTip={projection.cashTipLabel}
+          />
 
-        {mode === "view" ? (
-          <>
-            <Section title="Servicio">
-              <ReadRow label="Importe" value={projection.amountLabel} />
-              <ReadRow label="Metodo de pago" value={projection.paymentLabel} />
-              {projection.chargedAmountLabel && (
+          {mode === "view" ? (
+            <>
+              <DetailSection title="Servicio" icon="receipt-long">
+                <ReadRow label="Metodo de pago" value={projection.paymentLabel} />
+                {projection.chargedAmountLabel && (
+                  <ReadRow
+                    label="Importe cobrado por tarjeta"
+                    value={projection.chargedAmountLabel}
+                  />
+                )}
+                {projection.cashTotalReceivedLabel && (
+                  <ReadRow
+                    label="Total cobrado en efectivo"
+                    value={projection.cashTotalReceivedLabel}
+                  />
+                )}
+                {projection.cashTipLabel && (
+                  <ReadRow label="Propina" value={projection.cashTipLabel} />
+                )}
                 <ReadRow
-                  label="Importe cobrado por tarjeta"
-                  value={projection.chargedAmountLabel}
+                  label="Clasificacion"
+                  value={projection.sourceLabel}
+                  emphasis
                 />
-              )}
-              {projection.cashTotalReceivedLabel && (
+                {projection.customSourceLabel && (
+                  <ReadRow
+                    label="Clasificacion personalizada"
+                    value={projection.customSourceLabel}
+                  />
+                )}
+              </DetailSection>
+
+              <DetailSection title="Viaje" icon="route">
+                <ReadRow label="Hora inicio" value={form.startTimeInput} />
+                <ReadRow label="Hora fin" value={form.endTimeInput} />
                 <ReadRow
-                  label="Total cobrado en efectivo"
-                  value={projection.cashTotalReceivedLabel}
+                  label="Zona manual de recogida"
+                  value={projection.manualPickupZoneLabel}
                 />
-              )}
-              {projection.cashTipLabel && (
-                <ReadRow label="Propina" value={projection.cashTipLabel} />
-              )}
-              <ReadRow label="Clasificacion" value={projection.sourceLabel} />
-              {projection.customSourceLabel && (
                 <ReadRow
-                  label="Clasificacion personalizada"
-                  value={projection.customSourceLabel}
+                  label="Zona manual de destino"
+                  value={projection.manualDropoffZoneLabel}
                 />
-              )}
-            </Section>
+              </DetailSection>
 
-            <Section title="Viaje">
-              <ReadRow label="Hora inicio" value={form.startTimeInput} />
-              <ReadRow label="Hora fin" value={form.endTimeInput} />
-              <ReadRow
-                label="Zona manual de recogida"
-                value={projection.manualPickupZoneLabel}
-              />
-              <ReadRow
-                label="Zona manual de destino"
-                value={projection.manualDropoffZoneLabel}
-              />
-            </Section>
+              <DetailSection title="Ubicacion detectada" icon="my-location">
+                <ReadRow label="GEO inicio" value={projection.geoPickupZoneLabel} />
+                <ReadRow label="GEO fin" value={projection.geoDropoffZoneLabel} />
+                <Text style={detailStyles.helper}>
+                  Ubicacion automatica solo lectura.
+                </Text>
+              </DetailSection>
+            </>
+          ) : (
+            <>
+              <DetailSection title="Servicio" icon="receipt-long">
+                <Field label="Importe" error={errors.amount}>
+                  <DetailTextInput
+                    value={form.amountInput}
+                    onChangeText={(value) =>
+                      updateForm((current) => ({
+                        ...current,
+                        amountInput: value,
+                      }))
+                    }
+                    keyboardType="decimal-pad"
+                  />
+                </Field>
 
-            <Section title="Ubicacion detectada">
-              <ReadRow label="GEO inicio" value={projection.geoPickupZoneLabel} />
-              <ReadRow label="GEO fin" value={projection.geoDropoffZoneLabel} />
-              <Text style={styles.helper}>
-                Ubicacion automatica solo lectura.
-              </Text>
-            </Section>
-
-            <View style={styles.actions}>
-              <Button title="Corregir" onPress={startCorrection} />
-            </View>
-
-          </>
-        ) : (
-          <>
-            <Section title="Servicio">
-              <Field label="Importe" error={errors.amount}>
-                <TextInput
-                  value={form.amountInput}
-                  onChangeText={(value) =>
-                    updateForm((current) => ({ ...current, amountInput: value }))
-                  }
-                  keyboardType="decimal-pad"
-                  style={styles.input}
-                />
-              </Field>
-
-              <Text style={styles.label}>Metodo de pago</Text>
-              <ChipRow
-                values={[PaymentType.CASH, PaymentType.CARD, PaymentType.APP]}
-                selected={form.payment}
-                onSelect={(payment) =>
-                  updateForm((current) => ({
-                    ...current,
-                    payment,
-                    chargedAmountInput:
-                      payment === PaymentType.CARD
-                        ? current.chargedAmountInput
-                        : "",
-                    cashTotalReceivedInput:
-                      payment === PaymentType.CASH
-                        ? current.cashTotalReceivedInput
-                        : "",
-                  }))
-                }
-              />
-              <Text style={styles.helper}>
-                Al cambiar el metodo se normalizan los importes no aplicables.
-              </Text>
+                <Field label="Metodo de pago">
+                  <SegmentedControl
+                    options={paymentOptions}
+                    selected={form.payment}
+                    onSelect={(payment) =>
+                      updateForm((current) => ({
+                        ...current,
+                        payment,
+                        chargedAmountInput:
+                          payment === PaymentType.CARD
+                            ? current.chargedAmountInput
+                            : "",
+                        cashTotalReceivedInput:
+                          payment === PaymentType.CASH
+                            ? current.cashTotalReceivedInput
+                            : "",
+                      }))
+                    }
+                  />
+                </Field>
+                <Text style={detailStyles.helper}>
+                  Al cambiar el metodo se limpian los importes no aplicables.
+                </Text>
 
               {form.payment === PaymentType.CARD && (
                 <Field
                   label="Importe cobrado por tarjeta"
                   error={errors.chargedAmount}
                 >
-                  <TextInput
+                  <DetailTextInput
                     value={form.chargedAmountInput}
                     onChangeText={(value) =>
                       updateForm((current) => ({
@@ -452,7 +498,6 @@ export default function RegisteredServiceDetailScreen() {
                       }))
                     }
                     keyboardType="decimal-pad"
-                    style={styles.input}
                   />
                 </Field>
               )}
@@ -462,7 +507,7 @@ export default function RegisteredServiceDetailScreen() {
                   label="Total cobrado en efectivo"
                   error={errors.cashTotalReceived}
                 >
-                  <TextInput
+                  <DetailTextInput
                     value={form.cashTotalReceivedInput}
                     onChangeText={(value) =>
                       updateForm((current) => ({
@@ -471,31 +516,25 @@ export default function RegisteredServiceDetailScreen() {
                       }))
                     }
                     keyboardType="decimal-pad"
-                    style={styles.input}
                   />
                 </Field>
               )}
 
-              <Text style={styles.label}>Clasificacion</Text>
-              <ChipRow
-                values={[
-                  TripSource.TAXI,
-                  TripSource.UBER,
-                  TripSource.CABIFY,
-                  TripSource.FREE_NOW,
-                  TripSource.CUSTOM,
-                ]}
-                selected={form.source}
-                onSelect={(source) =>
-                  updateForm((current) => ({ ...current, source }))
-                }
-              />
+                <Field label="Clasificacion">
+                  <SegmentedControl
+                    options={sourceOptions}
+                    selected={form.source}
+                    onSelect={(source) =>
+                      updateForm((current) => ({ ...current, source }))
+                    }
+                  />
+                </Field>
               {form.source === TripSource.CUSTOM && (
                 <Field
                   label="Clasificacion personalizada"
                   error={errors.customSource}
                 >
-                  <TextInput
+                  <DetailTextInput
                     value={form.customSourceInput}
                     onChangeText={(value) =>
                       updateForm((current) => ({
@@ -503,15 +542,14 @@ export default function RegisteredServiceDetailScreen() {
                         customSourceInput: value,
                       }))
                     }
-                    style={styles.input}
                   />
                 </Field>
               )}
-            </Section>
+            </DetailSection>
 
-            <Section title="Viaje">
+            <DetailSection title="Viaje" icon="route">
               <Field label="Hora inicio" error={errors.startTime}>
-                <TextInput
+                <DetailTextInput
                   value={form.startTimeInput}
                   onChangeText={(value) =>
                     updateForm((current) => ({
@@ -520,21 +558,19 @@ export default function RegisteredServiceDetailScreen() {
                     }))
                   }
                   placeholder="08:30"
-                  style={styles.input}
                 />
               </Field>
               <Field label="Hora fin" error={errors.endTime}>
-                <TextInput
+                <DetailTextInput
                   value={form.endTimeInput}
                   onChangeText={(value) =>
                     updateForm((current) => ({ ...current, endTimeInput: value }))
                   }
                   placeholder="09:10"
-                  style={styles.input}
                 />
               </Field>
 
-              <ZoneEditor
+              <ZoneCorrectionRow
                 label="Zona manual de recogida"
                 value={correctionZones.pickup}
                 onChange={() => setShowPickupSelector(true)}
@@ -545,7 +581,7 @@ export default function RegisteredServiceDetailScreen() {
                   }))
                 }
               />
-              <ZoneEditor
+              <ZoneCorrectionRow
                 label="Zona manual de destino"
                 value={correctionZones.dropoff}
                 onChange={() => setShowDropoffSelector(true)}
@@ -556,25 +592,15 @@ export default function RegisteredServiceDetailScreen() {
                   }))
                 }
               />
-            </Section>
+            </DetailSection>
 
-            <Section title="Ubicacion detectada">
+            <DetailSection title="Ubicacion detectada" icon="my-location">
               <ReadRow label="GEO inicio" value={projection.geoPickupZoneLabel} />
               <ReadRow label="GEO fin" value={projection.geoDropoffZoneLabel} />
-              <Text style={styles.helper}>GEO automatico solo lectura.</Text>
-            </Section>
+              <Text style={detailStyles.helper}>GEO automatico solo lectura.</Text>
+            </DetailSection>
 
-            {saveError && <Text style={styles.error}>{saveError}</Text>}
-
-            <View style={styles.actions}>
-              <Button
-                title={saving ? "Guardando..." : "Guardar correcciones"}
-                disabled={saving}
-                onPress={saveCorrection}
-              />
-              <View style={styles.actionSpacer} />
-              <Button title="Cancelar" disabled={saving} onPress={cancelCorrection} />
-            </View>
+            {saveError && <Text style={detailStyles.error}>{saveError}</Text>}
           </>
         )}
 
@@ -586,15 +612,10 @@ export default function RegisteredServiceDetailScreen() {
         ) : null}
 
         {mode === "view" ? (
-          <View style={styles.dangerZone}>
-            <Text style={styles.dangerTitle}>Zona destructiva</Text>
-            <Button
-              title={deleting ? "Eliminando..." : "Eliminar registro completo"}
-              color="#b42318"
-              disabled={deleting}
-              onPress={confirmDelete}
-            />
-          </View>
+          <DestructiveRecordSection
+            deleting={deleting}
+            onDelete={confirmDelete}
+          />
         ) : null}
 
         <NeighborhoodSelector
@@ -614,7 +635,15 @@ export default function RegisteredServiceDetailScreen() {
           }
           onClose={() => setShowDropoffSelector(false)}
         />
-      </ScrollView>
+        </ScrollView>
+        {mode === "correction" ? (
+          <CorrectionActionBar
+            saving={saving}
+            onCancel={cancelCorrection}
+            onSave={saveCorrection}
+          />
+        ) : null}
+      </View>
     </KeyboardAvoidingView>
   );
 }
@@ -627,252 +656,3 @@ function navigateBack() {
 
   router.replace("/");
 }
-
-function Section({
-  title,
-  children,
-}: {
-  title: string;
-  children: React.ReactNode;
-}) {
-  return (
-    <View style={styles.section}>
-      <Text style={styles.sectionTitle}>{title}</Text>
-      {children}
-    </View>
-  );
-}
-
-function ReadRow({ label, value }: { label: string; value: string }) {
-  return (
-    <View style={styles.readRow}>
-      <Text style={styles.readLabel}>{label}</Text>
-      <Text style={styles.readValue}>{value}</Text>
-    </View>
-  );
-}
-
-function Field({
-  label,
-  error,
-  children,
-}: {
-  label: string;
-  error?: string;
-  children: React.ReactNode;
-}) {
-  return (
-    <View style={styles.field}>
-      <Text style={styles.label}>{label}</Text>
-      {children}
-      {error ? <Text style={styles.error}>{error}</Text> : null}
-    </View>
-  );
-}
-
-function ChipRow<T extends string>({
-  values,
-  selected,
-  onSelect,
-}: {
-  values: T[];
-  selected: T;
-  onSelect: (value: T) => void;
-}) {
-  return (
-    <View style={styles.chipRow}>
-      {values.map((value) => (
-        <Pressable
-          key={value}
-          onPress={() => onSelect(value)}
-          style={[styles.chip, selected === value && styles.chipActive]}
-        >
-          <Text style={styles.chipText}>{value}</Text>
-        </Pressable>
-      ))}
-    </View>
-  );
-}
-
-function ZoneEditor({
-  label,
-  value,
-  onChange,
-  onClear,
-}: {
-  label: string;
-  value: string;
-  onChange: () => void;
-  onClear: () => void;
-}) {
-  return (
-    <View style={styles.zoneEditor}>
-      <ReadRow label={label} value={value} />
-      <View style={styles.zoneActions}>
-        <Pressable onPress={onChange}>
-          <Text style={styles.link}>Cambiar</Text>
-        </Pressable>
-        <Pressable onPress={onClear}>
-          <Text style={styles.link}>Limpiar</Text>
-        </Pressable>
-      </View>
-    </View>
-  );
-}
-
-const styles = StyleSheet.create({
-  screen: {
-    flex: 1,
-    backgroundColor: "#f6f2eb",
-  },
-  content: {
-    padding: 20,
-    paddingTop: 56,
-    gap: 14,
-  },
-  centered: {
-    flex: 1,
-    alignItems: "center",
-    justifyContent: "center",
-    padding: 24,
-  },
-  back: {
-    alignSelf: "flex-start",
-    paddingVertical: 8,
-  },
-  backText: {
-    color: "#0066cc",
-    fontWeight: "700",
-  },
-  header: {
-    gap: 4,
-  },
-  status: {
-    alignSelf: "flex-start",
-    paddingHorizontal: 10,
-    paddingVertical: 4,
-    borderRadius: 999,
-    backgroundColor: "#e8f5e9",
-    color: "#1b5e20",
-    fontWeight: "800",
-    fontSize: 12,
-  },
-  title: {
-    fontSize: 24,
-    fontWeight: "900",
-    color: "#1f1a17",
-  },
-  subtitle: {
-    fontSize: 14,
-    color: "#5f564d",
-    fontWeight: "700",
-  },
-  section: {
-    backgroundColor: "#ffffff",
-    borderRadius: 8,
-    padding: 14,
-    borderWidth: 1,
-    borderColor: "#e2d8cb",
-    gap: 10,
-  },
-  sectionTitle: {
-    fontSize: 16,
-    fontWeight: "900",
-    color: "#1f1a17",
-  },
-  readRow: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-    gap: 14,
-  },
-  readLabel: {
-    flex: 1,
-    color: "#6b6258",
-    fontSize: 13,
-  },
-  readValue: {
-    flex: 1,
-    textAlign: "right",
-    color: "#211b17",
-    fontWeight: "800",
-    fontSize: 13,
-  },
-  field: {
-    gap: 6,
-  },
-  label: {
-    fontSize: 13,
-    fontWeight: "800",
-    color: "#2b2521",
-  },
-  input: {
-    borderWidth: 1,
-    borderColor: "#d8d0c5",
-    borderRadius: 8,
-    paddingHorizontal: 12,
-    paddingVertical: 10,
-    backgroundColor: "#fff",
-    fontSize: 15,
-    color: "#1f1a17",
-  },
-  helper: {
-    fontSize: 12,
-    color: "#6b6258",
-    lineHeight: 17,
-  },
-  error: {
-    color: "#b42318",
-    fontSize: 12,
-    fontWeight: "700",
-  },
-  chipRow: {
-    flexDirection: "row",
-    flexWrap: "wrap",
-    gap: 8,
-  },
-  chip: {
-    paddingVertical: 10,
-    paddingHorizontal: 12,
-    borderRadius: 8,
-    backgroundColor: "#eee6da",
-  },
-  chipActive: {
-    backgroundColor: "#d1e8ff",
-  },
-  chipText: {
-    fontWeight: "800",
-    color: "#1f1a17",
-  },
-  zoneEditor: {
-    gap: 6,
-  },
-  zoneActions: {
-    flexDirection: "row",
-    gap: 16,
-    justifyContent: "flex-end",
-  },
-  link: {
-    color: "#0066cc",
-    fontWeight: "800",
-  },
-  actions: {
-    gap: 8,
-  },
-  actionSpacer: {
-    height: 4,
-  },
-  dangerZone: {
-    marginTop: 12,
-    padding: 14,
-    borderRadius: 8,
-    borderWidth: 1,
-    borderColor: "#f4b4b4",
-    backgroundColor: "#fff5f5",
-    gap: 10,
-  },
-  dangerTitle: {
-    fontSize: 15,
-    fontWeight: "900",
-    color: "#8a1f11",
-  },
-});

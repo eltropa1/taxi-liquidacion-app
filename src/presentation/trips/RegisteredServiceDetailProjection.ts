@@ -94,7 +94,15 @@ export type RegisteredServiceDetailProjection = Readonly<{
 const paymentLabels: Record<PaymentType, string> = {
   [PaymentType.CASH]: "Efectivo",
   [PaymentType.CARD]: "Tarjeta",
-  [PaymentType.APP]: "Aplicacion",
+  [PaymentType.APP]: "App",
+};
+
+const sourceLabels: Record<TripSource, string> = {
+  [TripSource.TAXI]: "Taxi",
+  [TripSource.UBER]: "Uber",
+  [TripSource.CABIFY]: "Cabify",
+  [TripSource.FREE_NOW]: "Free Now",
+  [TripSource.CUSTOM]: "Otra",
 };
 
 export function buildRegisteredServiceDetailProjection(input: {
@@ -115,7 +123,7 @@ export function buildRegisteredServiceDetailProjection(input: {
     title: "Detalle del servicio",
     statusLabel: "Registrado",
     amountLabel: formatMoney(input.trip.amount),
-    paymentLabel: input.trip.payment ? paymentLabels[input.trip.payment] : "-",
+    paymentLabel: input.trip.payment ? formatPaymentTypeLabel(input.trip.payment) : "-",
     chargedAmountLabel:
       input.trip.payment === PaymentType.CARD
         ? formatMoney(input.trip.chargedAmount)
@@ -126,7 +134,7 @@ export function buildRegisteredServiceDetailProjection(input: {
       input.trip.payment === PaymentType.CASH
         ? formatMoney(input.trip.cashTip)
         : null,
-    sourceLabel: input.trip.source,
+    sourceLabel: formatTripSourceLabel(input.trip.source),
     customSourceLabel: input.trip.customSource,
     scheduleLabel: `${resolveTripEditClock(input.trip.startTime)} - ${
       input.trip.endTime ? resolveTripEditClock(input.trip.endTime) : "-"
@@ -142,6 +150,16 @@ export function buildRegisteredServiceDetailProjection(input: {
     geoPickupZoneLabel: resolveEffectiveNeighborhoodName(null, geoPickupZone),
     geoDropoffZoneLabel: resolveEffectiveNeighborhoodName(null, geoDropoffZone),
   };
+}
+
+export function formatPaymentTypeLabel(payment: PaymentType): string {
+  return paymentLabels[payment] ?? payment;
+}
+
+export function formatTripSourceLabel(
+  source: TripSource,
+): string {
+  return sourceLabels[source] ?? source;
 }
 
 export function createRegisteredServiceCorrectionForm(
