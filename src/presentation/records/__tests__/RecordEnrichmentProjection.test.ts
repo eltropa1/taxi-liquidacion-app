@@ -36,7 +36,9 @@ describe("RecordEnrichmentProjection", () => {
       attachments: [attachment({ id: "a1", status: "ready" })],
     });
 
+    expect(projection.noteTitle).toBe("Notas");
     expect(projection.noteLabel).toBe("Cliente solicita justificante");
+    expect(projection.noteActionLabel).toBe("Editar nota");
     expect(projection.hasNote).toBe(true);
     expect(projection.attachmentCountLabel).toBe("1/5");
     expect(projection.canAddAttachment).toBe(true);
@@ -63,7 +65,9 @@ describe("RecordEnrichmentProjection", () => {
       ],
     });
 
-    expect(projection.noteLabel).toBe("Sin nota");
+    expect(projection.noteTitle).toBe("Notas");
+    expect(projection.noteLabel).toBe("Sin notas añadidas");
+    expect(projection.noteActionLabel).toBe("Añadir nota");
     expect(projection.attachmentCountLabel).toBe("5/5");
     expect(projection.canAddAttachment).toBe(false);
     expect(projection.attachments.map((item) => item.id)).toEqual([

@@ -23,7 +23,9 @@ export type RecordAttachmentListItem = Readonly<{
 }>;
 
 export type RecordEnrichmentProjection = Readonly<{
+  noteTitle: string;
   noteLabel: string;
+  noteActionLabel: string;
   hasNote: boolean;
   attachments: RecordAttachmentListItem[];
   attachmentCountLabel: string;
@@ -51,7 +53,9 @@ export function buildRecordEnrichmentProjection(input: {
   ).length;
 
   return {
-    noteLabel: input.note?.body ?? "Sin nota",
+    noteTitle: "Notas",
+    noteLabel: input.note?.body ?? "Sin notas añadidas",
+    noteActionLabel: input.note ? "Editar nota" : "Añadir nota",
     hasNote: Boolean(input.note),
     attachments: visibleAttachments.map(projectAttachment),
     attachmentCountLabel: `${activeCount}/${RECORD_ATTACHMENT_LIMITS.maxAttachmentsPerOwner}`,

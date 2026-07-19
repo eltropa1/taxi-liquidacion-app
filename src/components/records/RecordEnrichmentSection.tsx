@@ -338,7 +338,7 @@ export function RecordEnrichmentSection({
       {!loading && !loadError ? (
         <>
           <View style={styles.noteBlock}>
-            <Text style={styles.label}>Nota</Text>
+            <Text style={styles.label}>{projection.noteTitle}</Text>
             {editingNote ? (
               <>
                 <TextInput
@@ -375,7 +375,7 @@ export function RecordEnrichmentSection({
                   {projection.noteLabel}
                 </Text>
                 <ActionButton
-                  label={projection.hasNote ? "Editar" : "Anadir nota"}
+                  label={projection.noteActionLabel}
                   onPress={beginEditNote}
                   variant="secondary"
                 />
