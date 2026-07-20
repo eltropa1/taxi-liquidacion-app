@@ -87,7 +87,8 @@ export async function loadTodayScreenData(selectedDate: Date) {
     monthSummaryPromise,
   ]);
 
-  const workdayId = criticalState.workdayInfo?.id ?? null;
+  const workdayId =
+    criticalState.workdayInfo?.id ?? criticalState.activeWorkday?.id ?? null;
   const enrichmentWithWorkday = await loadTodayScreenEnrichmentState(workdayId);
 
   return {
