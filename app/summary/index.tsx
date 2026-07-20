@@ -1,32 +1,36 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import {
   Alert,
+  FlatList,
   Modal,
   Pressable,
-  ScrollView,
   StyleSheet,
   Text,
   TextInput,
   View,
 } from "react-native";
 
-import { router } from "expo-router";
+import { router, useLocalSearchParams } from "expo-router";
 import { SafeAreaView } from "react-native-safe-area-context";
 
 import { ExportService } from "../../src/application/runtime";
-import { useTripActions } from "../../src/hooks/useTripActions";
+import { CompleteServiceFlowController } from "../../src/components/trips/CompleteServiceFlowController";
+import { TripHistoryEmptyState } from "../../src/components/trip-history/TripHistoryEmptyState";
+import { TripHistoryRow } from "../../src/components/trip-history/TripHistoryRow";
 import { PaymentType, TripSource } from "../../src/constants/enums";
-import { useTodayScreen, type TodayTripRow } from "../../src/hooks/useTodayScreen";
-import { TripHistory } from "../../src/components/trip-history";
+import { useSummaryScreen } from "../../src/hooks/useSummaryScreen";
+import { useTripActions } from "../../src/hooks/useTripActions";
 import {
-  buildTodayScreenProjection,
-  toTripVisualProjection,
+  buildSummaryScreenProjection,
+  type SummaryDrilldownGroup,
+  type TripVisualProjection,
 } from "../../src/presentation";
-import { addCalendarDays } from "../../src/utils/dateUtils";
+import { SummaryDrilldownSheet } from "../../src/components/summary/SummaryDrilldownSheet";
 import {
   parsePositiveIntegerInput,
-  validateWorkdayOdometers,
 } from "../../src/domain/workdays/workdayOdometer";
+import type { CompleteServiceFlowControllerHandle } from "../../src/components/trips/CompleteServiceFlowController";
+import { addCalendarDays } from "../../src/utils/dateUtils";
 
 function formatMoney(value: number | null | undefined) {
   if (value === null || value === undefined) return "—";
@@ -36,281 +40,223 @@ function formatMoney(value: number | null | undefined) {
   }).format(value)} €`;
 }
 
+function capitalize(value: string) {
+  if (!value) return value;
+  return value.charAt(0).toUpperCase() + value.slice(1);
+}
+
 function formatDateLabel(date: Date) {
-  return date.toLocaleDateString("es-ES", {
-    weekday: "short",
-    day: "2-digit",
-    month: "short",
-    year: "numeric",
-  });
+  return capitalize(
+    date.toLocaleDateString("es-ES", {
+      weekday: "short",
+      day: "numeric",
+      month: "short",
+    }),
+  );
 }
 
-function formatTimeLabel(value: string | null | undefined) {
-  if (!value) return "—";
-  return new Date(value).toLocaleTimeString("es-ES", {
-    hour: "2-digit",
-    minute: "2-digit",
-  });
+function parseSelectedDate(value: string | string[] | undefined) {
+  const candidate = Array.isArray(value) ? value[0] : value;
+  if (!candidate) return new Date();
+
+  const parsed = new Date(candidate);
+  return Number.isNaN(parsed.getTime()) ? new Date() : parsed;
 }
 
-function getProgressPercent(current: number, goal: number) {
-  if (goal <= 0) return null;
-  return (current / goal) * 100;
+function startOfMonth(date: Date) {
+  return new Date(date.getFullYear(), date.getMonth(), 1, 12, 0, 0, 0);
 }
 
-function clampPercent(percent: number | null) {
-  if (percent === null) return 0;
-  return Math.min(percent, 100);
+function addMonths(date: Date, months: number) {
+  return new Date(date.getFullYear(), date.getMonth() + months, 1, 12, 0, 0, 0);
 }
 
-function SummaryCard({
+function getDaysInMonth(date: Date) {
+  return new Date(date.getFullYear(), date.getMonth() + 1, 0).getDate();
+}
+
+function isSameDay(left: Date, right: Date) {
+  return left.toDateString() === right.toDateString();
+}
+
+function getMonthLabel(date: Date) {
+  return capitalize(
+    date.toLocaleDateString("es-ES", {
+      month: "long",
+      year: "numeric",
+    }),
+  );
+}
+
+function platformIdToTripSource(platformId: string) {
+  switch (platformId) {
+    case "uber":
+      return TripSource.UBER;
+    case "cabify":
+      return TripSource.CABIFY;
+    case "freeNow":
+      return TripSource.FREE_NOW;
+    default:
+      return TripSource.TAXI;
+  }
+}
+
+function SectionTitle({
   title,
-  children,
+  subtitle,
 }: {
   title: string;
-  children: React.ReactNode;
+  subtitle?: string;
 }) {
   return (
-    <View style={styles.card}>
-      <Text style={styles.cardTitle}>{title}</Text>
-      {children}
+    <View style={styles.sectionTitleBlock}>
+      <Text style={styles.sectionTitle}>{title}</Text>
+      {subtitle ? <Text style={styles.sectionSubtitle}>{subtitle}</Text> : null}
     </View>
   );
 }
 
-function KeyValueRow({
+function MetricRow({
   label,
   value,
+  detail,
 }: {
   label: string;
   value: string;
+  detail?: string;
 }) {
   return (
-    <View style={styles.keyValueRow}>
-      <Text style={styles.keyValueLabel}>{label}</Text>
-      <Text style={styles.keyValueValue}>{value}</Text>
+    <View style={styles.metricRow}>
+      <View style={styles.metricRowText}>
+        <Text style={styles.metricLabel}>{label}</Text>
+        {detail ? <Text style={styles.metricDetail}>{detail}</Text> : null}
+      </View>
+      <Text style={styles.metricValue}>{value}</Text>
     </View>
   );
 }
 
-function ProgressBar({
-  percent,
+function DrilldownRow({
+  group,
+  onPress,
 }: {
-  percent: number;
+  group: SummaryDrilldownGroup;
+  onPress: () => void;
 }) {
   return (
-    <View style={styles.progressRail}>
-      <View
-        style={[
-          styles.progressFill,
-          {
-            width: `${percent}%`,
-          },
-        ]}
-      />
-    </View>
+    <Pressable
+      onPress={onPress}
+      style={({ pressed }) => [styles.drilldownRow, pressed && styles.pressed]}
+    >
+      <View style={styles.drilldownText}>
+        <Text style={styles.drilldownTitle}>{group.title}</Text>
+        <Text style={styles.drilldownSubtitle}>{group.subtitle}</Text>
+      </View>
+
+      <View style={styles.drilldownMeta}>
+        <Text style={styles.drilldownCount}>{group.count}</Text>
+        <Text style={styles.drilldownAmount}>{formatMoney(group.amount)}</Text>
+        <Text style={styles.drilldownChevron}>›</Text>
+      </View>
+    </Pressable>
   );
 }
-
-type WorkdayModalMode = "open" | "close" | null;
 
 export default function SummaryScreen() {
+  const params = useLocalSearchParams<{ date?: string }>();
+  const [selectedDate, setSelectedDate] = useState(() => parseSelectedDate(params.date));
+  const [currentTime, setCurrentTime] = useState(() => new Date());
+  const [showDatePickerModal, setShowDatePickerModal] = useState(false);
+  const [calendarMonth, setCalendarMonth] = useState(() =>
+    startOfMonth(parseSelectedDate(params.date)),
+  );
+
   const [lastPayment, setLastPayment] = useState<PaymentType>(PaymentType.CASH);
-  const [lastSource, setLastSource] = useState<TripSource>(TripSource.TAXI);
-  const [selectedDate, setSelectedDate] = useState<Date>(new Date());
-  const [editingTrip, setEditingTrip] = useState<TodayTripRow | null>(null);
-  const [showFinishModal, setShowFinishModal] = useState(false);
-  const [amountInput, setAmountInput] = useState("");
-  const [payment, setPayment] = useState<PaymentType>(PaymentType.CASH);
-  const [source, setSource] = useState<TripSource>(TripSource.TAXI);
-  const [customSource, setCustomSource] = useState("");
-  const [chargedAmountInput, setChargedAmountInput] = useState("");
-  const [cashTipInput, setCashTipInput] = useState("");
-  const [workdayModalMode, setWorkdayModalMode] =
-    useState<WorkdayModalMode>(null);
-  const [workdayStartOdometerInput, setWorkdayStartOdometerInput] =
-    useState("");
-  const [workdayEndOdometerInput, setWorkdayEndOdometerInput] = useState("");
+  const [, setLastSource] = useState<TripSource>(TripSource.TAXI);
+  const [selectedGroup, setSelectedGroup] = useState<SummaryDrilldownGroup | null>(null);
+  const [showCloseWorkdayModal, setShowCloseWorkdayModal] = useState(false);
+  const [endOdometerInput, setEndOdometerInput] = useState("");
 
   const {
-    activeTripId,
-    trips,
-    weeklySummary,
-    monthlySummary,
-    goals,
     workdayInfo,
     activeWorkday,
+    trips,
     dailySummary,
     refreshData,
-  } = useTodayScreen(selectedDate);
+  } = useSummaryScreen(selectedDate);
 
-  const {
-    handleStartTrip,
-    handleSaveTrip,
-    handleDeleteTrip,
-    handleOpenWorkday,
-    handleCloseWorkday,
-  } = useTripActions({
+  const { handleCloseWorkday } = useTripActions({
     refreshData,
     setLastPayment,
     setLastSource,
-    setEditingTrip,
-    setShowFinishModal,
-    setAmountInput,
-    setCustomSource,
   });
 
-  const tripHistoryProjections = useMemo(
-    () => trips.map((trip) => toTripVisualProjection(trip)),
-    [trips],
-  );
-
-  const paymentRows = useMemo(
-    () =>
-      [
-        {
-          label: "Efectivo",
-          count: trips.filter((trip) => trip.payment === PaymentType.CASH).length,
-          amount: dailySummary?.efectivo ?? null,
-        },
-        {
-          label: "Tarjeta",
-          count: trips.filter((trip) => trip.payment === PaymentType.CARD).length,
-          amount: dailySummary?.tarjeta ?? null,
-        },
-        {
-          label: "App",
-          count: trips.filter((trip) => trip.payment === PaymentType.APP).length,
-          amount: dailySummary?.app ?? null,
-        },
-      ],
-    [dailySummary?.app, dailySummary?.efectivo, dailySummary?.tarjeta, trips],
-  );
+  const completeServiceFlowRef = useRef<
+    CompleteServiceFlowControllerHandle | null
+  >(null);
 
   const projection = useMemo(
     () =>
-      buildTodayScreenProjection({
+      buildSummaryScreenProjection({
         selectedDate,
-        activeTripId,
-        trips,
-        weeklySummary,
-        monthlySummary,
-        goals,
+        currentTime,
         workdayInfo,
         activeWorkday,
+        trips,
         dailySummary,
       }),
-    [
-      activeTripId,
-      activeWorkday,
-      dailySummary,
-      goals,
-      monthlySummary,
-      selectedDate,
-      trips,
-      weeklySummary,
-      workdayInfo,
-    ],
+    [activeWorkday, dailySummary, currentTime, selectedDate, trips, workdayInfo],
   );
 
-  const hasActiveWorkday = Boolean(activeWorkday);
-  const hasActiveTrip = Boolean(activeTripId);
-  const progressPercent = getProgressPercent(projection.totalToday, goals.daily);
-  const progressFill = clampPercent(progressPercent);
-  const remainingDaily = Math.max(goals.daily - projection.totalToday, 0);
-  const remainingWeekly = projection.remainingWeekly;
-  const remainingMonthly = projection.remainingMonthly;
+  useEffect(() => {
+    const nextSelectedDate = parseSelectedDate(params.date);
+    setSelectedDate(nextSelectedDate);
+    setCalendarMonth(startOfMonth(nextSelectedDate));
+  }, [params.date]);
 
-  const primaryActionLabel = !hasActiveWorkday
-    ? "Abrir jornada"
-    : hasActiveTrip
-      ? "Finalizar viaje"
-      : "Cerrar jornada";
+  useEffect(() => {
+    const timer = setInterval(() => setCurrentTime(new Date()), 60000);
+    return () => clearInterval(timer);
+  }, []);
 
-  const primaryActionHandler = !hasActiveWorkday
-    ? () => openWorkdayModal("open")
-    : hasActiveTrip
-      ? handleOpenFinish
-      : () => openWorkdayModal("close");
+  useEffect(() => {
+    setSelectedGroup(null);
+  }, [selectedDate]);
 
-  function handleOpenFinish() {
-    setEditingTrip(null);
-    setPayment(lastPayment);
-    setSource(lastSource);
-    setCustomSource("");
-    setAmountInput("");
-    setShowFinishModal(true);
-    setChargedAmountInput("");
-    setCashTipInput("");
-  }
+  const openGroups = selectedGroup?.trips ?? [];
+  const hasOpenWorkday = projection.statusLabel === "ABIERTA";
+  const canExportWorkday = projection.workdayId !== null;
+  const isLatestAvailableDate = isSameDay(selectedDate, new Date());
 
-  const handleOpenManualTrip = () => {
-    if (!hasActiveWorkday) return;
-
-    setEditingTrip({
-      id: -1,
-      startTime: new Date().toISOString(),
-      endTime: new Date().toISOString(),
-      amount: null,
-      payment: PaymentType.CASH,
-      source: TripSource.TAXI,
-    } as any);
-    setAmountInput("");
-    setPayment(PaymentType.CASH);
-    setSource(TripSource.TAXI);
-    setCustomSource("");
-    setShowFinishModal(true);
+  const openDrilldown = (group: SummaryDrilldownGroup) => {
+    setSelectedGroup(group);
   };
 
-  function openWorkdayModal(mode: WorkdayModalMode) {
-    setWorkdayModalMode(mode);
-    if (mode === "open") {
-      setWorkdayStartOdometerInput("");
-      setWorkdayEndOdometerInput("");
-      return;
-    }
+  const closeDrilldown = () => {
+    setSelectedGroup(null);
+  };
 
-    setWorkdayStartOdometerInput("");
-    setWorkdayEndOdometerInput(
-      workdayInfo?.endOdometer !== null && workdayInfo?.endOdometer !== undefined
-        ? String(workdayInfo.endOdometer)
-        : "",
-    );
-  }
+  const openPendingService = (trip: TripVisualProjection) => {
+    completeServiceFlowRef.current?.openForPendingService({
+      tripId: trip.id,
+      payment: lastPayment,
+      source: platformIdToTripSource(trip.platform.id),
+    });
+  };
 
-  const closeWorkdayModal = () => {
-    setWorkdayModalMode(null);
-    setWorkdayStartOdometerInput("");
-    setWorkdayEndOdometerInput("");
+  const openDatePickerModal = () => {
+    setCalendarMonth(startOfMonth(selectedDate));
+    setShowDatePickerModal(true);
+  };
+
+  const closeDatePickerModal = () => {
+    setShowDatePickerModal(false);
   };
 
   const handleSaveWorkday = async () => {
-    if (workdayModalMode === null) {
-      return;
-    }
-
-    if (workdayModalMode === "open") {
-      const startOdometer = parsePositiveIntegerInput(workdayStartOdometerInput);
-      const validation = validateWorkdayOdometers(startOdometer, null);
-
-      if (!validation.ok || startOdometer === null) {
-        Alert.alert(
-          "Odómetro inicial inválido",
-          "Introduce un odómetro inicial entero y positivo.",
-        );
-        return;
-      }
-
-      await handleOpenWorkday(startOdometer);
-      closeWorkdayModal();
-      return;
-    }
-
-    const trimmedEndOdometer = workdayEndOdometerInput.trim();
+    const trimmedEndOdometer = endOdometerInput.trim();
     const endOdometer =
-      trimmedEndOdometer === ""
-        ? null
-        : parsePositiveIntegerInput(trimmedEndOdometer);
+      trimmedEndOdometer === "" ? null : parsePositiveIntegerInput(trimmedEndOdometer);
 
     if (trimmedEndOdometer !== "" && endOdometer === null) {
       Alert.alert(
@@ -320,465 +266,356 @@ export default function SummaryScreen() {
       return;
     }
 
-    const validation = validateWorkdayOdometers(null, endOdometer);
-    if (!validation.ok) {
-      Alert.alert(
-        "Odómetro final inválido",
-        "Introduce un odómetro final válido.",
-      );
-      return;
-    }
-
     await handleCloseWorkday(endOdometer);
-    closeWorkdayModal();
+    setShowCloseWorkdayModal(false);
+    setEndOdometerInput("");
   };
 
-  const handleSave = async () => {
-    await handleSaveTrip({
-      editingTrip,
-      amountInput,
-      payment,
-      chargedAmountInput,
-      cashTipInput,
-      source,
-      customSource,
-    });
+  const handleExportWorkday = async () => {
+    if (!canExportWorkday || projection.workdayId === null) return;
+    await ExportService.exportWorkdayTripsToCSV(projection.workdayId);
   };
 
-  const handleDelete = async () => {
-    await handleDeleteTrip({ editingTrip });
-  };
+  const header = (
+    <View style={styles.headerContainer}>
+      <View style={styles.heroBlock}>
+        <Text style={styles.kicker}>Resumen de jornada</Text>
+        <View style={styles.heroTopRow}>
+          <Text style={styles.dateLabel}>{formatDateLabel(selectedDate)}</Text>
+          <Text
+            style={[
+              styles.statusPill,
+              hasOpenWorkday ? styles.statusOpen : styles.statusClosed,
+            ]}
+          >
+            {projection.statusLabel}
+          </Text>
+        </View>
+        <View style={styles.contextBarBottomRow}>
+          <View style={styles.contextBarBottomLeft}>
+            <Pressable
+              hitSlop={10}
+              onPress={() => setSelectedDate((current) => addCalendarDays(current, -1))}
+            >
+              <Text style={styles.dateNavigatorArrow}>‹</Text>
+            </Pressable>
+
+            <Pressable
+              hitSlop={10}
+              onPress={openDatePickerModal}
+              style={({ pressed }) => [
+                styles.contextCalendarButton,
+                pressed && styles.contextCalendarButtonPressed,
+              ]}
+              accessibilityRole="button"
+              accessibilityLabel="Abrir selector de fechas"
+            >
+              <Text style={styles.contextCalendarIcon}>📅</Text>
+            </Pressable>
+
+            <Pressable
+              hitSlop={10}
+              disabled={isLatestAvailableDate}
+              onPress={() => setSelectedDate((current) => addCalendarDays(current, 1))}
+              style={({ pressed }) => [
+                isLatestAvailableDate && styles.dateNavigatorDisabled,
+                pressed && !isLatestAvailableDate && styles.dateNavigatorPressed,
+              ]}
+            >
+              <Text
+                style={[
+                  styles.dateNavigatorArrow,
+                  isLatestAvailableDate && styles.dateNavigatorArrowDisabled,
+                ]}
+              >
+                ›
+              </Text>
+            </Pressable>
+          </View>
+        </View>
+        <Text style={styles.heroValue}>{formatMoney(projection.totalAmount)}</Text>
+        <Text style={styles.heroMeta}>
+          {projection.totalServices} servicios · Propinas {formatMoney(projection.tipTotalAmount)}
+        </Text>
+        <Text style={styles.heroNote}>{projection.statusNote}</Text>
+      </View>
+
+      <View style={styles.section}>
+        <SectionTitle title="Estado y conciliación" />
+        <MetricRow
+          label="Horas trabajadas"
+          value={projection.workedDurationLabel}
+          detail={projection.workdayRangeLabel}
+        />
+        {projection.workedKilometers !== null ? (
+          <MetricRow
+            label="Kilómetros trabajados"
+            value={`${projection.workedKilometers} km`}
+          />
+        ) : null}
+        <MetricRow
+          label="Servicios cerrados"
+          value={String(projection.completedServices)}
+        />
+        {projection.incidentServices > 0 ? (
+          <MetricRow
+            label="Incidencias visibles"
+            value={String(projection.incidentServices)}
+          />
+        ) : null}
+      </View>
+
+      <View style={styles.section}>
+        <SectionTitle title="Propinas" subtitle="Separadas de la recaudación principal" />
+        <MetricRow label="Tarjeta" value={formatMoney(projection.tipCardAmount)} />
+        <MetricRow label="Efectivo" value={formatMoney(projection.tipCashAmount)} />
+      </View>
+
+      <View style={styles.section}>
+        <SectionTitle title="Por plataforma" subtitle="Pulsa para ver solo esos servicios" />
+        {projection.platformRows.map((group) => (
+          <DrilldownRow
+            key={group.id}
+            group={group}
+            onPress={() => openDrilldown(group)}
+          />
+        ))}
+      </View>
+
+      <View style={styles.section}>
+        <SectionTitle title="Por método de cobro" subtitle="Pulsa para el mismo drill-down filtrado" />
+        {projection.paymentRows.map((group) => (
+          <DrilldownRow
+            key={group.id}
+            group={group}
+            onPress={() => openDrilldown(group)}
+          />
+        ))}
+      </View>
+
+      <View style={styles.section}>
+        <SectionTitle title="Revisión" subtitle="Servicios pendientes o en curso" />
+        {projection.incidentRows.length > 0 ? (
+          projection.incidentRows.map((group) => (
+            <DrilldownRow
+              key={group.id}
+              group={group}
+              onPress={() => openDrilldown(group)}
+            />
+          ))
+        ) : (
+          <Text style={styles.sectionEmpty}>Sin incidencias relevantes.</Text>
+        )}
+      </View>
+
+      <View style={styles.section}>
+        <SectionTitle title="Servicios de la jornada" subtitle="Listado completo y cronológico" />
+      </View>
+    </View>
+  );
+
+  const footer = (
+    <View style={styles.footer}>
+      <View style={styles.footerActions}>
+        {hasOpenWorkday ? (
+          <Pressable
+            onPress={() => {
+              setEndOdometerInput(
+                workdayInfo?.endOdometer !== null && workdayInfo?.endOdometer !== undefined
+                  ? String(workdayInfo.endOdometer)
+                  : "",
+              );
+              setShowCloseWorkdayModal(true);
+            }}
+            style={styles.primaryAction}
+          >
+            <Text style={styles.primaryActionText}>Cerrar jornada</Text>
+          </Pressable>
+        ) : null}
+
+        {canExportWorkday ? (
+          <Pressable onPress={handleExportWorkday} style={styles.secondaryAction}>
+            <Text style={styles.secondaryActionText}>Exportar esta jornada</Text>
+          </Pressable>
+        ) : null}
+      </View>
+
+      <Pressable onPress={() => router.push("/")} style={styles.backLink}>
+        <Text style={styles.backLinkText}>Volver a la Home</Text>
+      </Pressable>
+    </View>
+  );
 
   return (
     <SafeAreaView style={styles.screen} edges={["top", "bottom"]}>
-      <ScrollView contentContainerStyle={styles.content}>
-        <View style={styles.header}>
-          <Text style={styles.kicker}>Resumen diario</Text>
-          <Text style={styles.title}>Revisión antes del cierre</Text>
-          <Text style={styles.subtitle}>
-            ¿Está todo correcto antes de cerrar la jornada?
-          </Text>
-        </View>
-
-        <View style={styles.dateBar}>
-          <Pressable
-            onPress={() =>
-              setSelectedDate((current) => addCalendarDays(current, -1))
-            }
-            style={styles.dateButton}
-          >
-            <Text style={styles.dateButtonText}>‹</Text>
-          </Pressable>
-
-          <Text style={styles.dateLabel}>{formatDateLabel(selectedDate)}</Text>
-
-          <Pressable
-            onPress={() =>
-              setSelectedDate((current) => addCalendarDays(current, 1))
-            }
-            style={styles.dateButton}
-          >
-            <Text style={styles.dateButtonText}>›</Text>
-          </Pressable>
-        </View>
-
-        <SummaryCard title="Estado de la jornada">
-          <KeyValueRow
-            label="Contexto"
-            value={
-              hasActiveWorkday
-                ? "Jornada abierta"
-                : projection.resolvedWorkdayInfo.isVirtual
-                  ? "Sin jornada registrada"
-                  : "Jornada cerrada"
-            }
-          />
-          <KeyValueRow
-            label="Inicio"
-            value={formatTimeLabel(
-              activeWorkday?.startTime ?? projection.resolvedWorkdayInfo.startTime,
-            )}
-          />
-          <KeyValueRow
-            label="Fin"
-            value={formatTimeLabel(projection.resolvedWorkdayInfo.endTime)}
-          />
-          <KeyValueRow
-            label="Odómetro inicial"
-            value={
-              projection.resolvedWorkdayInfo.startOdometer === null
-                ? "—"
-                : String(projection.resolvedWorkdayInfo.startOdometer)
-            }
-          />
-          <KeyValueRow
-            label="Odómetro final"
-            value={
-              projection.resolvedWorkdayInfo.endOdometer === null
-                ? "—"
-                : String(projection.resolvedWorkdayInfo.endOdometer)
-            }
-          />
-          <KeyValueRow
-            label="Kilómetros trabajados"
-            value={
-              projection.resolvedWorkdayInfo.workedKilometers === null
-                ? "—"
-                : `${projection.resolvedWorkdayInfo.workedKilometers} km`
-            }
-          />
-          {hasActiveTrip && (
-            <Text style={styles.notice}>
-              Hay un viaje activo. Debe finalizarse antes de cerrar la jornada.
-            </Text>
-          )}
-        </SummaryCard>
-
-        <SummaryCard title="Recaudación del día">
-          <View style={styles.heroMetric}>
-            <Text style={styles.heroLabel}>Recaudación</Text>
-            <Text style={styles.heroValue}>{formatMoney(projection.totalToday)}</Text>
-          </View>
-
-          <View style={styles.progressHeader}>
-            <Text style={styles.progressMeta}>
-              Objetivo {formatMoney(goals.daily)} · Restan {formatMoney(remainingDaily)}
-            </Text>
-            {progressPercent !== null && progressPercent >= 100 ? (
-              <Text style={styles.goalReached}>Objetivo alcanzado</Text>
-            ) : null}
-          </View>
-          {progressPercent !== null && <ProgressBar percent={progressFill} />}
-          {progressPercent !== null && (
-            <Text style={styles.progressPercent}>
-              {progressPercent.toFixed(0)}%
-            </Text>
-          )}
-
-          <View style={styles.inlineMetrics}>
-            <KeyValueRow
-              label="Total de servicios"
-              value={String(dailySummary?.servicesTotal ?? trips.length)}
-            />
-            <KeyValueRow
-              label="Servicios finalizados"
-              value={String(trips.filter((trip) => trip.endTime !== null).length)}
-            />
-          </View>
-        </SummaryCard>
-
-        <SummaryCard title="Resumen por plataforma">
-          {[
-            { label: "Taxi", services: dailySummary?.servicesTaxi, amount: dailySummary?.taxi },
-            { label: "Uber", services: dailySummary?.servicesUber, amount: dailySummary?.uber },
-            { label: "Cabify", services: dailySummary?.servicesCabify, amount: dailySummary?.cabify },
-            { label: "FreeNow", services: dailySummary?.servicesFreeNow, amount: dailySummary?.freeNow },
-            { label: "Otros", services: dailySummary?.servicesOther, amount: null },
-          ].map((item) => (
-            <View key={item.label} style={styles.platformRow}>
-              <Text style={styles.platformLabel}>{item.label}</Text>
-              <Text style={styles.platformCount}>
-                {item.services ?? 0} servicios
-              </Text>
-              <Text style={styles.platformAmount}>
-                {item.amount === null ? "—" : formatMoney(item.amount)}
-              </Text>
-            </View>
-          ))}
-        </SummaryCard>
-
-        <SummaryCard title="Resumen por método de cobro">
-          {paymentRows.map((item) => (
-            <View key={item.label} style={styles.platformRow}>
-              <Text style={styles.platformLabel}>{item.label}</Text>
-              <Text style={styles.platformCount}>{item.count} servicios</Text>
-              <Text style={styles.platformAmount}>
-                {item.amount === null ? "—" : formatMoney(item.amount)}
-              </Text>
-            </View>
-          ))}
-          <View style={styles.tipBlock}>
-            <Text style={styles.tipTitle}>Propinas</Text>
-            <KeyValueRow
-              label="Tarjeta"
-              value={formatMoney(dailySummary?.propinaTarjeta)}
-            />
-            <KeyValueRow
-              label="Efectivo"
-              value={formatMoney(dailySummary?.propinaEfectivo)}
-            />
-          </View>
-        </SummaryCard>
-
-        <SummaryCard title="Resumen semanal y mensual">
-          <View style={styles.compareHeader}>
-            <Text style={styles.compareLabel} />
-            <Text style={styles.compareLabel}>Semana</Text>
-            <Text style={styles.compareLabel}>Mes</Text>
-          </View>
-
-          {[
-            ["Total", "total"],
-            ["Taxi", "taxi"],
-            ["Uber", "uber"],
-            ["Cabify", "cabify"],
-            ["FreeNow", "freeNow"],
-            ["Efectivo", "efectivo"],
-            ["Tarjeta", "tarjeta"],
-            ["App", "app"],
-          ].map(([label, key]) => (
-            <View key={key} style={styles.compareRow}>
-              <Text style={styles.compareMetricLabel}>{label}</Text>
-              <Text style={styles.compareMetricValue}>
-                {weeklySummary?.[key] !== undefined
-                  ? formatMoney(weeklySummary[key])
-                  : "—"}
-              </Text>
-              <Text style={styles.compareMetricValue}>
-                {monthlySummary?.[key] !== undefined
-                  ? formatMoney(monthlySummary[key])
-                  : "—"}
-              </Text>
-            </View>
-          ))}
-
-          <View style={styles.goalGrid}>
-            <KeyValueRow
-              label="Objetivo diario"
-              value={`${formatMoney(goals.daily)} · restan ${formatMoney(remainingDaily)}`}
-            />
-            <KeyValueRow
-              label="Objetivo semanal"
-              value={
-                weeklySummary?.total !== undefined
-                  ? `${formatMoney(weeklySummary.total)} · restan ${formatMoney(remainingWeekly)}`
-                  : "—"
-              }
-            />
-            <KeyValueRow
-              label="Objetivo mensual"
-              value={
-                monthlySummary?.total !== undefined
-                  ? `${formatMoney(monthlySummary.total)} · restan ${formatMoney(remainingMonthly)}`
-                  : "—"
-              }
-            />
-          </View>
-        </SummaryCard>
-
-        <SummaryCard title="Historial operativo">
-          <TripHistory
-            trips={tripHistoryProjections}
-            onRegisteredTripPress={(tripId) =>
+      <FlatList
+        data={projection.tripHistory}
+        keyExtractor={(item) => String(item.id)}
+        contentContainerStyle={styles.content}
+        ListHeaderComponent={header}
+        ListFooterComponent={footer}
+        ItemSeparatorComponent={() => <View style={styles.itemSeparator} />}
+        renderItem={({ item }) => (
+          <TripHistoryRow
+            trip={item}
+            onRegisteredPress={(tripId) =>
               router.push({
                 pathname: "/trip/edit",
                 params: { tripId },
               })
             }
+            onPendingPress={(trip) => openPendingService(trip)}
           />
-        </SummaryCard>
+        )}
+        ListEmptyComponent={<TripHistoryEmptyState />}
+      />
 
-        <SummaryCard title="Acciones">
-          <View style={styles.actionStack}>
-            <Pressable style={styles.primaryAction} onPress={primaryActionHandler}>
-              <Text style={styles.primaryActionText}>{primaryActionLabel}</Text>
-            </Pressable>
+      <SummaryDrilldownSheet
+        visible={selectedGroup !== null}
+        title={selectedGroup?.title ?? ""}
+        subtitle={selectedGroup?.subtitle ?? ""}
+        countLabel={`${selectedGroup?.count ?? 0} servicios`}
+        amountLabel={formatMoney(selectedGroup?.amount ?? 0)}
+        trips={openGroups}
+        onClose={closeDrilldown}
+        onRegisteredTripPress={(tripId) =>
+          router.push({
+            pathname: "/trip/edit",
+            params: { tripId },
+          })
+        }
+        onPendingTripPress={(trip) => openPendingService(trip)}
+      />
 
-            <View style={styles.secondaryActions}>
-              {hasActiveWorkday && (
-                <Pressable style={styles.secondaryAction} onPress={handleOpenManualTrip}>
-                  <Text style={styles.secondaryActionText}>Añadir viaje manual</Text>
-                </Pressable>
-              )}
+      <CompleteServiceFlowController
+        ref={completeServiceFlowRef}
+        refreshData={refreshData}
+        setLastPayment={setLastPayment}
+        setLastSource={setLastSource}
+        onServiceSaved={() => {
+          setSelectedGroup(null);
+        }}
+        onCompleteLater={refreshData}
+      />
 
-              {workdayInfo && (
-                <Pressable
-                  style={styles.secondaryAction}
-                  onPress={() => openWorkdayModal("close")}
-                >
-                  <Text style={styles.secondaryActionText}>Cerrar jornada</Text>
-                </Pressable>
-              )}
-
-              {workdayInfo && (
-                <Pressable
-                  style={styles.secondaryAction}
-                  onPress={() => openWorkdayModal("open")}
-                >
-                  <Text style={styles.secondaryActionText}>Abrir jornada</Text>
-                </Pressable>
-              )}
-
-              <Pressable
-                style={styles.secondaryAction}
-                onPress={() => ExportService.exportTripsToCSV()}
-              >
-                <Text style={styles.secondaryActionText}>Exportar CSV</Text>
-              </Pressable>
-            </View>
-          </View>
-        </SummaryCard>
-
-        <View style={styles.footer}>
-          <Pressable onPress={() => router.push("/")} style={styles.backLink}>
-            <Text style={styles.backLinkText}>Volver a la Home</Text>
-          </Pressable>
-        </View>
-      </ScrollView>
-
-      <Modal visible={showFinishModal} transparent animationType="slide">
+      {showCloseWorkdayModal ? (
         <View style={styles.modalOverlay}>
           <View style={styles.modalCard}>
-            <Text style={styles.modalTitle}>
-              {editingTrip ? "Editar viaje" : "Finalizar viaje"}
-            </Text>
-
-            <Text>Importe del viaje (€)</Text>
+            <Text style={styles.modalTitle}>Cerrar jornada</Text>
+            <Text>Odómetro final</Text>
             <TextInput
-              value={amountInput}
-              onChangeText={setAmountInput}
-              keyboardType="decimal-pad"
-              placeholder="0,00"
-              autoFocus
+              value={endOdometerInput}
+              onChangeText={setEndOdometerInput}
+              keyboardType="number-pad"
+              placeholder="123789"
               style={styles.input}
             />
-
-            {payment === PaymentType.CARD && (
-              <>
-                <Text style={{ marginTop: 10 }}>Importe cobrado (€)</Text>
-                <TextInput
-                  value={chargedAmountInput}
-                  onChangeText={setChargedAmountInput}
-                  keyboardType="decimal-pad"
-                  placeholder={amountInput || "0,00"}
-                  style={styles.input}
-                />
-              </>
-            )}
-
-            {payment === PaymentType.CASH && (
-              <>
-                <Text style={{ marginTop: 10 }}>Importe cobrado (€)</Text>
-                <TextInput
-                  value={cashTipInput}
-                  onChangeText={setCashTipInput}
-                  keyboardType="decimal-pad"
-                  placeholder="0,00"
-                  style={styles.input}
-                />
-              </>
-            )}
-
-            <Text style={{ marginTop: 10 }}>Forma de pago</Text>
-            <View style={styles.chipRow}>
-              {[PaymentType.CASH, PaymentType.CARD, PaymentType.APP].map((p) => (
-                <Pressable
-                  key={p}
-                  onPress={() => setPayment(p)}
-                  style={[styles.chip, payment === p && styles.chipActive]}
-                >
-                  <Text>{p}</Text>
-                </Pressable>
-              ))}
-            </View>
-
-            <Text style={{ marginTop: 10 }}>Tipo de viaje</Text>
-            <View style={styles.chipRow}>
-              {[TripSource.TAXI, TripSource.UBER, TripSource.CABIFY, TripSource.FREE_NOW].map(
-                (s) => (
-                  <Pressable
-                    key={s}
-                    onPress={() => setSource(s)}
-                    style={[styles.chip, source === s && styles.chipActive]}
-                  >
-                    <Text>{s}</Text>
-                  </Pressable>
-                ),
-              )}
-            </View>
 
             <View style={styles.modalButtons}>
               <Pressable
                 onPress={() => {
-                  setEditingTrip(null);
-                  setShowFinishModal(false);
+                  setShowCloseWorkdayModal(false);
+                  setEndOdometerInput("");
                 }}
                 style={styles.modalButton}
               >
                 <Text style={styles.modalButtonText}>Cancelar</Text>
               </Pressable>
 
-              <Pressable onPress={handleSave} style={styles.modalButtonPrimary}>
+              <Pressable onPress={handleSaveWorkday} style={styles.modalButtonPrimary}>
                 <Text style={styles.modalButtonPrimaryText}>Guardar</Text>
               </Pressable>
             </View>
-
-            {editingTrip && (
-              <View style={{ marginTop: 10 }}>
-                <Pressable
-                  onPress={() => {
-                    Alert.alert(
-                      "Borrar viaje",
-                      "Esta acción no se puede deshacer.\n\n¿Seguro que quieres borrar este viaje?",
-                      [
-                        { text: "Cancelar", style: "cancel" },
-                        {
-                          text: "Borrar",
-                          style: "destructive",
-                          onPress: handleDelete,
-                        },
-                      ],
-                    );
-                  }}
-                  style={styles.dangerButton}
-                >
-                  <Text style={styles.dangerButtonText}>Borrar viaje</Text>
-                </Pressable>
-              </View>
-            )}
           </View>
         </View>
-      </Modal>
+      ) : null}
 
-      <Modal visible={workdayModalMode !== null} transparent animationType="slide">
+      <Modal visible={showDatePickerModal} transparent animationType="slide">
         <View style={styles.modalOverlay}>
           <View style={styles.modalCard}>
-            <Text style={styles.modalTitle}>
-              {workdayModalMode === "open"
-                ? "Abrir jornada"
-                : "Cerrar jornada"}
-            </Text>
+            <View style={styles.calendarHeader}>
+              <Pressable
+                hitSlop={10}
+                onPress={() => setCalendarMonth((current) => addMonths(current, -1))}
+              >
+                <Text style={styles.calendarHeaderArrow}>‹</Text>
+              </Pressable>
 
-            {workdayModalMode === "open" ? (
-              <>
-                <Text>Odómetro inicial</Text>
-                <TextInput
-                  value={workdayStartOdometerInput}
-                  onChangeText={setWorkdayStartOdometerInput}
-                  keyboardType="number-pad"
-                  placeholder="123456"
-                  style={styles.input}
-                />
-              </>
-            ) : (
-              <>
-                <Text>Odómetro final</Text>
-                <TextInput
-                  value={workdayEndOdometerInput}
-                  onChangeText={setWorkdayEndOdometerInput}
-                  keyboardType="number-pad"
-                  placeholder="123789"
-                  style={styles.input}
-                />
-              </>
-            )}
+              <Text style={styles.modalTitle}>{getMonthLabel(calendarMonth)}</Text>
+
+              <Pressable
+                hitSlop={10}
+                onPress={() => setCalendarMonth((current) => addMonths(current, 1))}
+              >
+                <Text style={styles.calendarHeaderArrow}>›</Text>
+              </Pressable>
+            </View>
+
+            <View style={styles.calendarWeekdays}>
+              {["L", "M", "X", "J", "V", "S", "D"].map((label) => (
+                <Text key={label} style={styles.calendarWeekday}>
+                  {label}
+                </Text>
+              ))}
+            </View>
+
+            <View style={styles.calendarGrid}>
+              {Array.from({
+                length:
+                  (new Date(
+                    calendarMonth.getFullYear(),
+                    calendarMonth.getMonth(),
+                    1,
+                  ).getDay() +
+                    6) %
+                  7,
+              })
+                .fill(null)
+                .map((_, index) => (
+                  <View key={`empty-${index}`} style={styles.calendarCell} />
+                ))}
+
+              {Array.from({ length: getDaysInMonth(calendarMonth) }, (_, index) => {
+                const day = new Date(
+                  calendarMonth.getFullYear(),
+                  calendarMonth.getMonth(),
+                  index + 1,
+                  12,
+                  0,
+                  0,
+                  0,
+                );
+                const selected = isSameDay(day, selectedDate);
+
+                return (
+                  <Pressable
+                    key={day.toISOString()}
+                    onPress={() => {
+                      setSelectedDate(day);
+                      setShowDatePickerModal(false);
+                    }}
+                    style={({ pressed }) => [
+                      styles.calendarCell,
+                      selected && styles.calendarCellSelected,
+                      pressed && styles.calendarCellPressed,
+                    ]}
+                  >
+                    <Text
+                      style={[
+                        styles.calendarCellText,
+                        selected && styles.calendarCellTextSelected,
+                      ]}
+                    >
+                      {index + 1}
+                    </Text>
+                  </Pressable>
+                );
+              })}
+            </View>
 
             <View style={styles.modalButtons}>
-              <Pressable onPress={closeWorkdayModal} style={styles.modalButton}>
+              <Pressable onPress={closeDatePickerModal} style={styles.modalButton}>
                 <Text style={styles.modalButtonText}>Cancelar</Text>
-              </Pressable>
-              <Pressable onPress={handleSaveWorkday} style={styles.modalButtonPrimary}>
-                <Text style={styles.modalButtonPrimaryText}>Guardar</Text>
               </Pressable>
             </View>
           </View>
@@ -794,12 +631,16 @@ const styles = StyleSheet.create({
     backgroundColor: "#f4f1eb",
   },
   content: {
-    padding: 20,
-    gap: 12,
+    paddingHorizontal: 20,
+    paddingTop: 18,
+    paddingBottom: 24,
   },
-  header: {
-    gap: 4,
-    paddingBottom: 4,
+  headerContainer: {
+    gap: 12,
+    paddingBottom: 12,
+  },
+  heroBlock: {
+    gap: 6,
   },
   kicker: {
     fontSize: 12,
@@ -808,23 +649,64 @@ const styles = StyleSheet.create({
     letterSpacing: 1.2,
     color: "#6e6457",
   },
-  title: {
-    fontSize: 26,
-    fontWeight: "800",
-    color: "#1f1a17",
-  },
-  subtitle: {
-    fontSize: 14,
-    color: "#5f564d",
-    lineHeight: 20,
-  },
-  dateBar: {
+  heroTopRow: {
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "space-between",
-    paddingHorizontal: 4,
+    gap: 12,
   },
-  dateButton: {
+  dateLabel: {
+    flex: 1,
+    fontSize: 16,
+    fontWeight: "800",
+    color: "#1f1a17",
+    textTransform: "capitalize",
+  },
+  statusPill: {
+    minHeight: 28,
+    minWidth: 90,
+    paddingHorizontal: 12,
+    borderRadius: 999,
+    alignItems: "center",
+    justifyContent: "center",
+    textAlign: "center",
+    fontSize: 12,
+    fontWeight: "900",
+    letterSpacing: 0.4,
+  },
+  statusOpen: {
+    backgroundColor: "#dff4ef",
+    color: "#0f766e",
+  },
+  statusClosed: {
+    backgroundColor: "#ece5da",
+    color: "#2b2521",
+  },
+  contextBarBottomRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+  },
+  contextBarBottomLeft: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 10,
+  },
+  dateNavigatorArrow: {
+    fontSize: 22,
+    fontWeight: "700",
+    color: "#2b2521",
+  },
+  dateNavigatorArrowDisabled: {
+    color: "#9f968a",
+  },
+  dateNavigatorDisabled: {
+    opacity: 0.45,
+  },
+  dateNavigatorPressed: {
+    opacity: 0.7,
+  },
+  contextCalendarButton: {
     width: 38,
     height: 38,
     borderRadius: 19,
@@ -832,182 +714,137 @@ const styles = StyleSheet.create({
     alignItems: "center",
     justifyContent: "center",
   },
-  dateButtonText: {
-    fontSize: 22,
-    fontWeight: "700",
-    color: "#2b2521",
+  contextCalendarButtonPressed: {
+    opacity: 0.82,
   },
-  dateLabel: {
-    fontSize: 14,
-    fontWeight: "700",
-    color: "#2b2521",
-    textTransform: "capitalize",
-  },
-  card: {
-    backgroundColor: "#fff",
-    borderRadius: 18,
-    padding: 16,
-    borderWidth: 1,
-    borderColor: "rgba(31, 26, 23, 0.08)",
-    gap: 10,
-  },
-  cardTitle: {
+  contextCalendarIcon: {
     fontSize: 16,
-    fontWeight: "800",
-    color: "#1f1a17",
-    marginBottom: 2,
-  },
-  keyValueRow: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-    gap: 12,
-  },
-  keyValueLabel: {
-    fontSize: 13,
-    color: "#6e6457",
-    flex: 1,
-  },
-  keyValueValue: {
-    fontSize: 13,
-    fontWeight: "700",
-    color: "#231d1a",
-    textAlign: "right",
-    flexShrink: 0,
-  },
-  notice: {
-    marginTop: 4,
-    fontSize: 13,
-    lineHeight: 18,
-    color: "#8b4f24",
-    backgroundColor: "#fff6e8",
-    padding: 10,
-    borderRadius: 12,
-  },
-  heroMetric: {
-    paddingVertical: 4,
-    gap: 2,
-  },
-  heroLabel: {
-    fontSize: 13,
-    color: "#6e6457",
-    fontWeight: "700",
-    textTransform: "uppercase",
-    letterSpacing: 0.8,
   },
   heroValue: {
-    fontSize: 32,
+    fontSize: 38,
+    lineHeight: 42,
     fontWeight: "900",
     color: "#181311",
   },
-  progressHeader: {
-    gap: 4,
-  },
-  progressMeta: {
-    fontSize: 13,
-    fontWeight: "600",
+  heroMeta: {
+    fontSize: 14,
+    fontWeight: "700",
     color: "#4d463f",
   },
-  goalReached: {
+  heroNote: {
     fontSize: 13,
-    fontWeight: "800",
-    color: "#1c7c43",
-  },
-  progressRail: {
-    height: 12,
-    borderRadius: 999,
-    backgroundColor: "#e7dfd5",
-    overflow: "hidden",
-  },
-  progressFill: {
-    height: "100%",
-    borderRadius: 999,
-    backgroundColor: "#7b5fff",
-  },
-  progressPercent: {
-    fontSize: 12,
-    fontWeight: "700",
     color: "#6e6457",
-    alignSelf: "flex-end",
   },
-  inlineMetrics: {
-    gap: 8,
-  },
-  platformRow: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 8,
-    paddingVertical: 8,
-    borderBottomWidth: StyleSheet.hairlineWidth,
-    borderBottomColor: "rgba(31, 26, 23, 0.12)",
-  },
-  platformLabel: {
-    width: 76,
-    fontSize: 13,
-    fontWeight: "700",
-    color: "#1f1a17",
-  },
-  platformCount: {
-    flex: 1,
-    fontSize: 13,
-    color: "#5f564d",
-  },
-  platformAmount: {
-    fontSize: 13,
-    fontWeight: "700",
-    color: "#231d1a",
-    textAlign: "right",
-  },
-  tipBlock: {
-    marginTop: 6,
-    paddingTop: 10,
+  section: {
+    paddingVertical: 14,
     borderTopWidth: StyleSheet.hairlineWidth,
     borderTopColor: "rgba(31, 26, 23, 0.12)",
-    gap: 8,
   },
-  tipTitle: {
-    fontSize: 13,
-    fontWeight: "800",
-    color: "#231d1a",
+  sectionTitleBlock: {
+    gap: 2,
+    marginBottom: 10,
   },
-  compareHeader: {
-    flexDirection: "row",
-    alignItems: "center",
-    paddingBottom: 6,
-    borderBottomWidth: StyleSheet.hairlineWidth,
-    borderBottomColor: "rgba(31, 26, 23, 0.12)",
+  sectionTitle: {
+    fontSize: 16,
+    fontWeight: "900",
+    color: "#1f1a17",
   },
-  compareLabel: {
-    flex: 1,
+  sectionSubtitle: {
     fontSize: 12,
-    fontWeight: "800",
+    fontWeight: "600",
     color: "#6e6457",
-    textAlign: "right",
   },
-  compareRow: {
+  metricRow: {
     flexDirection: "row",
-    alignItems: "center",
-    paddingVertical: 7,
+    alignItems: "flex-start",
+    justifyContent: "space-between",
+    gap: 12,
+    paddingVertical: 9,
     borderBottomWidth: StyleSheet.hairlineWidth,
     borderBottomColor: "rgba(31, 26, 23, 0.08)",
   },
-  compareMetricLabel: {
+  metricRowText: {
     flex: 1,
+    minWidth: 0,
+    gap: 2,
+  },
+  metricLabel: {
     fontSize: 13,
     fontWeight: "700",
     color: "#1f1a17",
   },
-  compareMetricValue: {
-    flex: 1,
+  metricDetail: {
+    fontSize: 12,
+    color: "#6e6457",
+  },
+  metricValue: {
     fontSize: 13,
+    fontWeight: "800",
     color: "#231d1a",
     textAlign: "right",
   },
-  goalGrid: {
-    gap: 8,
-    paddingTop: 8,
-  },
-  actionStack: {
+  drilldownRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
     gap: 12,
+    paddingVertical: 11,
+    borderBottomWidth: StyleSheet.hairlineWidth,
+    borderBottomColor: "rgba(31, 26, 23, 0.08)",
+  },
+  drilldownText: {
+    flex: 1,
+    minWidth: 0,
+    gap: 2,
+  },
+  drilldownTitle: {
+    fontSize: 13,
+    fontWeight: "800",
+    color: "#1f1a17",
+  },
+  drilldownSubtitle: {
+    fontSize: 12,
+    color: "#6e6457",
+  },
+  drilldownMeta: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+  },
+  drilldownCount: {
+    minWidth: 24,
+    textAlign: "right",
+    fontSize: 13,
+    fontWeight: "800",
+    color: "#231d1a",
+  },
+  drilldownAmount: {
+    minWidth: 84,
+    textAlign: "right",
+    fontSize: 13,
+    fontWeight: "800",
+    color: "#231d1a",
+  },
+  drilldownChevron: {
+    fontSize: 18,
+    fontWeight: "800",
+    color: "#6e6457",
+  },
+  sectionEmpty: {
+    fontSize: 13,
+    color: "#6e6457",
+    paddingVertical: 6,
+  },
+  itemSeparator: {
+    height: 8,
+  },
+  footer: {
+    gap: 10,
+    paddingTop: 18,
+    paddingBottom: 8,
+  },
+  footerActions: {
+    gap: 10,
   },
   primaryAction: {
     minHeight: 52,
@@ -1018,33 +855,25 @@ const styles = StyleSheet.create({
     paddingHorizontal: 18,
   },
   primaryActionText: {
-    color: "#fff",
+    color: "#ffffff",
     fontSize: 15,
     fontWeight: "800",
   },
-  secondaryActions: {
-    flexDirection: "row",
-    flexWrap: "wrap",
-    gap: 10,
-  },
   secondaryAction: {
-    minHeight: 40,
-    paddingHorizontal: 14,
+    minHeight: 44,
     borderRadius: 12,
     backgroundColor: "#ece5da",
     alignItems: "center",
     justifyContent: "center",
+    paddingHorizontal: 14,
   },
   secondaryActionText: {
     fontSize: 13,
     fontWeight: "700",
     color: "#2b2521",
   },
-  footer: {
-    alignItems: "center",
-    paddingBottom: 8,
-  },
   backLink: {
+    alignSelf: "center",
     paddingVertical: 8,
     paddingHorizontal: 12,
   },
@@ -1054,7 +883,7 @@ const styles = StyleSheet.create({
     color: "#6e6457",
   },
   modalOverlay: {
-    flex: 1,
+    ...StyleSheet.absoluteFillObject,
     backgroundColor: "rgba(0,0,0,0.45)",
     justifyContent: "center",
     padding: 20,
@@ -1086,6 +915,55 @@ const styles = StyleSheet.create({
     gap: 12,
     marginTop: 6,
   },
+  calendarHeader: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    gap: 12,
+    marginBottom: 10,
+  },
+  calendarHeaderArrow: {
+    fontSize: 22,
+    fontWeight: "700",
+    color: "#2b2521",
+  },
+  calendarWeekdays: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    marginBottom: 10,
+  },
+  calendarWeekday: {
+    width: 36,
+    textAlign: "center",
+    fontSize: 11,
+    fontWeight: "800",
+    color: "#6e6457",
+  },
+  calendarGrid: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+  },
+  calendarCell: {
+    width: "14.2857%",
+    aspectRatio: 1,
+    alignItems: "center",
+    justifyContent: "center",
+    borderRadius: 12,
+  },
+  calendarCellPressed: {
+    backgroundColor: "#f0e8dc",
+  },
+  calendarCellSelected: {
+    backgroundColor: "#d8ccb8",
+  },
+  calendarCellText: {
+    fontSize: 14,
+    fontWeight: "700",
+    color: "#2b2521",
+  },
+  calendarCellTextSelected: {
+    color: "#1f1a17",
+  },
   modalButton: {
     flex: 1,
     minHeight: 44,
@@ -1112,31 +990,7 @@ const styles = StyleSheet.create({
     fontWeight: "800",
     color: "#fff",
   },
-  dangerButton: {
-    minHeight: 44,
-    borderRadius: 12,
-    backgroundColor: "#ffe8e8",
-    alignItems: "center",
-    justifyContent: "center",
-  },
-  dangerButtonText: {
-    fontSize: 13,
-    fontWeight: "800",
-    color: "#b42318",
-  },
-  chipRow: {
-    flexDirection: "row",
-    flexWrap: "wrap",
-    gap: 8,
-    marginTop: 6,
-  },
-  chip: {
-    paddingVertical: 10,
-    paddingHorizontal: 14,
-    borderRadius: 999,
-    backgroundColor: "#eee6da",
-  },
-  chipActive: {
-    backgroundColor: "#d8ccb8",
+  pressed: {
+    opacity: 0.82,
   },
 });

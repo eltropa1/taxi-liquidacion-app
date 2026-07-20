@@ -21,8 +21,8 @@ No recoge detalles de implementación, arquitectura ni persistencia. Su objetivo
 | Metas | `/goals` | Activa | Permite ver y editar metas diarias, semanales y mensuales. | Alta | Sí |
 | Edición de viaje | `/trip/edit` | Activa | Permite revisar y corregir un viaje existente. | Alta | Sí |
 | Nuevo viaje | `/trip/new` | Placeholder | Solo muestra el texto `NUEVO VIAJE`. | Baja | Sí |
-| Resumen | `/summary` | Placeholder | Solo muestra el texto `app-summary-index`. | Baja | Sí |
-| Detalle de resumen | `/summary/detail` | Placeholder | Solo muestra el texto `app-summary-detail`. | Baja | Sí |
+| Resumen | `/summary` | Activa | Revisión, conciliación y cierre de una jornada con navegación temporal, drill-down y exportación secundaria. | Alta | Sí |
+| Detalle de resumen | `/summary/detail` | Eliminada | No existe como ruta funcional. | Baja | No |
 | Configuración | `/settings` | Placeholder | Solo muestra el texto `app-settings-index`. | Baja | Sí |
 
 ## Navegación
@@ -33,7 +33,8 @@ No recoge detalles de implementación, arquitectura ni persistencia. Su objetivo
 - La pantalla principal permite abrir el flujo de finalización o de alta manual de viaje en un modal.
 - La pantalla de metas permite volver atrás.
 - La pantalla de edición de viaje permite volver atrás.
-- Las pantallas `Nuevo viaje`, `Resumen`, `Detalle de resumen` y `Configuración` no tienen acceso visible desde la navegación principal actual.
+- Las pantallas `Nuevo viaje` y `Configuración` no tienen acceso visible desde la navegación principal actual.
+- `Resumen` sí tiene acceso visible desde la navegación principal.
 - No hay barra inferior, menú lateral ni navegación por pestañas visible.
 
 ## Flujos De Usuario
@@ -75,6 +76,7 @@ No recoge detalles de implementación, arquitectura ni persistencia. Su objetivo
 
 - En la pantalla principal el usuario puede desplegar el detalle diario, las metas y el resumen semanal/mensual.
 - El usuario puede cambiar la fecha con flechas día a día.
+- En `Resumen`, el usuario puede navegar entre jornadas, consultar el detalle de la jornada actual o histórica y abrir el selector de fecha.
 
 ### 7. Exportación
 
@@ -129,8 +131,8 @@ No recoge detalles de implementación, arquitectura ni persistencia. Su objetivo
 | Voz | Inexistente en UI | No hay acción visible, pantalla ni control de voz para el usuario. | Baja | No aplica |
 | Estadísticas GEO por barrio/distrito | No expuesto | No hay pantalla visible para estas estadísticas; no forman parte del flujo actual del usuario. | Baja | No aplica |
 | Pantalla nuevo viaje | Placeholder | Solo muestra un texto de marcador. | Baja | Sí |
-| Pantalla resumen | Placeholder | Solo muestra un texto de marcador. | Baja | Sí |
-| Pantalla detalle de resumen | Placeholder | Solo muestra un texto de marcador. | Baja | Sí |
+| Pantalla resumen | Activa | Muestra revisión, conciliación y cierre de una jornada con desglose por plataforma, cobro, incidencias y listado completo. | Alta | Sí |
+| Pantalla detalle de resumen | Eliminada | No existe como ruta funcional. | Baja | No |
 | Pantalla configuración | Placeholder | Solo muestra un texto de marcador. | Baja | Sí |
 | Soporte de tipo de viaje personalizado | Latente | Existe soporte de datos, pero no hay control visible para elegirlo en el flujo principal actual. | Baja | No aplica |
 | Soporte de voz / dictado | Latente | Hay un servicio no expuesto al usuario en el estado actual. | Baja | No aplica |
@@ -138,14 +140,15 @@ No recoge detalles de implementación, arquitectura ni persistencia. Su objetivo
 ## Pantallas Placeholder
 
 - `Nuevo viaje`: muestra `NUEVO VIAJE`.
-- `Resumen`: muestra `app-summary-index`.
-- `Detalle de resumen`: muestra `app-summary-detail`.
+- `Resumen`: muestra una pantalla funcional de jornada.
+- `Detalle de resumen`: no existe como ruta funcional.
 - `Configuración`: muestra `app-settings-index`.
 
 ## Funcionalidades Incompletas
 
 - No existe un flujo real de `Nuevo viaje` como pantalla dedicada.
-- No existe una vista funcional de `Resumen` ni de `Detalle de resumen`.
+- `Resumen` es una vista funcional centrada en una jornada.
+- No existe una vista funcional de `Detalle de resumen`.
 - No existe una pantalla funcional de `Configuración`.
 - No existe entrada visible para voz.
 - No existe un flujo visible para tipo de viaje personalizado desde la pantalla principal.
@@ -172,5 +175,5 @@ No recoge detalles de implementación, arquitectura ni persistencia. Su objetivo
 ## Criterio De Paridad
 
 - Debe mantenerse exactamente igual todo lo que el usuario puede ver y hacer hoy en las pantallas activas.
-- Los placeholders deben conservar el mismo comportamiento visible hasta que exista una decisión funcional explícita para reemplazarlos.
+- `Resumen` debe seguir operando como revisión, conciliación y cierre de una jornada.
 - Las capacidades latentes o no expuestas no forman parte de la paridad visible, pero no deben introducirse como si ya fueran producto terminado.

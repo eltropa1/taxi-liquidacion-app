@@ -569,7 +569,12 @@ export default function TodayScreen() {
         </Pressable>
 
         <Pressable
-          onPress={() => router.push("/summary")}
+          onPress={() =>
+            router.push({
+              pathname: "/summary",
+              params: { date: selectedDate.toISOString() },
+            })
+          }
           style={({ pressed }) => [
             styles.bottomNavItem,
             pressed && styles.bottomNavItemPressed,
