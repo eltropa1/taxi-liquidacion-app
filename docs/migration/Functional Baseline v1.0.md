@@ -75,6 +75,7 @@ No recoge detalles de implementación, arquitectura ni persistencia. Su objetivo
 ### 6. Consulta de métricas
 
 - En la pantalla principal el usuario puede desplegar el detalle diario, las metas y el resumen semanal/mensual.
+- La pantalla principal de Home sigue el día calendario actual mientras está en modo vivo; si el usuario navega manualmente por una fecha histórica, esa selección queda fija hasta volver a pulsar `Home`.
 - El usuario puede cambiar la fecha con flechas día a día.
 - En `Resumen`, el usuario puede navegar entre jornadas, consultar el detalle de la jornada actual o histórica y abrir el selector de fecha.
 
@@ -89,6 +90,8 @@ No recoge detalles de implementación, arquitectura ni persistencia. Su objetivo
 - Solo puede existir una jornada abierta a la vez.
 - Una jornada puede cruzar medianoche.
 - Las jornadas se cierran manualmente.
+- La identidad operativa de una jornada se conserva por su `workdayId` y por su `startTime`, aunque cruce medianoche.
+- El resumen semanal agrega jornadas por rango operativo de semana, no por la fecha calendario visible en Home si esta está navegando histórico.
 - El historial del día muestra viajes ordenados del más reciente al más antiguo.
 - Un viaje en curso no es editable desde el historial.
 - Las metas de importe pueden estar vacías y entonces se interpretan como `0`.

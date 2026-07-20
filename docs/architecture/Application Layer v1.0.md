@@ -123,6 +123,7 @@ Ejemplos:
 - abrir jornada;
 - cerrar jornada;
 - resolver jornada activa.
+- la Home puede seguir "hoy" o una fecha histórica, pero la identidad de jornada sigue viniendo de `workdayId` y `startTime`.
 
 ### 3.3. `services/`
 
@@ -308,4 +309,3 @@ Application no debe absorber:
 - dominio puro;
 - infraestructura concreta;
 - utilidades genéricas.
-

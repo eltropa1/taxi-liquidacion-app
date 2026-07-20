@@ -19,10 +19,10 @@ import {
 } from "../src/components/trips/CompleteServiceFlowController";
 import { PaymentType, TripSource } from "../src/constants/enums";
 import { useTodayScreen } from "../src/hooks/useTodayScreen";
+import { useHomeDateTracking } from "../src/hooks/useHomeDateTracking";
 import { useTripActions } from "../src/hooks/useTripActions";
 import { buildTodayScreenProjection, toTripVisualProjection } from "../src/presentation";
 import { UpdateWorkday } from "../src/application/workdays/UpdateWorkday";
-import { addCalendarDays } from "../src/utils/dateUtils";
 import {
   parsePositiveIntegerInput,
   validateWorkdayOdometers,
@@ -132,8 +132,12 @@ function getMonthLabel(date: Date) {
 export default function TodayScreen() {
   const [lastPayment, setLastPayment] = useState<PaymentType>(PaymentType.CASH);
   const [lastSource, setLastSource] = useState<TripSource>(TripSource.TAXI);
-
-  const [selectedDate, setSelectedDate] = useState<Date>(new Date());
+  const {
+    selectedDate,
+    setHistoricalDate,
+    shiftHistoricalDate,
+    goToToday,
+  } = useHomeDateTracking();
 
   type WorkdayModalMode = "open" | "close" | "edit" | null;
   const [workdayModalMode, setWorkdayModalMode] =
@@ -394,9 +398,7 @@ export default function TodayScreen() {
             <View style={styles.contextBarBottomLeft}>
               <Pressable
                 hitSlop={10}
-                onPress={() =>
-                  setSelectedDate((current) => addCalendarDays(current, -1))
-                }
+                onPress={() => shiftHistoricalDate(-1)}
               >
                 <Text style={styles.dateNavigatorArrow}>‹</Text>
               </Pressable>
@@ -417,9 +419,7 @@ export default function TodayScreen() {
               <Pressable
                 hitSlop={10}
                 disabled={isLatestAvailableDate}
-                onPress={() =>
-                  setSelectedDate((current) => addCalendarDays(current, 1))
-                }
+                onPress={() => shiftHistoricalDate(1)}
                 style={({ pressed }) => [
                   isLatestAvailableDate && styles.dateNavigatorDisabled,
                   pressed && !isLatestAvailableDate && styles.dateNavigatorPressed,
@@ -547,7 +547,7 @@ export default function TodayScreen() {
 
       <View style={styles.bottomNav}>
         <Pressable
-          onPress={() => setSelectedDate(new Date())}
+          onPress={goToToday}
           style={({ pressed }) => [
             styles.bottomNavItem,
             pressed && styles.bottomNavItemPressed,
@@ -715,7 +715,7 @@ export default function TodayScreen() {
                   <Pressable
                     key={day.toISOString()}
                     onPress={() => {
-                      setSelectedDate(day);
+                      setHistoricalDate(day);
                       setShowDatePickerModal(false);
                     }}
                     style={({ pressed }) => [
