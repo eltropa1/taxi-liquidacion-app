@@ -18,7 +18,7 @@ No recoge detalles de implementación, arquitectura ni persistencia. Su objetivo
 |---|---|---|---|---|---|
 | Arranque | Inicio de app | Activa | La app muestra un indicador de carga hasta que puede continuar. | Alta | Sí |
 | Hoy / liquidación diaria | `/` | Activa | Es la pantalla principal. Muestra estado del día, viajes del día, metas, resúmenes y acciones principales. | Alta | Sí |
-| Metas | `/goals` | Activa | Permite ver y editar metas diarias, semanales y mensuales. | Alta | Sí |
+| Metas | `/goals` | Activa | Permite ver la politica vigente, editar metas diarias, semanales y mensuales y consultar su historial versionado. | Alta | Sí |
 | Edición de viaje | `/trip/edit` | Activa | Permite revisar y corregir un viaje existente. | Alta | Sí |
 | Nuevo viaje | `/trip/new` | Placeholder | Solo muestra el texto `NUEVO VIAJE`. | Baja | Sí |
 | Resumen | `/summary` | Activa | Revisión, conciliación y cierre de una jornada con navegación temporal, drill-down y exportación secundaria. | Alta | Sí |
@@ -31,11 +31,11 @@ No recoge detalles de implementación, arquitectura ni persistencia. Su objetivo
 - La pantalla principal permite ir a `Metas`.
 - La pantalla principal permite abrir la edición de un viaje tocando un viaje finalizado del historial.
 - La pantalla principal permite abrir el flujo de finalización o de alta manual de viaje en un modal.
-- La pantalla de metas permite volver atrás.
+- La pantalla de metas convive con la navegación por pestañas.
 - La pantalla de edición de viaje permite volver atrás.
 - Las pantallas `Nuevo viaje` y `Configuración` no tienen acceso visible desde la navegación principal actual.
 - `Resumen` sí tiene acceso visible desde la navegación principal.
-- No hay barra inferior, menú lateral ni navegación por pestañas visible.
+- Hay navegación inferior por pestañas visible.
 
 ## Flujos De Usuario
 
@@ -74,10 +74,11 @@ No recoge detalles de implementación, arquitectura ni persistencia. Su objetivo
 
 ### 6. Consulta de métricas
 
-- En la pantalla principal el usuario puede desplegar el detalle diario, las metas y el resumen semanal/mensual.
+- En la pantalla principal el usuario puede ver el progreso diario usando la meta vigente.
 - La pantalla principal de Home sigue el día calendario actual mientras está en modo vivo; si el usuario navega manualmente por una fecha histórica, esa selección queda fija hasta volver a pulsar `Home`.
 - El usuario puede cambiar la fecha con flechas día a día.
 - En `Resumen`, el usuario puede navegar entre jornadas, consultar el detalle de la jornada actual o histórica y abrir el selector de fecha.
+- `Metas` muestra la politica vigente, permite editarla como una nueva version y ofrece un historial solo lectura.
 
 ### 7. Exportación
 
@@ -91,7 +92,7 @@ No recoge detalles de implementación, arquitectura ni persistencia. Su objetivo
 - Una jornada puede cruzar medianoche.
 - Las jornadas se cierran manualmente.
 - La identidad operativa de una jornada se conserva por su `workdayId` y por su `startTime`, aunque cruce medianoche.
-- El resumen semanal agrega jornadas por rango operativo de semana, no por la fecha calendario visible en Home si esta está navegando histórico.
+- El resumen semanal agrega jornadas por rango operativo de semana, con frontera mensual dura, no por la fecha calendario visible en Home si esta está navegando histórico.
 - El historial del día muestra viajes ordenados del más reciente al más antiguo.
 - Un viaje en curso no es editable desde el historial.
 - Las metas de importe pueden estar vacías y entonces se interpretan como `0`.
@@ -118,13 +119,13 @@ No recoge detalles de implementación, arquitectura ni persistencia. Su objetivo
 | Alta manual de viaje | Activo | Abre un modal para registrar un viaje sin depender de un viaje activo previo. | Alta | Sí |
 | Edición de viaje | Activo | Permite corregir un viaje ya registrado. | Alta | Sí |
 | Borrado de viaje | Activo | El usuario puede borrar un viaje desde la pantalla de edición tras confirmación. | Alta | Sí |
-| Historial de viajes | Activo | Muestra los viajes de la fecha seleccionada o el estado vacío si no hay viajes. | Alta | Sí |
+| Historial real | Activo | Muestra semana, quincena, mes, año o rango personalizado sobre el mismo universo histórico, con jornadas, resumen, desglose coherente, exportación CSV y acceso al detalle correspondiente. | Alta | Sí |
 | Tocar viaje del historial | Activo | Solo los viajes cerrados abren la pantalla de edición. | Alta | Sí |
 | Resumen diario | Activo | Muestra totales por plataforma, por tipo de pago y propinas del día. | Alta | Sí |
 | Resumen semanal | Activo | Muestra total y desglose semanal cuando se despliega. | Media | Sí |
-| Resumen mensual | Activo | Muestra total y desglose mensual cuando se despliega. | Media | Sí |
+| Resumen mensual | Activo | Muestra total y desglose mensual por semanas oficiales del mes. | Media | Sí |
 | Progreso de metas | Activo | Muestra estado textual, porcentaje y cantidad restante cuando la meta es mayor que cero. | Media | Sí |
-| Metas económicas | Activo | Permite editar metas diarias, semanales y mensuales y conservarlas para sesiones posteriores. | Alta | Sí |
+| Metas económicas | Activo | Permite editar metas diarias, semanales y mensuales, guardar una nueva version y consultar el historial. | Alta | Sí |
 | Exportación CSV | Activo | Genera un CSV y abre compartir del sistema. | Media | Sí |
 | Geolocalización en inicio de viaje | Activo | Al iniciar un viaje puede capturarse la ubicación sin bloquear el arranque visible. | Media | Sí |
 | Geolocalización en fin de viaje | Activo | Al finalizar un viaje se intenta capturar la ubicación antes de cerrar la operación. | Media | Sí |
@@ -146,6 +147,7 @@ No recoge detalles de implementación, arquitectura ni persistencia. Su objetivo
 - `Resumen`: muestra una pantalla funcional de jornada.
 - `Detalle de resumen`: no existe como ruta funcional.
 - `Configuración`: muestra `app-settings-index`.
+- `Metas`: muestra la politica vigente, un acceso a edicion y un historial solo lectura.
 
 ## Funcionalidades Incompletas
 
@@ -153,6 +155,7 @@ No recoge detalles de implementación, arquitectura ni persistencia. Su objetivo
 - `Resumen` es una vista funcional centrada en una jornada.
 - No existe una vista funcional de `Detalle de resumen`.
 - No existe una pantalla funcional de `Configuración`.
+- `Metas` es una pantalla de configuracion, no de analisis.
 - No existe entrada visible para voz.
 - No existe un flujo visible para tipo de viaje personalizado desde la pantalla principal.
 - No existe una vista visible de estadísticas GEO por barrio o distrito.

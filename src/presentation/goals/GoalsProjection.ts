@@ -5,7 +5,7 @@ export type GoalsDraft = Readonly<{
 }>;
 
 export function formatGoalValue(value: number | null | undefined) {
-  if (!value) return "";
+  if (value === null || value === undefined) return "";
   return String(value);
 }
 
