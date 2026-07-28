@@ -44,6 +44,12 @@ describe("runMigrations", () => {
     await runMigrations();
 
     expect(execAsync).toHaveBeenCalledWith(
+      "PRAGMA busy_timeout = 5000;",
+    );
+    expect(execAsync).toHaveBeenCalledWith(
+      "BEGIN IMMEDIATE TRANSACTION;",
+    );
+    expect(execAsync).toHaveBeenCalledWith(
       expect.stringContaining("ALTER TABLE trips ADD COLUMN serviceStatus TEXT;"),
     );
     expect(execAsync).toHaveBeenCalledWith(
@@ -58,6 +64,7 @@ describe("runMigrations", () => {
     expect(execAsync).toHaveBeenCalledWith(
       expect.stringContaining("CREATE INDEX IF NOT EXISTS idx_record_attachments_owner"),
     );
+    expect(execAsync).toHaveBeenCalledWith("COMMIT;");
     expect(execAsync).not.toHaveBeenCalledWith(
       expect.stringContaining("CREATE TABLE IF NOT EXISTS services"),
     );
