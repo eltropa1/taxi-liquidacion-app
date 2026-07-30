@@ -93,6 +93,7 @@ describe("SqliteTripRepository", () => {
       expect.stringContaining("UPDATE trips\n      SET amount = ?, payment = ?, source = ?, customSource = ?, chargedAmount = ?, cashTip = ?, serviceStatus = ?"),
       [21, PaymentType.CASH, TripSource.CABIFY, null, null, null, "completed", 55],
     );
+    expect(db.execAsync).not.toHaveBeenCalled();
   });
 
   it("updates a service directly through the explicit service write path", async () => {

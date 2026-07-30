@@ -280,29 +280,27 @@ export class SqliteTripRepository implements TripRepositoryPort {
   }
 
   async updateEditedTrip(input: TripEditedInput): Promise<void> {
-    await this.runInTransaction(async () => {
-      await this.updateTripManualZones({
-        id: input.id,
-        pickupZone: input.manualPickupZone,
-        dropoffZone: input.manualDropoffZone,
-      });
+    await this.updateTripManualZones({
+      id: input.id,
+      pickupZone: input.manualPickupZone,
+      dropoffZone: input.manualDropoffZone,
+    });
 
-      await this.updateTripTimes({
-        id: input.id,
-        startTime: input.startTime,
-        endTime: input.endTime,
-      });
+    await this.updateTripTimes({
+      id: input.id,
+      startTime: input.startTime,
+      endTime: input.endTime,
+    });
 
-      await this.updateTrip({
-        id: input.id,
-        amount: input.amount,
-        payment: input.payment,
-        source: input.source,
-        customSource: input.customSource,
-        chargedAmount: input.chargedAmount,
-        cashTip: input.cashTip,
-        serviceStatus: input.serviceStatus ?? "completed",
-      });
+    await this.updateTrip({
+      id: input.id,
+      amount: input.amount,
+      payment: input.payment,
+      source: input.source,
+      customSource: input.customSource,
+      chargedAmount: input.chargedAmount,
+      cashTip: input.cashTip,
+      serviceStatus: input.serviceStatus ?? "completed",
     });
   }
 
