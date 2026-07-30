@@ -1,8 +1,11 @@
+import { useMemo } from "react";
 import { Modal, Pressable, StyleSheet, Text, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import { TripHistory } from "../trip-history";
 import type { TripVisualProjection } from "../../presentation";
+import type { ThemeColors, RadiiTokens, ShadowCardTokens } from "../../presentation/theme/tokens";
+import { useAppTheme } from "../../presentation/theme/ThemeProvider";
 
 type SummaryDrilldownSheetProps = Readonly<{
   visible: boolean;
@@ -27,6 +30,11 @@ export function SummaryDrilldownSheet({
   onRegisteredTripPress,
   onPendingTripPress,
 }: SummaryDrilldownSheetProps) {
+  const { colors: themeColors, radii: themeRadii, shadowCard } = useAppTheme();
+  const styles = useMemo(
+    () => createStyles(themeColors, themeRadii, shadowCard),
+    [themeColors, themeRadii, shadowCard],
+  );
   const insets = useSafeAreaInsets();
 
   if (!visible) {
@@ -68,34 +76,29 @@ export function SummaryDrilldownSheet({
   );
 }
 
-const styles = StyleSheet.create({
+function createStyles(themeColors: ThemeColors, themeRadii: RadiiTokens, shadowCard: ShadowCardTokens) {
+  return StyleSheet.create({
   overlay: {
     flex: 1,
     backgroundColor: "rgba(0,0,0,0.42)",
     justifyContent: "flex-end",
   },
   sheet: {
-    backgroundColor: "#ffffff",
-    borderTopLeftRadius: 24,
-    borderTopRightRadius: 24,
+    backgroundColor: themeColors.surface,
+    borderTopLeftRadius: themeRadii.card,
+    borderTopRightRadius: themeRadii.card,
     paddingTop: 10,
     paddingHorizontal: 20,
     height: "84%",
-    shadowColor: "#000000",
-    shadowOpacity: 0.14,
-    shadowRadius: 16,
-    shadowOffset: {
-      width: 0,
-      height: -6,
-    },
-    elevation: 16,
+    ...shadowCard,
+    shadowOffset: { width: 0, height: -1 },
   },
   handle: {
     alignSelf: "center",
     width: 44,
     height: 5,
     borderRadius: 999,
-    backgroundColor: "#E7E0D6",
+    backgroundColor: themeColors.border,
     marginBottom: 16,
   },
   header: {
@@ -111,26 +114,26 @@ const styles = StyleSheet.create({
   },
   title: {
     fontSize: 18,
-    fontWeight: "900",
-    color: "#111827",
+    fontWeight: "600",
+    color: themeColors.textPrimary,
   },
   subtitle: {
     fontSize: 13,
-    color: "#5f564d",
+    color: themeColors.textSecondary,
     lineHeight: 18,
   },
   closeButton: {
     minHeight: 40,
     paddingHorizontal: 14,
-    borderRadius: 12,
-    backgroundColor: "#EEE6DA",
+    borderRadius: themeRadii.button,
+    backgroundColor: themeColors.bg,
     alignItems: "center",
     justifyContent: "center",
   },
   closeButtonText: {
     fontSize: 13,
     fontWeight: "800",
-    color: "#2b2521",
+    color: themeColors.textPrimary,
   },
   summaryRow: {
     flexDirection: "row",
@@ -144,15 +147,16 @@ const styles = StyleSheet.create({
   summaryMeta: {
     fontSize: 13,
     fontWeight: "700",
-    color: "#5f564d",
+    color: themeColors.textSecondary,
   },
   summaryAmount: {
     fontSize: 13,
     fontWeight: "800",
-    color: "#1f1a17",
+    color: themeColors.textPrimary,
   },
   list: {
     flex: 1,
     minHeight: 0,
   },
-});
+  });
+}

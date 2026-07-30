@@ -27,7 +27,7 @@ import {
   SegmentedControl,
   ServiceEconomicSummary,
   ZoneCorrectionRow,
-  detailStyles,
+  useDetailTheme,
 } from "../../src/components/trips/RegisteredServiceDetailLayout";
 import {
   buildRegisteredServiceDetailProjection,
@@ -46,6 +46,7 @@ import type { TripGeoSnapshotRecord } from "../../src/application/ports/persiste
 type ScreenMode = "view" | "correction";
 
 export default function RegisteredServiceDetailScreen() {
+  const { styles: detailStyles } = useDetailTheme();
   const { tripId } = useLocalSearchParams<{ tripId: string }>();
   const navigation = useNavigation();
   const [loading, setLoading] = useState(true);
@@ -65,7 +66,7 @@ export default function RegisteredServiceDetailScreen() {
   const prepared = useMemo(() => {
     if (!trip || !form) return null;
     return prepareRegisteredServiceCorrection(trip, form);
-  }, [trip, form]);
+  }, [form, trip]);
 
   const isDirty =
     mode === "correction" && trip && form
@@ -84,7 +85,7 @@ export default function RegisteredServiceDetailScreen() {
       ownerType: "registered_service" as const,
       ownerId: String(trip.id),
     };
-  }, [trip?.id]);
+  }, [trip]);
 
   const correctionZones = useMemo(() => {
     const geo = resolveTripEditSnapshotZones(snapshots);
@@ -165,6 +166,7 @@ export default function RegisteredServiceDetailScreen() {
             style: "destructive",
             onPress: () => {
               confirmingDiscardRef.current = false;
+              allowNavigationRef.current = true;
               onDiscard();
             },
           },
@@ -207,6 +209,10 @@ export default function RegisteredServiceDetailScreen() {
     },
     [isDirty],
   );
+
+  const navigateHome = useCallback(() => {
+    requestNavigationDiscard(() => router.replace("/"));
+  }, [requestNavigationDiscard]);
 
   useEffect(() => {
     const subscription = navigation.addListener("beforeRemove", (event) => {
@@ -292,14 +298,14 @@ export default function RegisteredServiceDetailScreen() {
   function confirmDelete() {
     if (!trip || deleting) return;
     Alert.alert(
-      "Eliminar el registro completo?",
+      "Anular este servicio?",
       enrichmentDirty
-        ? "Se eliminaran el servicio, el viaje asociado, sus ubicaciones detectadas, la nota y los adjuntos. La nota sin guardar se perdera."
-        : "Se eliminaran el servicio, el viaje asociado, sus ubicaciones detectadas, la nota y los adjuntos.",
+        ? "El servicio quedara marcado como anulado y dejara de contar en los totales, pero se conserva para consulta. La nota sin guardar se perdera."
+        : "El servicio quedara marcado como anulado y dejara de contar en los totales, pero se conserva para consulta.",
       [
         { text: "Cancelar", style: "cancel" },
         {
-          text: "Eliminar registro",
+          text: "Anular servicio",
           style: "destructive",
           onPress: deleteRecord,
         },
@@ -311,20 +317,12 @@ export default function RegisteredServiceDetailScreen() {
     if (!trip || deleting) return;
     setDeleting(true);
     try {
-      const result = await DeleteRegisteredServiceRecord.execute(trip.id);
-      if (result.enrichmentCleanupPending) {
-        Alert.alert(
-          "Registro eliminado",
-          "El registro se elimino. Queda limpieza de adjuntos pendiente de reconciliacion.",
-          [{ text: "Aceptar", onPress: navigateBack }],
-        );
-        return;
-      }
+      await DeleteRegisteredServiceRecord.execute(trip.id);
       navigateBack();
     } catch (error) {
-      console.error("Error deleting registered service", error);
+      console.error("Error voiding registered service", error);
       Alert.alert(
-        "No se ha podido eliminar",
+        "No se ha podido anular",
         "El registro sigue disponible. Intentalo de nuevo.",
       );
     } finally {
@@ -379,6 +377,7 @@ export default function RegisteredServiceDetailScreen() {
             schedule={projection.scheduleLabel}
             mode={mode}
             onBack={() => requestNavigationDiscard(navigateBack)}
+            onHome={navigateHome}
             onCorrect={startCorrection}
           />
 
@@ -456,7 +455,7 @@ export default function RegisteredServiceDetailScreen() {
                         amountInput: value,
                       }))
                     }
-                    keyboardType="decimal-pad"
+                    keyboardType="default"
                   />
                 </Field>
 
@@ -497,7 +496,7 @@ export default function RegisteredServiceDetailScreen() {
                         chargedAmountInput: value,
                       }))
                     }
-                    keyboardType="decimal-pad"
+                    keyboardType="default"
                   />
                 </Field>
               )}
@@ -515,7 +514,7 @@ export default function RegisteredServiceDetailScreen() {
                         cashTotalReceivedInput: value,
                       }))
                     }
-                    keyboardType="decimal-pad"
+                    keyboardType="default"
                   />
                 </Field>
               )}

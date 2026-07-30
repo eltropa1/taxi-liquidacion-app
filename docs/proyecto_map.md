@@ -48,6 +48,20 @@ record_notes
 record_attachments
 ```
 
+## GEO / Zonas especiales
+
+```ts
+src/application/trips/tripGeoEnrichment.ts
+src/infrastructure/geocoding/engine/GeoAdministrativeResolver.ts
+src/infrastructure/geocoding/catalog/specialZones.catalog.ts
+src/infrastructure/geocoding/catalog/neighborhoods.catalog.ts
+src/presentation/trips/TripEditProjection.ts
+src/components/forms/NeighborhoodSelector.tsx
+app/trip/edit.tsx  (sección "Ubicacion detectada")
+```
+
+Ver `docs/architecture/GEO Special Zones Resolver v1.0.md` para arquitectura completa e historial de bugs.
+
 ## Lecturas clave
 
 - Metas es una pantalla de configuracion versionada append-only.

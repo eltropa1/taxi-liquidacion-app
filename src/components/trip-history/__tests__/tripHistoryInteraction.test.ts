@@ -23,6 +23,17 @@ describe("getTripHistoryPressIntent", () => {
     expect(getTripHistoryPressIntent(trip)).toBe("completePendingService");
   });
 
+  it("keeps completion intent even when a pending service has amount zero", () => {
+    const trip = toTripVisualProjection({
+      ...closedTrip,
+      serviceStatus: "incomplete",
+      amount: 0,
+      payment: PaymentType.CASH,
+    });
+
+    expect(getTripHistoryPressIntent(trip)).toBe("completePendingService");
+  });
+
   it("keeps editing for a registered service", () => {
     const trip = toTripVisualProjection({
       ...closedTrip,

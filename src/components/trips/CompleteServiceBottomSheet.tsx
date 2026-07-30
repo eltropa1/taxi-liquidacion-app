@@ -16,6 +16,8 @@ import { PaymentType, TripSource } from "../../constants/enums";
 import { VisualCatalog } from "../../domain/visual";
 import type { PaymentMethodIdentity } from "../../domain/visual/contracts/PaymentMethodIdentity";
 import type { PlatformIdentity } from "../../domain/visual/contracts/PlatformIdentity";
+import type { ThemeColors, RadiiTokens, ShadowCardTokens } from "../../presentation/theme/tokens";
+import { useAppTheme } from "../../presentation/theme/ThemeProvider";
 
 type CompleteServiceBottomSheetProps = Readonly<{
   visible: boolean;
@@ -67,6 +69,11 @@ export function CompleteServiceBottomSheet({
   onSave,
   onCompleteLater,
 }: CompleteServiceBottomSheetProps) {
+  const { colors: themeColors, radii: themeRadii, shadowCard } = useAppTheme();
+  const styles = useMemo(
+    () => createStyles(themeColors, themeRadii, shadowCard),
+    [themeColors, themeRadii, shadowCard],
+  );
   const insets = useSafeAreaInsets();
 
   const platforms = useMemo(
@@ -118,7 +125,7 @@ export function CompleteServiceBottomSheet({
                 <TextInput
                   value={amountInput}
                   onChangeText={onAmountInputChange}
-                  keyboardType="decimal-pad"
+                  keyboardType="default"
                   placeholder="0,00"
                   placeholderTextColor="#9CA3AF"
                   autoFocus
@@ -128,7 +135,7 @@ export function CompleteServiceBottomSheet({
                 <TextInput
                   value={chargedAmountInput}
                   onChangeText={onChargedAmountInputChange}
-                  keyboardType="decimal-pad"
+                  keyboardType="default"
                   placeholder="Importe cobrado (opcional)"
                   placeholderTextColor="#9CA3AF"
                   style={styles.chargedInput}
@@ -208,11 +215,17 @@ export function CompleteServiceBottomSheet({
             </View>
 
             <View style={[styles.actions, { paddingBottom: insets.bottom }]}>
-              <Pressable onPress={onSave} style={styles.primaryAction}>
+              <Pressable
+                onPress={onSave}
+                style={({ pressed }) => [styles.primaryAction, pressed && styles.pressed]}
+              >
                 <Text style={styles.primaryActionText}>Guardar servicio</Text>
               </Pressable>
 
-              <Pressable onPress={onCompleteLater} style={styles.secondaryAction}>
+              <Pressable
+                onPress={onCompleteLater}
+                style={({ pressed }) => [styles.secondaryAction, pressed && styles.pressed]}
+              >
                 <Text style={styles.secondaryActionText}>Completar después</Text>
               </Pressable>
             </View>
@@ -223,7 +236,8 @@ export function CompleteServiceBottomSheet({
   );
 }
 
-const styles = StyleSheet.create({
+function createStyles(themeColors: ThemeColors, themeRadii: RadiiTokens, shadowCard: ShadowCardTokens) {
+  return StyleSheet.create({
   overlay: {
     flex: 1,
     backgroundColor: "rgba(0,0,0,0.42)",
@@ -235,28 +249,22 @@ const styles = StyleSheet.create({
     justifyContent: "flex-end",
   },
   sheet: {
-    backgroundColor: "#FFFFFF",
-    borderTopLeftRadius: 24,
-    borderTopRightRadius: 24,
+    backgroundColor: themeColors.surface,
+    borderTopLeftRadius: themeRadii.card,
+    borderTopRightRadius: themeRadii.card,
     paddingTop: 10,
     paddingHorizontal: 20,
     paddingBottom: 12,
     height: "82%",
-    shadowColor: "#000000",
-    shadowOpacity: 0.14,
-    shadowRadius: 16,
-    shadowOffset: {
-      width: 0,
-      height: -6,
-    },
-    elevation: 16,
+    ...shadowCard,
+    shadowOffset: { width: 0, height: -1 },
   },
   handle: {
     alignSelf: "center",
     width: 44,
     height: 5,
     borderRadius: 999,
-    backgroundColor: "#E7E0D6",
+    backgroundColor: themeColors.border,
     marginBottom: 16,
   },
   scroll: {
@@ -272,25 +280,25 @@ const styles = StyleSheet.create({
   amountInput: {
     borderWidth: 0,
     borderBottomWidth: 1,
-    borderColor: "#E6E1D7",
+    borderColor: themeColors.border,
     paddingVertical: 10,
     paddingHorizontal: 0,
-    fontSize: 34,
-    lineHeight: 40,
-    fontWeight: "900",
-    color: "#111827",
+    fontSize: 32,
+    lineHeight: 36,
+    fontWeight: "600",
+    color: themeColors.textPrimary,
     includeFontPadding: false,
   },
   chargedInput: {
     borderWidth: 1,
-    borderColor: "#E5E0D5",
-    borderRadius: 18,
+    borderColor: themeColors.border,
+    borderRadius: themeRadii.card,
     paddingHorizontal: 14,
     paddingVertical: 13,
     fontSize: 16,
     fontWeight: "700",
-    color: "#111827",
-    backgroundColor: "#FAF8F4",
+    color: themeColors.textPrimary,
+    backgroundColor: themeColors.bg,
   },
   platformGrid: {
     flexDirection: "row",
@@ -312,17 +320,10 @@ const styles = StyleSheet.create({
   },
   platformTileSelected: {
     borderWidth: 1,
-    borderColor: "#111827",
-    backgroundColor: "#FAF8F4",
-    borderRadius: 16,
-    shadowColor: "#000000",
-    shadowOpacity: 0.08,
-    shadowRadius: 4,
-    shadowOffset: {
-      width: 0,
-      height: 1,
-    },
-    elevation: 1,
+    borderColor: themeColors.textPrimary,
+    backgroundColor: themeColors.bg,
+    borderRadius: themeRadii.card,
+    ...shadowCard,
   },
   platformChip: {
     width: 40,
@@ -353,7 +354,7 @@ const styles = StyleSheet.create({
   },
   sectionSeparator: {
     height: 1,
-    backgroundColor: "#E9E2D8",
+    backgroundColor: themeColors.border,
     marginVertical: 2,
   },
   iconSlot: {
@@ -363,17 +364,10 @@ const styles = StyleSheet.create({
   },
   paymentTileSelected: {
     borderWidth: 1,
-    borderColor: "#111827",
-    backgroundColor: "#FAF8F4",
-    borderRadius: 16,
-    shadowColor: "#000000",
-    shadowOpacity: 0.08,
-    shadowRadius: 4,
-    shadowOffset: {
-      width: 0,
-      height: 1,
-    },
-    elevation: 1,
+    borderColor: themeColors.textPrimary,
+    backgroundColor: themeColors.bg,
+    borderRadius: themeRadii.card,
+    ...shadowCard,
   },
   paymentTile: {
     flex: 1,
@@ -390,7 +384,7 @@ const styles = StyleSheet.create({
   paymentIcon: {
     fontSize: 34,
     fontWeight: "700",
-    color: "#111827",
+    color: themeColors.textPrimary,
     includeFontPadding: false,
     textAlignVertical: "center",
   },
@@ -398,12 +392,12 @@ const styles = StyleSheet.create({
     gap: 10,
     paddingTop: 8,
     borderTopWidth: 1,
-    borderTopColor: "#E9E2D8",
+    borderTopColor: themeColors.border,
   },
   primaryAction: {
     minHeight: 52,
-    borderRadius: 18,
-    backgroundColor: "#111827",
+    borderRadius: themeRadii.button,
+    backgroundColor: themeColors.primary,
     alignItems: "center",
     justifyContent: "center",
     paddingHorizontal: 18,
@@ -412,14 +406,14 @@ const styles = StyleSheet.create({
   primaryActionText: {
     fontSize: 16,
     fontWeight: "800",
-    color: "#FFFFFF",
+    color: themeColors.surface,
   },
   secondaryAction: {
     minHeight: 52,
-    borderRadius: 18,
+    borderRadius: themeRadii.button,
     borderWidth: 1,
-    borderColor: "#D9D1C4",
-    backgroundColor: "#FAF8F4",
+    borderColor: themeColors.border,
+    backgroundColor: themeColors.bg,
     alignItems: "center",
     justifyContent: "center",
     paddingHorizontal: 18,
@@ -428,9 +422,10 @@ const styles = StyleSheet.create({
   secondaryActionText: {
     fontSize: 16,
     fontWeight: "800",
-    color: "#374151",
+    color: themeColors.textSecondary,
   },
   pressed: {
     opacity: 0.84,
   },
-});
+  });
+}

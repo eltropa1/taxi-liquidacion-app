@@ -1,5 +1,10 @@
 import { PaymentType } from "../../constants/enums";
 import { calculateWorkdayKilometers } from "../../domain/workdays/workdayOdometer";
+import {
+  groupTripsByKey,
+  sortGroupsByOrder,
+  type EconomicDrilldownGroup,
+} from "../economics";
 import { toTripVisualProjection } from "../trips";
 import type { TripVisualProjection } from "../trips";
 
@@ -56,14 +61,7 @@ export type SummaryScreenData = Readonly<{
   dailySummary: SummaryDailySummary;
 }>;
 
-export type SummaryDrilldownGroup = Readonly<{
-  id: string;
-  title: string;
-  subtitle: string;
-  count: number;
-  amount: number;
-  trips: readonly TripVisualProjection[];
-}>;
+export type SummaryDrilldownGroup = EconomicDrilldownGroup;
 
 export type SummaryScreenProjection = Readonly<{
   dateLabel: string;
@@ -144,51 +142,6 @@ function resolveRangeLabel(startTime: string, endTime: string | null, isOpen: bo
 
 function sumTripAmounts(trips: readonly SummaryTripRecord[]) {
   return trips.reduce((accumulator, trip) => accumulator + (trip.amount ?? 0), 0);
-}
-
-function groupTripsByKey(
-  trips: readonly TripVisualProjection[],
-  getKey: (trip: TripVisualProjection) => string,
-  getTitle: (key: string, trips: readonly TripVisualProjection[]) => string,
-  getSubtitle: (trips: readonly TripVisualProjection[]) => string,
-): SummaryDrilldownGroup[] {
-  const map = new Map<string, TripVisualProjection[]>();
-
-  for (const trip of trips) {
-    const key = getKey(trip);
-    const bucket = map.get(key);
-    if (bucket) {
-      bucket.push(trip);
-    } else {
-      map.set(key, [trip]);
-    }
-  }
-
-  return [...map.entries()].map(([key, groupedTrips]) => ({
-    id: key,
-    title: getTitle(key, groupedTrips),
-    subtitle: getSubtitle(groupedTrips),
-    count: groupedTrips.length,
-    amount: groupedTrips.reduce((accumulator, trip) => accumulator + (trip.amount.value ?? 0), 0),
-    trips: groupedTrips,
-  }));
-}
-
-function sortGroupsByOrder(
-  groups: SummaryDrilldownGroup[],
-  order: readonly string[],
-) {
-  const orderMap = new Map(order.map((value, index) => [value, index]));
-  return [...groups].sort((left, right) => {
-    const leftIndex = orderMap.get(left.id) ?? Number.MAX_SAFE_INTEGER;
-    const rightIndex = orderMap.get(right.id) ?? Number.MAX_SAFE_INTEGER;
-
-    if (leftIndex !== rightIndex) {
-      return leftIndex - rightIndex;
-    }
-
-    return left.title.localeCompare(right.title, "es");
-  });
 }
 
 function sortByStartTime(trips: readonly TripVisualProjection[]) {

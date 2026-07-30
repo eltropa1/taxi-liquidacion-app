@@ -1,4 +1,5 @@
 import type React from "react";
+import { useMemo } from "react";
 import { MaterialIcons } from "@expo/vector-icons";
 import {
   Pressable,
@@ -9,21 +10,45 @@ import {
   type TextInputProps,
 } from "react-native";
 
-const colors = {
-  background: "#f7f8f6",
-  surface: "#ffffff",
-  surfaceMuted: "#f1f5f3",
-  ink: "#171c1a",
-  text: "#26302d",
-  muted: "#66736f",
-  faint: "#8a9691",
-  border: "#dce3df",
-  primary: "#0f766e",
-  primarySurface: "#dff4ef",
-  danger: "#b42318",
-  dangerSurface: "#fff1f0",
-  warningSurface: "#fff8e1",
-};
+import { radii as themeRadii } from "../../presentation/theme/tokens";
+import { useAppTheme } from "../../presentation/theme/ThemeProvider";
+
+/**
+ * Remapeo local hacia la fuente única de tokens
+ * (src/presentation/theme/tokens.ts), preservando los nombres que ya
+ * consume este archivo. Reactivo al esquema claro/oscuro activo.
+ */
+function useDetailColors() {
+  const { colors: themeColors } = useAppTheme();
+  return useMemo(
+    () => ({
+      background: themeColors.bg,
+      surface: themeColors.surface,
+      surfaceMuted: themeColors.border,
+      ink: themeColors.textPrimary,
+      text: themeColors.textPrimary,
+      muted: themeColors.textSecondary,
+      faint: themeColors.textSecondary,
+      border: themeColors.border,
+      primary: themeColors.primary,
+      primarySurface: themeColors.primarySubtle,
+      danger: themeColors.danger,
+      dangerSurface: themeColors.dangerSubtle,
+      warning: themeColors.warning,
+      warningSurface: themeColors.warningSubtle,
+    }),
+    [themeColors],
+  );
+}
+
+type DetailColors = ReturnType<typeof useDetailColors>;
+
+/** Hook público: da acceso a la paleta y a los estilos del detalle de servicio. */
+export function useDetailTheme() {
+  const colors = useDetailColors();
+  const styles = useMemo(() => buildDetailStyles(colors), [colors]);
+  return { colors, styles };
+}
 
 export type DetailActionState = Readonly<{
   saving: boolean;
@@ -36,6 +61,7 @@ export function RegisteredServiceDetailHeader({
   schedule,
   mode,
   onBack,
+  onHome,
   onCorrect,
 }: {
   title: string;
@@ -43,8 +69,10 @@ export function RegisteredServiceDetailHeader({
   schedule: string;
   mode: "view" | "correction";
   onBack: () => void;
+  onHome: () => void;
   onCorrect: () => void;
 }) {
+  const { colors, styles: detailStyles } = useDetailTheme();
   return (
     <View style={detailStyles.header}>
       <View style={detailStyles.headerTopRow}>
@@ -60,6 +88,14 @@ export function RegisteredServiceDetailHeader({
           <Text style={detailStyles.title}>{title}</Text>
           <Text style={detailStyles.headerSubtitle}>{schedule}</Text>
         </View>
+        <Pressable
+          onPress={onHome}
+          style={detailStyles.iconButton}
+          accessibilityRole="button"
+          accessibilityLabel="Inicio"
+        >
+          <MaterialIcons name="home" size={22} color={colors.text} />
+        </Pressable>
         {mode === "view" ? (
           <Pressable
             onPress={onCorrect}
@@ -97,6 +133,7 @@ export function ServiceEconomicSummary({
   cashTotal: string | null;
   cashTip: string | null;
 }) {
+  const { colors, styles: detailStyles } = useDetailTheme();
   const secondaryItems = [
     { label: "Pago", value: payment, icon: "payments" as const },
     { label: "Plataforma", value: source, icon: "local-taxi" as const },
@@ -108,7 +145,7 @@ export function ServiceEconomicSummary({
       : null,
     cashTotal ? { label: "Total efectivo", value: cashTotal } : null,
     cashTip ? { label: "Propina", value: cashTip } : null,
-  ].filter(Boolean) as Array<{ label: string; value: string }>;
+  ].filter(Boolean) as { label: string; value: string }[];
 
   return (
     <View style={detailStyles.summary}>
@@ -157,6 +194,7 @@ export function DetailSection({
   icon: keyof typeof MaterialIcons.glyphMap;
   children: React.ReactNode;
 }) {
+  const { colors, styles: detailStyles } = useDetailTheme();
   return (
     <View style={detailStyles.section}>
       <View style={detailStyles.sectionHeader}>
@@ -177,6 +215,7 @@ export function ReadRow({
   value: string;
   emphasis?: boolean;
 }) {
+  const { styles: detailStyles } = useDetailTheme();
   return (
     <View style={detailStyles.readRow}>
       <Text style={detailStyles.readLabel}>{label}</Text>
@@ -201,6 +240,7 @@ export function Field({
   helper?: string;
   children: React.ReactNode;
 }) {
+  const { colors, styles: detailStyles } = useDetailTheme();
   return (
     <View style={detailStyles.field}>
       <Text style={detailStyles.inputLabel}>{label}</Text>
@@ -217,6 +257,7 @@ export function Field({
 }
 
 export function DetailTextInput(props: TextInputProps) {
+  const { colors, styles: detailStyles } = useDetailTheme();
   return (
     <TextInput
       {...props}
@@ -231,10 +272,11 @@ export function SegmentedControl<T extends string>({
   selected,
   onSelect,
 }: {
-  options: Array<{ value: T; label: string }>;
+  options: { value: T; label: string }[];
   selected: T;
   onSelect: (value: T) => void;
 }) {
+  const { styles: detailStyles } = useDetailTheme();
   return (
     <View style={detailStyles.segmentedControl}>
       {options.map((option) => {
@@ -277,6 +319,7 @@ export function ZoneCorrectionRow({
   onChange: () => void;
   onClear: () => void;
 }) {
+  const { styles: detailStyles } = useDetailTheme();
   return (
     <View style={detailStyles.zoneRow}>
       <View style={detailStyles.zoneText}>
@@ -316,6 +359,7 @@ export function CorrectionActionBar({
   onCancel: () => void;
   onSave: () => void;
 }) {
+  const { styles: detailStyles } = useDetailTheme();
   return (
     <View style={detailStyles.actionBar}>
       <Pressable
@@ -349,32 +393,34 @@ export function DestructiveRecordSection({
   deleting: boolean;
   onDelete: () => void;
 }) {
+  const { colors, styles: detailStyles } = useDetailTheme();
   return (
     <View style={detailStyles.dangerZone}>
       <View style={detailStyles.sectionHeader}>
-        <MaterialIcons name="delete-outline" size={18} color={colors.danger} />
-        <Text style={detailStyles.dangerTitle}>Eliminar</Text>
+        <MaterialIcons name="block" size={18} color={colors.danger} />
+        <Text style={detailStyles.dangerTitle}>Anular</Text>
       </View>
       <Text style={detailStyles.helper}>
-        Elimina el servicio, el viaje asociado, sus ubicaciones detectadas, la
-        nota y los adjuntos.
+        El servicio se marca como anulado y deja de contar en los totales.
+        Se conserva junto con sus ubicaciones, nota y adjuntos para consulta.
       </Text>
       <Pressable
         onPress={onDelete}
         disabled={deleting}
         style={[detailStyles.dangerButton, deleting && detailStyles.disabled]}
         accessibilityRole="button"
-        accessibilityLabel="Eliminar registro completo"
+        accessibilityLabel="Anular servicio"
       >
         <Text style={detailStyles.dangerButtonText}>
-          {deleting ? "Eliminando..." : "Eliminar registro completo"}
+          {deleting ? "Anulando..." : "Anular servicio"}
         </Text>
       </Pressable>
     </View>
   );
 }
 
-export const detailStyles = StyleSheet.create({
+function buildDetailStyles(colors: DetailColors) {
+  return StyleSheet.create({
   screen: {
     flex: 1,
     backgroundColor: colors.background,
@@ -419,7 +465,7 @@ export const detailStyles = StyleSheet.create({
   },
   title: {
     fontSize: 21,
-    fontWeight: "900",
+    fontWeight: "700",
     color: colors.ink,
   },
   headerSubtitle: {
@@ -434,14 +480,14 @@ export const detailStyles = StyleSheet.create({
     alignItems: "center",
     gap: 6,
     paddingHorizontal: 12,
-    borderRadius: 8,
+    borderRadius: themeRadii.button,
     borderWidth: 1,
     borderColor: colors.border,
     backgroundColor: colors.surface,
   },
   correctButtonText: {
     color: colors.primary,
-    fontWeight: "900",
+    fontWeight: "700",
   },
   statusRow: {
     flexDirection: "row",
@@ -455,7 +501,7 @@ export const detailStyles = StyleSheet.create({
     borderRadius: 999,
     backgroundColor: colors.primarySurface,
     color: colors.primary,
-    fontWeight: "900",
+    fontWeight: "700",
     fontSize: 12,
   },
   correctionPill: {
@@ -464,13 +510,13 @@ export const detailStyles = StyleSheet.create({
     paddingVertical: 4,
     borderRadius: 999,
     backgroundColor: colors.warningSurface,
-    color: "#7a4d00",
-    fontWeight: "900",
+    color: colors.warning,
+    fontWeight: "700",
     fontSize: 12,
   },
   summary: {
     backgroundColor: colors.surface,
-    borderRadius: 8,
+    borderRadius: themeRadii.card,
     borderWidth: 1,
     borderColor: colors.border,
     padding: 16,
@@ -479,13 +525,13 @@ export const detailStyles = StyleSheet.create({
   summaryEyebrow: {
     color: colors.muted,
     fontSize: 12,
-    fontWeight: "900",
+    fontWeight: "700",
     textTransform: "uppercase",
   },
   amount: {
     color: colors.ink,
     fontSize: 36,
-    fontWeight: "900",
+    fontWeight: "700",
   },
   summaryPills: {
     flexDirection: "row",
@@ -498,7 +544,7 @@ export const detailStyles = StyleSheet.create({
     alignItems: "center",
     gap: 8,
     padding: 10,
-    borderRadius: 8,
+    borderRadius: themeRadii.button,
     backgroundColor: colors.surfaceMuted,
   },
   summaryPillText: {
@@ -513,7 +559,7 @@ export const detailStyles = StyleSheet.create({
   summaryPillValue: {
     fontSize: 14,
     color: colors.text,
-    fontWeight: "900",
+    fontWeight: "700",
   },
   summaryMoneyGrid: {
     borderTopWidth: 1,
@@ -528,7 +574,7 @@ export const detailStyles = StyleSheet.create({
   },
   section: {
     backgroundColor: colors.surface,
-    borderRadius: 8,
+    borderRadius: themeRadii.card,
     padding: 14,
     borderWidth: 1,
     borderColor: colors.border,
@@ -541,7 +587,7 @@ export const detailStyles = StyleSheet.create({
   },
   sectionTitle: {
     fontSize: 16,
-    fontWeight: "900",
+    fontWeight: "700",
     color: colors.ink,
   },
   readRow: {
@@ -566,21 +612,21 @@ export const detailStyles = StyleSheet.create({
   },
   readValueStrong: {
     color: colors.ink,
-    fontWeight: "900",
+    fontWeight: "700",
   },
   field: {
     gap: 6,
   },
   inputLabel: {
     fontSize: 13,
-    fontWeight: "900",
+    fontWeight: "700",
     color: colors.text,
   },
   input: {
     minHeight: 46,
     borderWidth: 1,
     borderColor: colors.border,
-    borderRadius: 8,
+    borderRadius: themeRadii.button,
     paddingHorizontal: 12,
     paddingVertical: 10,
     backgroundColor: colors.surface,
@@ -614,7 +660,7 @@ export const detailStyles = StyleSheet.create({
     alignItems: "center",
     justifyContent: "center",
     paddingHorizontal: 12,
-    borderRadius: 8,
+    borderRadius: themeRadii.button,
     borderWidth: 1,
     borderColor: colors.border,
     backgroundColor: colors.surface,
@@ -624,7 +670,7 @@ export const detailStyles = StyleSheet.create({
     backgroundColor: colors.primarySurface,
   },
   segmentText: {
-    fontWeight: "900",
+    fontWeight: "700",
     color: colors.text,
   },
   segmentTextActive: {
@@ -633,7 +679,7 @@ export const detailStyles = StyleSheet.create({
   zoneRow: {
     borderWidth: 1,
     borderColor: colors.border,
-    borderRadius: 8,
+    borderRadius: themeRadii.button,
     padding: 12,
     gap: 10,
     backgroundColor: colors.surfaceMuted,
@@ -643,7 +689,7 @@ export const detailStyles = StyleSheet.create({
   },
   zoneValue: {
     color: colors.text,
-    fontWeight: "900",
+    fontWeight: "700",
     fontSize: 14,
   },
   zoneActions: {
@@ -655,11 +701,11 @@ export const detailStyles = StyleSheet.create({
     minHeight: 36,
     justifyContent: "center",
     paddingHorizontal: 10,
-    borderRadius: 8,
+    borderRadius: themeRadii.button,
   },
   textActionLabel: {
     color: colors.primary,
-    fontWeight: "900",
+    fontWeight: "700",
   },
   actionBar: {
     flexDirection: "row",
@@ -676,26 +722,27 @@ export const detailStyles = StyleSheet.create({
     minHeight: 48,
     alignItems: "center",
     justifyContent: "center",
-    borderRadius: 8,
-    backgroundColor: colors.primary,
+    borderRadius: themeRadii.button,
+    // Guardar correcciones: acción de cierre/corrección administrativa, no de avance de ingresos — neutro, no verde.
+    backgroundColor: colors.ink,
   },
   primaryButtonText: {
-    color: "#ffffff",
-    fontWeight: "900",
+    color: colors.surface,
+    fontWeight: "700",
   },
   secondaryButton: {
     flex: 1,
     minHeight: 48,
     alignItems: "center",
     justifyContent: "center",
-    borderRadius: 8,
+    borderRadius: themeRadii.button,
     borderWidth: 1,
     borderColor: colors.border,
     backgroundColor: colors.surface,
   },
   secondaryButtonText: {
     color: colors.text,
-    fontWeight: "900",
+    fontWeight: "700",
   },
   disabled: {
     opacity: 0.55,
@@ -709,20 +756,21 @@ export const detailStyles = StyleSheet.create({
   },
   dangerTitle: {
     fontSize: 15,
-    fontWeight: "900",
+    fontWeight: "700",
     color: colors.danger,
   },
   dangerButton: {
     minHeight: 46,
     alignItems: "center",
     justifyContent: "center",
-    borderRadius: 8,
+    borderRadius: themeRadii.button,
     borderWidth: 1,
     borderColor: colors.danger,
     backgroundColor: colors.dangerSurface,
   },
   dangerButtonText: {
     color: colors.danger,
-    fontWeight: "900",
+    fontWeight: "700",
   },
-});
+  });
+}

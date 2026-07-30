@@ -20,6 +20,16 @@ describe("toTripVisualProjection", () => {
     expect(projection.isPendingCompletion).toBe(true);
   });
 
+  it("keeps incomplete services pending even when the amount is zero", () => {
+    const projection = toTripVisualProjection({
+      ...baseTrip,
+      serviceStatus: "incomplete",
+      amount: 0,
+    });
+
+    expect(projection.isPendingCompletion).toBe(true);
+  });
+
   it("projects completed services as not pending from service status", () => {
     const projection = toTripVisualProjection({
       ...baseTrip,

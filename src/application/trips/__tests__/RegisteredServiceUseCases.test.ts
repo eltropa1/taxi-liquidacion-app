@@ -35,6 +35,7 @@ function createPersistence() {
       findTripById: jest.fn().mockResolvedValue(completedTrip),
       updateEditedTrip: jest.fn(),
       deleteTrip: jest.fn(),
+      voidTrip: jest.fn(),
     },
     workdayRepository: {},
     tripGeoSnapshotRepository: {
@@ -134,24 +135,8 @@ describe("registered service use cases", () => {
     ).rejects.toThrow("Solo se puede corregir un servicio registrado");
   });
 
-  it("deletes snapshots and trip while filesystem cleanup failure remains non-blocking", async () => {
+  it("voids a completed service instead of deleting it, preserving snapshots and attachments", async () => {
     const persistence = createPersistence();
-    persistence.recordAttachmentRepository.listByOwner.mockResolvedValue([
-      {
-        id: "att-1",
-        ownerType: "registered_service",
-        ownerId: "12",
-        attachmentKind: "document",
-        mimeType: "application/pdf",
-        originalName: "ticket.pdf",
-        storageKey: "attachments/registered_service/12/att-1.pdf",
-        sizeBytes: 1,
-        createdAt: "2026-07-01T08:00:00.000Z",
-        status: "ready",
-        source: "document",
-        description: null,
-      },
-    ]);
     configureApplicationPersistence(persistence as any);
     configureApplicationRuntime({
       goalStorage: {} as any,
@@ -159,27 +144,36 @@ describe("registered service use cases", () => {
       geoLocation: {} as any,
       geoAdministrativeResolver: {} as any,
       tripCsvExporter: {} as any,
-      attachmentFileStorage: {
-        delete: jest.fn().mockRejectedValue(new Error("fs failed")),
-      } as any,
     });
 
     await expect(DeleteRegisteredServiceRecord.execute(12)).resolves.toEqual({
-      deleted: true,
-      enrichmentCleanupPending: true,
-      pendingAttachmentIds: ["att-1"],
+      voided: true,
     });
 
-    expect(persistence.tripRepository.runInTransaction).toHaveBeenCalledTimes(1);
+    expect(persistence.tripRepository.voidTrip).toHaveBeenCalledWith(
+      12,
+      expect.any(Date),
+    );
+    expect(persistence.tripRepository.deleteTrip).not.toHaveBeenCalled();
     expect(
       persistence.tripGeoSnapshotRepository.deleteSnapshotsForTrip,
-    ).toHaveBeenCalledWith(12);
-    expect(persistence.tripRepository.deleteTrip).toHaveBeenCalledWith(12);
+    ).not.toHaveBeenCalled();
     expect(
       persistence.recordAttachmentRepository.markOwnerAttachmentsDeleting,
-    ).toHaveBeenCalledWith({
-      ownerType: "registered_service",
-      ownerId: "12",
+    ).not.toHaveBeenCalled();
+  });
+
+  it("rejects voiding a service that is not completed", async () => {
+    const persistence = createPersistence();
+    persistence.tripRepository.findTripById.mockResolvedValue({
+      ...completedTrip,
+      serviceStatus: "incomplete",
     });
+    configureApplicationPersistence(persistence as any);
+
+    await expect(DeleteRegisteredServiceRecord.execute(12)).rejects.toThrow(
+      "Solo se puede anular un servicio registrado",
+    );
+    expect(persistence.tripRepository.voidTrip).not.toHaveBeenCalled();
   });
 });

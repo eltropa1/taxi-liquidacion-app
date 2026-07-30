@@ -10,6 +10,7 @@ import {
 export async function runMigrations() {
   const db = getDatabase();
 
+  await db.execAsync("PRAGMA journal_mode = WAL;");
   await db.execAsync("PRAGMA busy_timeout = 5000;");
   await db.execAsync("BEGIN IMMEDIATE TRANSACTION;");
 
@@ -123,6 +124,11 @@ export async function runMigrations() {
       tripColumns,
       "manualDropoffZone",
       `ALTER TABLE trips ADD COLUMN manualDropoffZone TEXT;`,
+    );
+    await ensureColumn(
+      tripColumns,
+      "voidedAt",
+      `ALTER TABLE trips ADD COLUMN voidedAt TEXT;`,
     );
 
     await db.execAsync(`

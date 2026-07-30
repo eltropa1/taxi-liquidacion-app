@@ -2,6 +2,12 @@ describe("initializePersistenceDatabase", () => {
   afterEach(() => {
     jest.resetModules();
     jest.clearAllMocks();
+    // El cacheo real vive en globalThis (sobrevive a Fast Refresh en la
+    // app), pero eso significa que jest.resetModules() no lo limpia:
+    // sin este delete, un segundo test en este archivo heredaría la
+    // promesa del primero.
+    delete (globalThis as { __taxiLiquidacionInitPromise?: unknown })
+      .__taxiLiquidacionInitPromise;
   });
 
   it("reuses the in-flight initialization promise", async () => {

@@ -28,6 +28,10 @@ describe("ExportService", () => {
     configureApplicationRuntime({
       goalStorage: {
         getGoals: jest.fn(),
+        getCurrentGoalPolicy: jest.fn(),
+        getGoalsAt: jest.fn(),
+        getGoalHistory: jest.fn(),
+        getGoalPolicyById: jest.fn(),
         saveGoals: jest.fn(),
       },
       weekConfigurationStorage: {

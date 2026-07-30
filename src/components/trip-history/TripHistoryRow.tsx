@@ -1,7 +1,10 @@
+import { memo, useMemo } from "react";
 import { Pressable, StyleSheet, Text, View } from "react-native";
 
 import type { TripVisualProjection } from "../../presentation";
 import { getTripHistoryPressIntent } from "./tripHistoryInteraction";
+import { useAppTheme } from "../../presentation/theme/ThemeProvider";
+import type { ThemeColors } from "../../presentation/theme/tokens";
 
 type TripHistoryRowProps = {
   readonly trip: TripVisualProjection;
@@ -9,11 +12,14 @@ type TripHistoryRowProps = {
   readonly onPendingPress?: (trip: TripVisualProjection) => void;
 };
 
-export function TripHistoryRow({
+export const TripHistoryRow = memo(function TripHistoryRow({
   trip,
   onRegisteredPress,
   onPendingPress,
 }: TripHistoryRowProps) {
+  const { colors: themeColors } = useAppTheme();
+  const styles = useMemo(() => createStyles(themeColors), [themeColors]);
+
   const handlePress = () => {
     const intent = getTripHistoryPressIntent(trip);
     if (intent === "completePendingService") {
@@ -93,9 +99,10 @@ export function TripHistoryRow({
       </View>
     </Pressable>
   );
-}
+});
 
-const styles = StyleSheet.create({
+function createStyles(themeColors: ThemeColors) {
+  return StyleSheet.create({
   container: {
     marginBottom: 0,
   },
@@ -129,14 +136,6 @@ const styles = StyleSheet.create({
     borderWidth: 0.8,
     alignItems: "center",
     justifyContent: "center",
-    shadowColor: "#000000",
-    shadowOpacity: 0.05,
-    shadowRadius: 1,
-    shadowOffset: {
-      width: 0,
-      height: 0,
-    },
-    elevation: 1,
   },
   platformChipText: {
     fontSize: 11,
@@ -146,14 +145,14 @@ const styles = StyleSheet.create({
   paymentIcon: {
     fontSize: 15,
     fontWeight: "700",
-    color: "#111827",
+    color: themeColors.textPrimary,
     includeFontPadding: false,
     textAlignVertical: "center",
   },
   schedule: {
     fontSize: 13,
     fontWeight: "700",
-    color: "#111827",
+    color: themeColors.textPrimary,
     flex: 1,
     minWidth: 0,
     textAlign: "center",
@@ -168,7 +167,7 @@ const styles = StyleSheet.create({
   amount: {
     fontSize: 14,
     fontWeight: "800",
-    color: "#111827",
+    color: themeColors.textPrimary,
     flexShrink: 0,
     textAlign: "right",
   },
@@ -180,23 +179,24 @@ const styles = StyleSheet.create({
     borderRadius: 999,
     alignItems: "center",
     justifyContent: "center",
-    backgroundColor: "#EFE8DD",
+    backgroundColor: themeColors.warningSubtle,
     borderWidth: 1,
-    borderColor: "#D9D1C4",
+    borderColor: themeColors.warningSubtle,
   },
   pendingChipText: {
     fontSize: 11,
     lineHeight: 14,
     fontWeight: "800",
     letterSpacing: 0.2,
-    color: "#7C5A1C",
+    color: themeColors.warning,
     includeFontPadding: false,
     textAlignVertical: "center",
   },
   navigation: {
     fontSize: 16,
     fontWeight: "700",
-    color: "#6B7280",
+    color: themeColors.textSecondary,
     flexShrink: 0,
   },
-});
+  });
+}

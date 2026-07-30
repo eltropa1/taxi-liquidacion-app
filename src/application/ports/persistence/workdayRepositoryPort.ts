@@ -6,6 +6,7 @@ export type WorkdayRecord = Readonly<{
   endOdometer: number | null;
   isClosed: boolean;
   createdAt: string;
+  goalPolicyId?: string | null;
 }>;
 
 export type WorkdayLookupRecord = Readonly<{
@@ -21,6 +22,7 @@ export type WorkdayInfoRecord = Readonly<{
   startOdometer: number | null;
   endOdometer: number | null;
   isClosed: boolean;
+  goalPolicyId?: string | null;
 }>;
 
 export interface WorkdayRepositoryPort {
@@ -32,7 +34,10 @@ export interface WorkdayRepositoryPort {
 
   openWorkday(startOdometer: number): Promise<WorkdayRecord | null>;
 
-  closeCurrentWorkday(endOdometer?: number | null): Promise<void>;
+  closeCurrentWorkday(
+    endOdometer?: number | null,
+    goalPolicyId?: string | null,
+  ): Promise<void>;
 
   updateWorkdayOdometers(params: {
     id: number;
@@ -52,7 +57,12 @@ export interface WorkdayRepositoryPort {
   findWorkdayIdsBetweenDates(
     startDate: Date,
     endDate: Date,
-  ): Promise<Array<{ id: number }>>;
+  ): Promise<{ id: number }[]>;
+
+  findWorkdaysBetweenDates(
+    startDate: Date,
+    endDate: Date,
+  ): Promise<WorkdayRecord[]>;
 
   assignTripToCurrentWorkday(tripId: number): Promise<void>;
 }

@@ -8,6 +8,7 @@ export type {
 export { toTripVisualProjection } from "./toTripVisualProjection";
 export {
   resolveEffectiveNeighborhoodName,
+  resolveGeoZoneLabel,
   resolveTripEditClock,
   resolveTripEditSnapshotZones,
 } from "./TripEditProjection";

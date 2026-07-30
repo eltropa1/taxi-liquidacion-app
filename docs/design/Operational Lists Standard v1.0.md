@@ -7,6 +7,9 @@ Approved.
 This document defines the official design standard for operational lists in TaxiGeo.
 
 The Trip History V2 is the first implementation of this standard, but the standard is not limited to trip history.
+The real Historial screen is a separate historical consumer and must not be confused with the operational `TripHistory` component.
+The real Historial screen now exposes Week, Fortnight, Month, Year and Custom historical views, and its CSV export is driven by the same canonical dataset for the selected period, but it still remains a historical consumer and not part of the operational trip list.
+Its economic consolidado reuses the same semantic grouping language as `Summary` for platform, payment method and drill-down presentation, but that reuse belongs to the historical consumer, not to the operational list itself.
 
 The approved Home V2 baseline applies this standard with neutral rows and platform chips in the Registry Operativo.
 
@@ -53,7 +56,7 @@ The user should be able to identify the meaning of an item before finishing read
 
 Each row represents exactly one operational item.
 
-For Trip History V2:
+For the operational `TripHistory` component:
 
 - one row equals one trip.
 

@@ -91,7 +91,7 @@ export class SqliteTripRepository implements TripRepositoryPort {
       `
       SELECT id, startTime
       FROM trips
-      WHERE endTime IS NULL
+      WHERE endTime IS NULL AND voidedAt IS NULL
       ORDER BY startTime DESC
       LIMIT 1
       `,
@@ -162,7 +162,7 @@ export class SqliteTripRepository implements TripRepositoryPort {
         chargedAmount,
         cashTip
       FROM trips
-      WHERE workdayId = ?
+      WHERE workdayId = ? AND voidedAt IS NULL
       ORDER BY startTime DESC
       `,
       [workdayId],
@@ -191,7 +191,7 @@ export class SqliteTripRepository implements TripRepositoryPort {
         chargedAmount,
         cashTip
       FROM trips
-      WHERE workdayId IN (${placeholders})
+      WHERE workdayId IN (${placeholders}) AND voidedAt IS NULL
       ORDER BY startTime ASC
       `,
       workdayIds,
@@ -208,6 +208,7 @@ export class SqliteTripRepository implements TripRepositoryPort {
         payment,
         source
       FROM trips
+      WHERE voidedAt IS NULL
       ORDER BY startTime ASC
       `,
     );
@@ -278,27 +279,29 @@ export class SqliteTripRepository implements TripRepositoryPort {
   }
 
   async updateEditedTrip(input: TripEditedInput): Promise<void> {
-    await this.updateTripManualZones({
-      id: input.id,
-      pickupZone: input.manualPickupZone,
-      dropoffZone: input.manualDropoffZone,
-    });
+    await this.runInTransaction(async () => {
+      await this.updateTripManualZones({
+        id: input.id,
+        pickupZone: input.manualPickupZone,
+        dropoffZone: input.manualDropoffZone,
+      });
 
-    await this.updateTripTimes({
-      id: input.id,
-      startTime: input.startTime,
-      endTime: input.endTime,
-    });
+      await this.updateTripTimes({
+        id: input.id,
+        startTime: input.startTime,
+        endTime: input.endTime,
+      });
 
-    await this.updateTrip({
-      id: input.id,
-      amount: input.amount,
-      payment: input.payment,
-      source: input.source,
-      customSource: input.customSource,
-      chargedAmount: input.chargedAmount,
-      cashTip: input.cashTip,
-      serviceStatus: input.serviceStatus ?? "completed",
+      await this.updateTrip({
+        id: input.id,
+        amount: input.amount,
+        payment: input.payment,
+        source: input.source,
+        customSource: input.customSource,
+        chargedAmount: input.chargedAmount,
+        cashTip: input.cashTip,
+        serviceStatus: input.serviceStatus ?? "completed",
+      });
     });
   }
 
@@ -309,6 +312,17 @@ export class SqliteTripRepository implements TripRepositoryPort {
       WHERE id = ?
       `,
       [id],
+    );
+  }
+
+  async voidTrip(id: number, voidedAt: Date): Promise<void> {
+    await this.database.runAsync(
+      `
+      UPDATE trips
+      SET voidedAt = ?
+      WHERE id = ?
+      `,
+      [voidedAt.toISOString(), id],
     );
   }
 }

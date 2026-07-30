@@ -1,6 +1,6 @@
 {
   "expo": {
-    "name": "Taxi Liquidación",
+    "name": "GeoTaxi",
     "slug": "taxi-liquidacion-app",
     "version": "1.0.0",
     "orientation": "portrait",
@@ -8,6 +8,7 @@
     "platforms": [
       "android"
     ],
+    "icon": "./assets/icon.png",
     "plugins": [
       [
         "expo-image-picker",
@@ -16,10 +17,27 @@
           "photosPermission": "GeoTaxi accede a tus imagenes solo cuando eliges adjuntar una imagen a un registro."
         }
       ],
-      "expo-document-picker"
+      "expo-document-picker",
+      [
+        "expo-splash-screen",
+        {
+          "image": "./assets/splash-icon.png",
+          "imageWidth": 200,
+          "resizeMode": "contain",
+          "backgroundColor": "#F7F3EC"
+        }
+      ]
     ],
     "android": {
-      "package": "com.taxiliquidacionapp"
+      "package": "com.taxiliquidacionapp",
+      "versionCode": 1,
+      "adaptiveIcon": {
+        "foregroundImage": "./assets/adaptive-icon.png",
+        "backgroundColor": "#ffffff"
+      },
+      "permissions": [
+        "android.permission.CAMERA"
+      ]
     },
     "extra": {
       "eas": {

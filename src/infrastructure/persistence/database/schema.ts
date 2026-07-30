@@ -8,7 +8,8 @@ CREATE TABLE IF NOT EXISTS workdays (
   startOdometer INTEGER,
   endOdometer INTEGER,
   isClosed INTEGER NOT NULL DEFAULT 0,
-  createdAt TEXT NOT NULL
+  createdAt TEXT NOT NULL,
+  goalPolicyId TEXT
 );
 `;
 

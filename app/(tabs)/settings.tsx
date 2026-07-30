@@ -22,8 +22,21 @@ import {
   parsePositiveIntegerInput,
   validateWorkdayOdometers,
 } from "../../src/domain/workdays/workdayOdometer";
+import type { ThemeColors, RadiiTokens, ShadowCardTokens } from "../../src/presentation/theme/tokens";
+import { useAppTheme, type ThemePreference } from "../../src/presentation/theme/ThemeProvider";
+
+const THEME_OPTIONS: { value: ThemePreference; label: string }[] = [
+  { value: "auto", label: "Automático" },
+  { value: "light", label: "Claro" },
+  { value: "dark", label: "Oscuro" },
+];
 
 export default function MoreScreen() {
+  const { colors: themeColors, radii: themeRadii, shadowCard, preference, setPreference } = useAppTheme();
+  const styles = useMemo(
+    () => createStyles(themeColors, themeRadii, shadowCard),
+    [themeColors, themeRadii, shadowCard],
+  );
   const [todayDate] = useState(() => new Date());
   const [weekStartDay, setWeekStartDay] = useState<WeekStartDay>("monday");
   const [editingOdometersVisible, setEditingOdometersVisible] = useState(false);
@@ -149,7 +162,7 @@ export default function MoreScreen() {
         contentContainerStyle={styles.content}
         showsVerticalScrollIndicator={false}
       >
-        <Text style={styles.title}>Más</Text>
+        <Text style={styles.title}>Ajustes</Text>
 
         <View style={styles.actionsSection}>
           <Text style={styles.sectionTitle}>Acciones disponibles</Text>
@@ -161,7 +174,7 @@ export default function MoreScreen() {
               pressed && styles.actionRowPressed,
             ]}
           >
-            <Text style={styles.actionLabel}>Exportar CSV</Text>
+            <Text style={styles.actionLabel}>Exportar CSV global</Text>
             <Text style={styles.actionChevron}>›</Text>
           </Pressable>
 
@@ -175,6 +188,38 @@ export default function MoreScreen() {
             <Text style={styles.actionLabel}>Editar odómetros</Text>
             <Text style={styles.actionChevron}>›</Text>
           </Pressable>
+        </View>
+
+        <View style={styles.section}>
+          <Text style={styles.sectionTitle}>Apariencia</Text>
+          <Text style={styles.sectionSubtitle}>
+            Automático oscurece la pantalla por la noche (21:00–07:00) para no deslumbrar.
+          </Text>
+
+          <View style={styles.themeOptionRow}>
+            {THEME_OPTIONS.map((option) => (
+              <Pressable
+                key={option.value}
+                onPress={() => setPreference(option.value)}
+                style={[
+                  styles.themeOption,
+                  preference === option.value && styles.themeOptionActive,
+                ]}
+                accessibilityRole="button"
+                accessibilityLabel={`Tema ${option.label}`}
+                accessibilityState={{ selected: preference === option.value }}
+              >
+                <Text
+                  style={[
+                    styles.themeOptionText,
+                    preference === option.value && styles.themeOptionTextActive,
+                  ]}
+                >
+                  {option.label}
+                </Text>
+              </Pressable>
+            ))}
+          </View>
         </View>
 
         <View style={styles.section}>
@@ -263,10 +308,11 @@ export default function MoreScreen() {
   );
 }
 
-const styles = StyleSheet.create({
+function createStyles(themeColors: ThemeColors, themeRadii: RadiiTokens, shadowCard: ShadowCardTokens) {
+  return StyleSheet.create({
   screen: {
     flex: 1,
-    backgroundColor: "#f7f7f5",
+    backgroundColor: themeColors.bg,
   },
   scrollContainer: {
     flex: 1,
@@ -277,9 +323,9 @@ const styles = StyleSheet.create({
     paddingBottom: 32,
   },
   title: {
-    fontSize: 30,
+    fontSize: 24,
     fontWeight: "700",
-    color: "#111827",
+    color: themeColors.textPrimary,
     marginBottom: 20,
   },
   actionsSection: {
@@ -287,39 +333,35 @@ const styles = StyleSheet.create({
     marginBottom: 24,
   },
   section: {
-    backgroundColor: "#ffffff",
-    borderRadius: 24,
+    backgroundColor: themeColors.surface,
+    borderRadius: themeRadii.card,
     padding: 18,
-    shadowColor: "#000000",
-    shadowOpacity: 0.06,
-    shadowRadius: 18,
-    shadowOffset: { width: 0, height: 8 },
-    elevation: 3,
+    marginBottom: 16,
+    borderWidth: 1,
+    borderColor: themeColors.border,
+    ...shadowCard,
   },
   sectionTitle: {
     fontSize: 18,
-    fontWeight: "700",
-    color: "#111827",
+    fontWeight: "600",
+    color: themeColors.textPrimary,
     marginBottom: 12,
   },
   sectionSubtitle: {
     fontSize: 13,
-    color: "#6b7280",
+    color: themeColors.textSecondary,
     marginBottom: 12,
   },
   actionRow: {
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "space-between",
-    borderRadius: 18,
-    backgroundColor: "#ffffff",
+    borderRadius: themeRadii.card,
+    backgroundColor: themeColors.surface,
+    borderWidth: 1,
+    borderColor: themeColors.border,
     paddingHorizontal: 18,
     paddingVertical: 16,
-    shadowColor: "#000000",
-    shadowOpacity: 0.05,
-    shadowRadius: 14,
-    shadowOffset: { width: 0, height: 6 },
-    elevation: 2,
   },
   actionRowPressed: {
     opacity: 0.86,
@@ -328,11 +370,11 @@ const styles = StyleSheet.create({
   actionLabel: {
     fontSize: 16,
     fontWeight: "600",
-    color: "#111827",
+    color: themeColors.textPrimary,
   },
   actionChevron: {
     fontSize: 24,
-    color: "#6b7280",
+    color: themeColors.textSecondary,
     lineHeight: 24,
   },
   weekdayRow: {
@@ -342,15 +384,20 @@ const styles = StyleSheet.create({
     marginBottom: 18,
   },
   weekdayChip: {
-    minWidth: 42,
+    minWidth: 44,
+    minHeight: 44,
     paddingVertical: 12,
     paddingHorizontal: 14,
-    borderRadius: 16,
-    backgroundColor: "#f3f4f6",
+    borderRadius: themeRadii.card,
+    backgroundColor: themeColors.surface,
+    borderWidth: 1,
+    borderColor: themeColors.border,
     alignItems: "center",
+    justifyContent: "center",
   },
   weekdayChipActive: {
-    backgroundColor: "#dbeafe",
+    backgroundColor: themeColors.primarySubtle,
+    borderColor: themeColors.primary,
   },
   weekdayChipPressed: {
     opacity: 0.88,
@@ -358,15 +405,15 @@ const styles = StyleSheet.create({
   weekdayChipText: {
     fontSize: 15,
     fontWeight: "700",
-    color: "#374151",
+    color: themeColors.textSecondary,
   },
   weekdayChipTextActive: {
-    color: "#1d4ed8",
+    color: themeColors.primary,
   },
   saveButton: {
     marginTop: 4,
-    backgroundColor: "#111827",
-    borderRadius: 16,
+    backgroundColor: themeColors.textPrimary,
+    borderRadius: themeRadii.button,
     paddingVertical: 16,
     alignItems: "center",
   },
@@ -374,7 +421,7 @@ const styles = StyleSheet.create({
     opacity: 0.9,
   },
   saveButtonText: {
-    color: "#ffffff",
+    color: themeColors.surface,
     fontSize: 16,
     fontWeight: "700",
   },
@@ -384,9 +431,9 @@ const styles = StyleSheet.create({
     justifyContent: "flex-end",
   },
   modalCard: {
-    backgroundColor: "#ffffff",
-    borderTopLeftRadius: 24,
-    borderTopRightRadius: 24,
+    backgroundColor: themeColors.surface,
+    borderTopLeftRadius: themeRadii.card,
+    borderTopRightRadius: themeRadii.card,
     paddingHorizontal: 20,
     paddingTop: 20,
     paddingBottom: 28,
@@ -394,13 +441,13 @@ const styles = StyleSheet.create({
   modalTitle: {
     fontSize: 22,
     fontWeight: "700",
-    color: "#111827",
+    color: themeColors.textPrimary,
     marginBottom: 18,
   },
   fieldLabel: {
     fontSize: 14,
     fontWeight: "600",
-    color: "#374151",
+    color: themeColors.textSecondary,
     marginBottom: 8,
   },
   fieldLabelSpacing: {
@@ -408,12 +455,12 @@ const styles = StyleSheet.create({
   },
   input: {
     borderWidth: 1,
-    borderColor: "#d1d5db",
-    borderRadius: 14,
+    borderColor: themeColors.border,
+    borderRadius: themeRadii.button,
     paddingHorizontal: 14,
     paddingVertical: 12,
     fontSize: 16,
-    color: "#111827",
+    color: themeColors.textPrimary,
   },
   modalButtons: {
     flexDirection: "row",
@@ -422,26 +469,56 @@ const styles = StyleSheet.create({
   },
   modalButton: {
     flex: 1,
-    borderRadius: 16,
+    borderRadius: themeRadii.button,
     paddingVertical: 15,
     alignItems: "center",
-    backgroundColor: "#f3f4f6",
+    backgroundColor: themeColors.bg,
+    borderWidth: 1,
+    borderColor: themeColors.border,
   },
   modalButtonText: {
-    color: "#111827",
+    color: themeColors.textPrimary,
     fontSize: 16,
     fontWeight: "600",
   },
   modalButtonPrimary: {
     flex: 1,
-    borderRadius: 16,
+    borderRadius: themeRadii.button,
     paddingVertical: 15,
     alignItems: "center",
-    backgroundColor: "#111827",
+    backgroundColor: themeColors.textPrimary,
   },
   modalButtonPrimaryText: {
-    color: "#ffffff",
+    color: themeColors.surface,
     fontSize: 16,
     fontWeight: "700",
   },
-});
+  themeOptionRow: {
+    flexDirection: "row",
+    gap: 8,
+    marginBottom: 4,
+  },
+  themeOption: {
+    flex: 1,
+    minHeight: 44,
+    borderRadius: themeRadii.button,
+    borderWidth: 1,
+    borderColor: themeColors.border,
+    backgroundColor: themeColors.surface,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  themeOptionActive: {
+    backgroundColor: themeColors.primarySubtle,
+    borderColor: themeColors.primary,
+  },
+  themeOptionText: {
+    fontSize: 13,
+    fontWeight: "700",
+    color: themeColors.textSecondary,
+  },
+  themeOptionTextActive: {
+    color: themeColors.primary,
+  },
+  });
+}

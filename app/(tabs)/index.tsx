@@ -1,6 +1,9 @@
-import { useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
+  AccessibilityInfo,
   Alert,
+  Animated,
+  Easing,
   Modal,
   Pressable,
   StyleSheet,
@@ -8,25 +11,35 @@ import {
   TextInput,
   View,
 } from "react-native";
+import { MaterialIcons } from "@expo/vector-icons";
 
 import { router } from "expo-router";
 import { SafeAreaView } from "react-native-safe-area-context";
 
-import { TripHistory } from "../src/components/trip-history";
+import { TripHistory } from "../../src/components/trip-history";
 import {
   CompleteServiceFlowController,
   type CompleteServiceFlowControllerHandle,
-} from "../src/components/trips/CompleteServiceFlowController";
-import { PaymentType, TripSource } from "../src/constants/enums";
-import { useTodayScreen } from "../src/hooks/useTodayScreen";
-import { useHomeDateTracking } from "../src/hooks/useHomeDateTracking";
-import { useTripActions } from "../src/hooks/useTripActions";
-import { buildTodayScreenProjection, toTripVisualProjection } from "../src/presentation";
-import { UpdateWorkday } from "../src/application/workdays/UpdateWorkday";
+} from "../../src/components/trips/CompleteServiceFlowController";
+import { PaymentType, TripSource } from "../../src/constants/enums";
+import { useTodayScreen } from "../../src/hooks/useTodayScreen";
+import { useHomeDateTracking } from "../../src/hooks/useHomeDateTracking";
+import { useTripActions } from "../../src/hooks/useTripActions";
+import {
+  buildTodayScreenProjection,
+  toTripVisualProjection,
+  type TripVisualProjection,
+} from "../../src/presentation";
+import { UpdateWorkday } from "../../src/application/workdays/UpdateWorkday";
 import {
   parsePositiveIntegerInput,
   validateWorkdayOdometers,
-} from "../src/domain/workdays/workdayOdometer";
+} from "../../src/domain/workdays/workdayOdometer";
+import {
+  useSignatureTokens,
+  type SignatureTokens,
+} from "../../src/presentation/signature/geo-taxi-signature-tokens";
+import { useAppTheme } from "../../src/presentation/theme/ThemeProvider";
 
 function capitalize(value: string) {
   if (!value) return value;
@@ -59,6 +72,29 @@ function formatTimeLabel(value: string | null | undefined) {
   });
 }
 
+function formatElapsedDuration(startedAt: string | null | undefined, now: number) {
+  if (!startedAt) return null;
+  const startMs = new Date(startedAt).getTime();
+  if (Number.isNaN(startMs)) return null;
+  const elapsedMinutes = Math.max(0, Math.floor((now - startMs) / 60000));
+  const hours = Math.floor(elapsedMinutes / 60);
+  const minutes = elapsedMinutes % 60;
+  return `${hours}h ${String(minutes).padStart(2, "0")}m`;
+}
+
+function useElapsedClock(isRunning: boolean) {
+  const [now, setNow] = useState(() => Date.now());
+
+  useEffect(() => {
+    if (!isRunning) return;
+    setNow(Date.now());
+    const interval = setInterval(() => setNow(Date.now()), 30000);
+    return () => clearInterval(interval);
+  }, [isRunning]);
+
+  return now;
+}
+
 function platformIdToTripSource(platformId: string) {
   switch (platformId) {
     case "uber":
@@ -85,20 +121,63 @@ function clampPercent(percent: number | null) {
 function ProgressBar({
   percent,
   color,
+  trackColor,
 }: {
   percent: number;
   color: string;
+  trackColor: string;
 }) {
+  const animatedPercent = useRef(new Animated.Value(percent)).current;
+  const [reduceMotionEnabled, setReduceMotionEnabled] = useState(false);
+
+  useEffect(() => {
+    let mounted = true;
+    AccessibilityInfo.isReduceMotionEnabled().then((enabled) => {
+      if (mounted) setReduceMotionEnabled(enabled);
+    });
+    const subscription = AccessibilityInfo.addEventListener(
+      "reduceMotionChanged",
+      setReduceMotionEnabled,
+    );
+    return () => {
+      mounted = false;
+      subscription.remove();
+    };
+  }, []);
+
+  useEffect(() => {
+    // motion-base (200-250ms) con ease-in-out — ver GeoTaxi Motion and
+    // Microinteractions v1.0 §2-3. Instantáneo si el sistema pide reducir movimiento.
+    Animated.timing(animatedPercent, {
+      toValue: percent,
+      duration: reduceMotionEnabled ? 0 : 220,
+      easing: Easing.inOut(Easing.ease),
+      useNativeDriver: false,
+    }).start();
+  }, [percent, reduceMotionEnabled, animatedPercent]);
+
+  const width = animatedPercent.interpolate({
+    inputRange: [0, 100],
+    outputRange: ["0%", "100%"],
+    extrapolate: "clamp",
+  });
+
   return (
-    <View style={styles.progressRail}>
-      <View
-        style={[
-          styles.progressFill,
-          {
-            width: `${percent}%`,
-            backgroundColor: color,
-          },
-        ]}
+    <View
+      style={{
+        height: 12,
+        backgroundColor: trackColor,
+        borderRadius: 999,
+        overflow: "hidden",
+      }}
+    >
+      <Animated.View
+        style={{
+          height: "100%",
+          borderRadius: 999,
+          width,
+          backgroundColor: color,
+        }}
       />
     </View>
   );
@@ -130,6 +209,9 @@ function getMonthLabel(date: Date) {
 }
 
 export default function TodayScreen() {
+  const signature = useSignatureTokens();
+  const { shadowCard } = useAppTheme();
+  const styles = useMemo(() => createStyles(signature, shadowCard), [signature, shadowCard]);
   const [lastPayment, setLastPayment] = useState<PaymentType>(PaymentType.CASH);
   const [lastSource, setLastSource] = useState<TripSource>(TripSource.TAXI);
   const {
@@ -233,7 +315,31 @@ export default function TodayScreen() {
     actionHandler();
   };
 
+  const handlePendingTripPress = useCallback(
+    (trip: TripVisualProjection) => {
+      completeServiceFlowRef.current?.openForPendingService({
+        tripId: trip.id,
+        payment: lastPayment,
+        source: platformIdToTripSource(trip.platform.id),
+      });
+    },
+    [lastPayment],
+  );
+
+  const handleRegisteredTripPress = useCallback((tripId: number) => {
+    router.push({
+      pathname: "/trip/edit",
+      params: { tripId },
+    });
+  }, []);
+
   const contextStartTime = workdayInfo?.startTime ?? activeWorkday?.startTime ?? null;
+  const isViewingToday = isSameDay(selectedDate, new Date());
+  const isWorkedTimeLive = hasActiveWorkday && isViewingToday;
+  const elapsedClockNow = useElapsedClock(isWorkedTimeLive);
+  const workedTimeLabel = isWorkedTimeLive
+    ? formatElapsedDuration(contextStartTime, elapsedClockNow)
+    : null;
 
   function openDatePickerModal() {
     setCalendarMonth(startOfMonth(selectedDate));
@@ -285,7 +391,7 @@ export default function TodayScreen() {
     }
   };
 
-  const handleSaveWorkday = async () => {
+  const handleSaveWorkday = () => {
     if (workdayModalMode === null) {
       return;
     }
@@ -302,8 +408,13 @@ export default function TodayScreen() {
         return;
       }
 
-      await handleOpenWorkday(startOdometer);
+      // Camino de respuesta instantánea: el modal se cierra al toque y la
+      // apertura de jornada continúa en segundo plano.
       closeWorkdayModal();
+      handleOpenWorkday(startOdometer).catch((error) => {
+        console.error("Error abriendo jornada", error);
+        Alert.alert("No se ha podido abrir la jornada", "Inténtalo de nuevo.");
+      });
       return;
     }
 
@@ -322,8 +433,11 @@ export default function TodayScreen() {
         return;
       }
 
-      await handleCloseWorkday(endOdometer);
       closeWorkdayModal();
+      handleCloseWorkday(endOdometer).catch((error) => {
+        console.error("Error cerrando jornada", error);
+        Alert.alert("No se ha podido cerrar la jornada", "Inténtalo de nuevo.");
+      });
       return;
     }
 
@@ -367,16 +481,19 @@ export default function TodayScreen() {
       return;
     }
 
-    await UpdateWorkday.execute({
+    closeWorkdayModal();
+    UpdateWorkday.execute({
       id: editingWorkdayId,
       startOdometer,
       endOdometer,
-    });
-    closeWorkdayModal();
-    await refreshData();
+    })
+      .then(() => refreshData())
+      .catch((error) => {
+        console.error("Error actualizando jornada", error);
+        Alert.alert("No se ha podido actualizar la jornada", "Inténtalo de nuevo.");
+      });
   };
 
-  const showProgressBlock = hasOperationalContext;
   const showClosedState = !hasActiveWorkday;
   const isLatestAvailableDate = isSameDay(selectedDate, new Date());
 
@@ -391,6 +508,32 @@ export default function TodayScreen() {
               <Text style={styles.contextStart}>
                 Inicio {formatTimeLabel(contextStartTime)}
               </Text>
+
+              {workedTimeLabel ? (
+                <Text style={styles.contextWorkedTime}>
+                  Trabajado {workedTimeLabel}
+                </Text>
+              ) : null}
+
+              {workdayInfo?.id != null ? (
+                <Pressable
+                  hitSlop={8}
+                  onPress={() => openWorkdayModal("edit")}
+                  accessibilityRole="button"
+                  accessibilityLabel="Corregir odómetros de la jornada"
+                  style={({ pressed }) => [
+                    styles.contextEditOdometerButton,
+                    pressed && styles.contextEditOdometerButtonPressed,
+                  ]}
+                >
+                  <MaterialIcons
+                    name="edit"
+                    size={14}
+                    color={signature.colors.ink}
+                  />
+                  <Text style={styles.contextEditOdometerText}>Odómetros</Text>
+                </Pressable>
+              ) : null}
             </View>
           </View>
 
@@ -413,7 +556,7 @@ export default function TodayScreen() {
                 accessibilityRole="button"
                 accessibilityLabel="Abrir selector de fechas"
               >
-                <Text style={styles.contextCalendarIcon}>📅</Text>
+                <MaterialIcons name="calendar-today" size={16} color={signature.colors.green} />
               </Pressable>
 
               <Pressable
@@ -434,6 +577,21 @@ export default function TodayScreen() {
                   ›
                 </Text>
               </Pressable>
+
+              {!isLatestAvailableDate ? (
+                <Pressable
+                  hitSlop={6}
+                  onPress={goToToday}
+                  accessibilityRole="button"
+                  accessibilityLabel="Volver a hoy"
+                  style={({ pressed }) => [
+                    styles.todayButton,
+                    pressed && styles.todayButtonPressed,
+                  ]}
+                >
+                  <Text style={styles.todayButtonText}>Hoy</Text>
+                </Pressable>
+              ) : null}
             </View>
 
             <View style={styles.contextBarBottomAction}>
@@ -452,146 +610,91 @@ export default function TodayScreen() {
           </View>
         </View>
 
-        {showProgressBlock && (
-          <View style={styles.progressBlock}>
-            <View style={styles.progressLeft}>
-              <Text style={styles.progressLabel}>Recaudación</Text>
-              <Text
-                style={styles.progressAmount}
-                numberOfLines={1}
-                adjustsFontSizeToFit
-                minimumFontScale={0.72}
-              >
-                {formatMoney(todayProjection.totalToday)}
-              </Text>
-            </View>
-
-            <View style={styles.progressDivider} />
-
-            <View style={styles.progressRight}>
-              <Text style={styles.progressTopLine} numberOfLines={1}>
-                {progressPercent !== null && progressPercent >= 100 ? (
-                  <Text style={styles.progressTopReached}>Objetivo alcanzado</Text>
-                ) : (
-                  <>
-                    <Text style={styles.progressTopLabel}>Objetivo </Text>
-                    <Text style={styles.progressTopGoal}>
-                      {formatMoney(goals.daily).replace(" €", "\u00A0€")}
-                    </Text>
-                    <Text style={styles.progressTopSpacer}>   </Text>
-                    <Text style={styles.progressTopLabel}>Restan </Text>
-                    <Text style={styles.progressTopRemaining}>
-                      {formatMoney(remainingDaily).replace(" €", "\u00A0€")}
-                    </Text>
-                  </>
-                )}
-              </Text>
-
-              <View style={styles.progressMeterRow}>
-                <View style={styles.progressMeterWrap}>
-                  <ProgressBar
-                    percent={progressFill}
-                    color="#1f2937"
-                  />
+        <View style={styles.operationalStackContent}>
+            {hasOperationalContext && (
+              <View style={styles.progressBlock}>
+                <View style={styles.progressLeft}>
+                  <Text style={styles.progressLabel}>Recaudación</Text>
+                  <Text
+                    style={styles.progressAmount}
+                    numberOfLines={1}
+                    adjustsFontSizeToFit
+                    minimumFontScale={0.72}
+                  >
+                    {formatMoney(todayProjection.totalToday)}
+                  </Text>
                 </View>
-                <Text style={styles.progressPercentLabel}>
-                  {progressPercent === null ? "0%" : `${Math.round(progressPercent)}%`}
+
+                <View style={styles.progressDivider} />
+
+                <View style={styles.progressRight}>
+                  <Text style={styles.progressTopLine} numberOfLines={1}>
+                    {progressPercent !== null && progressPercent >= 100 ? (
+                      <Text style={styles.progressTopReached}>Objetivo alcanzado</Text>
+                    ) : (
+                      <>
+                        <Text style={styles.progressTopLabel}>Objetivo </Text>
+                        <Text style={styles.progressTopGoal}>
+                          {formatMoney(goals.daily).replace(" €", "\u00A0€")}
+                        </Text>
+                        <Text style={styles.progressTopSpacer}>   </Text>
+                        <Text style={styles.progressTopLabel}>Restan </Text>
+                        <Text style={styles.progressTopRemaining}>
+                          {formatMoney(remainingDaily).replace(" €", "\u00A0€")}
+                        </Text>
+                      </>
+                    )}
+                  </Text>
+
+                  <View style={styles.progressMeterRow}>
+                    <View style={styles.progressMeterWrap}>
+                      <ProgressBar
+                        percent={progressFill}
+                        color={signature.colors.green}
+                        trackColor={signature.colors.surfaceMuted}
+                      />
+                    </View>
+                    <Text style={styles.progressPercentLabel}>
+                      {progressPercent === null
+                        ? "0%"
+                        : `${Math.round(progressPercent)}%`}
+                    </Text>
+                  </View>
+                </View>
+              </View>
+            )}
+
+            {showClosedState && (
+              <View style={styles.closedState}>
+                <Text style={styles.closedStateTitle}>Jornada cerrada</Text>
+                <Text style={styles.closedStateDescription}>
+                  Abre la jornada para empezar a registrar servicios.
                 </Text>
               </View>
+            )}
+
+            <Pressable
+              onPress={handleActionPress}
+              style={({ pressed }) => [
+                styles.actionCard,
+                pressed && styles.actionCardPressed,
+              ]}
+            >
+              <View style={styles.actionCardLeftIcon}>
+                <Text style={styles.actionCardPlus}>+</Text>
+              </View>
+              <Text style={styles.actionCardLabel}>{actionLabel}</Text>
+              <Text style={styles.actionCardArrow}>›</Text>
+            </Pressable>
+
+            <View style={styles.registerArea}>
+              <TripHistory
+                trips={tripHistoryProjections}
+                onPendingTripPress={handlePendingTripPress}
+                onRegisteredTripPress={handleRegisteredTripPress}
+              />
             </View>
-          </View>
-        )}
-
-        {showClosedState && (
-          <View style={styles.closedState}>
-            <Text style={styles.closedStateTitle}>Jornada cerrada</Text>
-            <Text style={styles.closedStateDescription}>
-              Abre la jornada para empezar a registrar servicios.
-            </Text>
-          </View>
-        )}
-
-        <Pressable
-          onPress={handleActionPress}
-          style={({ pressed }) => [
-            styles.actionCard,
-            pressed && styles.actionCardPressed,
-          ]}
-        >
-          <View style={styles.actionCardLeftIcon}>
-            <Text style={styles.actionCardPlus}>+</Text>
-          </View>
-          <Text style={styles.actionCardLabel}>{actionLabel}</Text>
-          <Text style={styles.actionCardArrow}>›</Text>
-        </Pressable>
-
-        <View style={styles.registerArea}>
-          <TripHistory
-            trips={tripHistoryProjections}
-            onPendingTripPress={(trip) =>
-              completeServiceFlowRef.current?.openForPendingService({
-                tripId: trip.id,
-                payment: lastPayment,
-                source: platformIdToTripSource(trip.platform.id),
-              })
-            }
-            onRegisteredTripPress={(tripId) =>
-              router.push({
-                pathname: "/trip/edit",
-                params: { tripId },
-              })
-            }
-            />
         </View>
-      </View>
-
-      <View style={styles.bottomNav}>
-        <Pressable
-          onPress={goToToday}
-          style={({ pressed }) => [
-            styles.bottomNavItem,
-            pressed && styles.bottomNavItemPressed,
-          ]}
-        >
-          <Text style={[styles.bottomNavLabel, styles.bottomNavLabelActive]}>
-            Home
-          </Text>
-        </Pressable>
-
-        <Pressable
-          onPress={() => router.push("/goals")}
-          style={({ pressed }) => [
-            styles.bottomNavItem,
-            pressed && styles.bottomNavItemPressed,
-          ]}
-        >
-          <Text style={styles.bottomNavLabel}>Metas</Text>
-        </Pressable>
-
-        <Pressable
-          onPress={() =>
-            router.push({
-              pathname: "/summary",
-              params: { date: selectedDate.toISOString() },
-            })
-          }
-          style={({ pressed }) => [
-            styles.bottomNavItem,
-            pressed && styles.bottomNavItemPressed,
-          ]}
-        >
-          <Text style={styles.bottomNavLabel}>Resumen</Text>
-        </Pressable>
-
-        <Pressable
-          onPress={() => router.push("/settings")}
-          style={({ pressed }) => [
-            styles.bottomNavItem,
-            pressed && styles.bottomNavItemPressed,
-          ]}
-        >
-          <Text style={styles.bottomNavLabel}>Más</Text>
-        </Pressable>
       </View>
 
       <Modal visible={workdayModalMode !== null} transparent animationType="slide">
@@ -749,10 +852,11 @@ export default function TodayScreen() {
   );
 }
 
-const styles = StyleSheet.create({
+function createStyles(signature: SignatureTokens, shadowCard: ReturnType<typeof useAppTheme>["shadowCard"]) {
+  return StyleSheet.create({
   screen: {
     flex: 1,
-    backgroundColor: "#F6F2EA",
+    backgroundColor: signature.colors.background,
   },
   content: {
     flex: 1,
@@ -779,28 +883,64 @@ const styles = StyleSheet.create({
   contextDate: {
     fontSize: 17,
     fontWeight: "700",
-    color: "#1F2937",
+    color: signature.colors.ink,
     flexShrink: 1,
   },
   contextStart: {
     fontSize: 13,
     fontWeight: "700",
-    color: "#2ecc71",
+    color: signature.colors.inkSoft,
+  },
+  contextWorkedTime: {
+    fontSize: 13,
+    fontWeight: "700",
+    color: signature.colors.green,
+    fontVariant: ["tabular-nums"],
   },
   contextCalendarButton: {
-    width: 32,
-    height: 32,
-    borderRadius: 16,
-    backgroundColor: "#EFE8DD",
+    width: 44,
+    height: 44,
+    borderRadius: 22,
+    backgroundColor: signature.colors.surfaceMuted,
     alignItems: "center",
     justifyContent: "center",
   },
   contextCalendarButtonPressed: {
     opacity: 0.75,
   },
-  contextCalendarIcon: {
-    fontSize: 14,
-    color: "#2ecc71",
+  contextEditOdometerButton: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 4,
+    marginLeft: 10,
+    paddingHorizontal: 8,
+    height: 24,
+    borderRadius: 12,
+    backgroundColor: signature.colors.surfaceMuted,
+  },
+  contextEditOdometerButtonPressed: {
+    opacity: 0.75,
+  },
+  contextEditOdometerText: {
+    fontSize: 11,
+    fontWeight: "600",
+    color: signature.colors.ink,
+  },
+  todayButton: {
+    paddingHorizontal: 12,
+    height: 32,
+    borderRadius: 16,
+    backgroundColor: signature.colors.surfaceMuted,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  todayButtonPressed: {
+    opacity: 0.75,
+  },
+  todayButtonText: {
+    fontSize: 13,
+    fontWeight: "600",
+    color: signature.colors.green,
   },
   contextBarBottomRow: {
     flexDirection: "row",
@@ -821,11 +961,11 @@ const styles = StyleSheet.create({
   },
   dateNavigatorArrow: {
     fontSize: 22,
-    color: "#1F2937",
+    color: signature.colors.ink,
     paddingHorizontal: 12,
   },
   dateNavigatorArrowDisabled: {
-    color: "#C3B8AA",
+    color: signature.colors.border,
   },
   dateNavigatorPressed: {
     opacity: 0.75,
@@ -836,7 +976,7 @@ const styles = StyleSheet.create({
   dateNavigatorLabel: {
     fontSize: 12,
     fontWeight: "700",
-    color: "#6B7280",
+    color: signature.colors.inkSoft,
     letterSpacing: 0.3,
   },
   contextBarBottomAction: {
@@ -844,10 +984,12 @@ const styles = StyleSheet.create({
     alignItems: "flex-end",
   },
   contextCloseWorkdayButton: {
-    paddingVertical: 6,
-    paddingHorizontal: 10,
+    minHeight: 44,
+    paddingHorizontal: 12,
     borderRadius: 999,
-    backgroundColor: "#EFE8DD",
+    backgroundColor: signature.colors.surfaceMuted,
+    alignItems: "center",
+    justifyContent: "center",
   },
   contextCloseWorkdayButtonPressed: {
     opacity: 0.75,
@@ -855,7 +997,11 @@ const styles = StyleSheet.create({
   contextCloseWorkdayText: {
     fontSize: 12,
     fontWeight: "700",
-    color: "#374151",
+    color: signature.colors.inkSoft,
+  },
+  operationalStackContent: {
+    flex: 1,
+    gap: 12,
   },
   progressBlock: {
     flexDirection: "row",
@@ -886,38 +1032,38 @@ const styles = StyleSheet.create({
     fontSize: 12,
     fontWeight: "800",
     letterSpacing: 0.6,
-    color: "#2ecc71",
+    color: signature.colors.green,
     textTransform: "uppercase",
   },
   progressAmount: {
-    fontSize: 34,
-    lineHeight: 38,
-    fontWeight: "900",
-    color: "#111827",
+    fontSize: 32,
+    lineHeight: 36,
+    fontWeight: "600",
+    color: signature.colors.ink,
     flexShrink: 1,
   },
   progressTopLine: {
     fontSize: 13,
     fontWeight: "700",
-    color: "#111827",
+    color: signature.colors.ink,
     textAlign: "left",
     flexWrap: "nowrap",
   },
   progressTopLabel: {
-    color: "#111827",
+    color: signature.colors.inkSoft,
   },
   progressTopGoal: {
-    color: "#2ecc71",
+    color: signature.colors.green,
   },
   progressTopRemaining: {
-    color: "#D97706",
+    color: signature.colors.inkSoft,
   },
   progressTopReached: {
-    color: "#111827",
+    color: signature.colors.ink,
     fontWeight: "800",
   },
   progressTopSpacer: {
-    color: "#111827",
+    color: signature.colors.ink,
   },
   progressMeterRow: {
     flexDirection: "row",
@@ -928,30 +1074,20 @@ const styles = StyleSheet.create({
   progressMeterWrap: {
     flex: 1,
   },
-  progressRail: {
-    height: 12,
-    backgroundColor: "#E5E7EB",
-    borderRadius: 999,
-    overflow: "hidden",
-  },
-  progressFill: {
-    height: "100%",
-    borderRadius: 999,
-  },
   progressPercentLabel: {
     minWidth: 42,
     textAlign: "right",
-    fontSize: 26,
-    fontWeight: "900",
-    color: "#2ecc71",
-    lineHeight: 30,
+    fontSize: 17,
+    fontWeight: "700",
+    color: signature.colors.green,
+    lineHeight: 22,
   },
   closedState: {
-    backgroundColor: "#FFFFFF",
-    borderRadius: 18,
+    backgroundColor: signature.colors.surface,
+    borderRadius: signature.radii.card,
     borderWidth: 1,
     borderStyle: "dashed",
-    borderColor: "#D7CFC2",
+    borderColor: signature.colors.border,
     paddingVertical: 16,
     paddingHorizontal: 16,
     marginBottom: 12,
@@ -959,17 +1095,17 @@ const styles = StyleSheet.create({
   closedStateTitle: {
     fontSize: 17,
     fontWeight: "800",
-    color: "#111827",
+    color: signature.colors.ink,
   },
   closedStateDescription: {
     marginTop: 4,
     fontSize: 13,
     lineHeight: 18,
-    color: "#4B5563",
+    color: signature.colors.inkSoft,
   },
   actionCard: {
-    backgroundColor: "#1c7c43",
-    borderRadius: 20,
+    backgroundColor: signature.colors.green,
+    borderRadius: signature.radii.card,
     borderWidth: 0,
     paddingVertical: 18,
     paddingHorizontal: 16,
@@ -978,14 +1114,7 @@ const styles = StyleSheet.create({
     justifyContent: "space-between",
     minHeight: 64,
     marginBottom: 12,
-    shadowColor: "#1c7c43",
-    shadowOpacity: 0.22,
-    shadowRadius: 12,
-    shadowOffset: {
-      width: 0,
-      height: 6,
-    },
-    elevation: 5,
+    ...shadowCard,
   },
   actionCardPressed: {
     transform: [{ scale: 0.995 }],
@@ -993,10 +1122,10 @@ const styles = StyleSheet.create({
   },
   actionCardLabel: {
     flex: 1,
-    fontSize: 21,
-    lineHeight: 24,
-    fontWeight: "900",
-    color: "#FFFFFF",
+    fontSize: 22,
+    lineHeight: 26,
+    fontWeight: "700",
+    color: signature.colors.surface,
     textAlign: "center",
     paddingHorizontal: 12,
   },
@@ -1006,21 +1135,21 @@ const styles = StyleSheet.create({
     borderRadius: 17,
     alignItems: "center",
     justifyContent: "center",
-    backgroundColor: "#FFFFFF",
+    backgroundColor: signature.colors.surface,
     flexShrink: 0,
   },
   actionCardPlus: {
     fontSize: 24,
     lineHeight: 24,
-    fontWeight: "900",
-    color: "#1c7c43",
+    fontWeight: "700",
+    color: signature.colors.green,
     marginTop: -1,
   },
   actionCardArrow: {
     fontSize: 26,
     lineHeight: 26,
-    fontWeight: "900",
-    color: "#FFFFFF",
+    fontWeight: "700",
+    color: signature.colors.surface,
     flexShrink: 0,
   },
   utilityRow: {
@@ -1033,9 +1162,9 @@ const styles = StyleSheet.create({
     paddingVertical: 8,
     paddingHorizontal: 12,
     borderRadius: 999,
-    backgroundColor: "#FFFFFF",
+    backgroundColor: signature.colors.surface,
     borderWidth: 1,
-    borderColor: "#D7D2C9",
+    borderColor: signature.colors.border,
   },
   utilityPillPressed: {
     opacity: 0.8,
@@ -1043,39 +1172,12 @@ const styles = StyleSheet.create({
   utilityPillText: {
     fontSize: 12,
     fontWeight: "700",
-    color: "#374151",
+    color: signature.colors.inkSoft,
   },
   registerArea: {
     flex: 1,
     minHeight: 0,
     marginBottom: 10,
-  },
-  bottomNav: {
-    flexDirection: "row",
-    borderTopWidth: 1,
-    borderTopColor: "#DDD7CB",
-    backgroundColor: "#F7F3EC",
-    paddingHorizontal: 8,
-    paddingTop: 8,
-    paddingBottom: 10,
-  },
-  bottomNavItem: {
-    flex: 1,
-    alignItems: "center",
-    justifyContent: "center",
-    paddingVertical: 8,
-    borderRadius: 12,
-  },
-  bottomNavItemPressed: {
-    backgroundColor: "#EEE7DC",
-  },
-  bottomNavLabel: {
-    fontSize: 12,
-    fontWeight: "700",
-    color: "#6B7280",
-  },
-  bottomNavLabelActive: {
-    color: "#111827",
   },
   row: {
     flexDirection: "row",
@@ -1086,21 +1188,21 @@ const styles = StyleSheet.create({
   chip: {
     paddingVertical: 12,
     paddingHorizontal: 14,
-    backgroundColor: "#F0ECE5",
+    backgroundColor: signature.colors.surfaceMuted,
     borderRadius: 22,
     borderWidth: 1,
-    borderColor: "#E1D9CC",
+    borderColor: signature.colors.border,
   },
   chipPressed: {
     opacity: 0.85,
   },
   chipActive: {
-    backgroundColor: "#F6F2EA",
-    borderColor: "#111827",
+    backgroundColor: signature.colors.background,
+    borderColor: signature.colors.ink,
     borderWidth: 1.5,
   },
   chipText: {
-    color: "#111827",
+    color: signature.colors.ink,
     fontWeight: "700",
   },
   modalOverlay: {
@@ -1110,15 +1212,15 @@ const styles = StyleSheet.create({
     padding: 20,
   },
   modalCard: {
-    backgroundColor: "#fff",
-    borderRadius: 18,
+    backgroundColor: signature.colors.surface,
+    borderRadius: signature.radii.card,
     padding: 18,
   },
   modalTitle: {
-    fontWeight: "900",
+    fontWeight: "600",
     fontSize: 18,
     marginBottom: 12,
-    color: "#111827",
+    color: signature.colors.ink,
   },
   calendarHeader: {
     flexDirection: "row",
@@ -1128,8 +1230,8 @@ const styles = StyleSheet.create({
   },
   calendarHeaderArrow: {
     fontSize: 20,
-    fontWeight: "900",
-    color: "#111827",
+    fontWeight: "700",
+    color: signature.colors.ink,
     paddingHorizontal: 8,
   },
   calendarWeekdays: {
@@ -1142,7 +1244,7 @@ const styles = StyleSheet.create({
     textAlign: "center",
     fontSize: 11,
     fontWeight: "800",
-    color: "#6B7280",
+    color: signature.colors.inkSoft,
   },
   calendarGrid: {
     flexDirection: "row",
@@ -1156,27 +1258,27 @@ const styles = StyleSheet.create({
     borderRadius: 10,
     alignItems: "center",
     justifyContent: "center",
-    backgroundColor: "#F3EEE6",
+    backgroundColor: signature.colors.surfaceMuted,
   },
   calendarCellPressed: {
     opacity: 0.8,
   },
   calendarCellSelected: {
-    backgroundColor: "#111827",
+    backgroundColor: signature.colors.ink,
   },
   calendarCellText: {
     fontSize: 13,
     fontWeight: "800",
-    color: "#1F2937",
+    color: signature.colors.ink,
   },
   calendarCellTextSelected: {
-    color: "#FFFFFF",
+    color: signature.colors.surface,
   },
   input: {
     borderWidth: 1,
-    borderColor: "#D1D5DB",
+    borderColor: signature.colors.border,
     padding: 10,
-    borderRadius: 10,
+    borderRadius: signature.radii.card,
     marginTop: 6,
   },
   modalButtons: {
@@ -1188,37 +1290,38 @@ const styles = StyleSheet.create({
     flex: 1,
     borderRadius: 12,
     borderWidth: 1,
-    borderColor: "#D1D5DB",
+    borderColor: signature.colors.border,
     paddingVertical: 12,
     alignItems: "center",
     justifyContent: "center",
   },
   modalButtonText: {
     fontWeight: "700",
-    color: "#374151",
+    color: signature.colors.inkSoft,
   },
   modalButtonPrimary: {
     flex: 1,
     borderRadius: 12,
-    backgroundColor: "#111827",
+    backgroundColor: signature.colors.ink,
     paddingVertical: 12,
     alignItems: "center",
     justifyContent: "center",
   },
   modalButtonPrimaryText: {
     fontWeight: "800",
-    color: "#fff",
+    color: signature.colors.surface,
   },
   deleteButton: {
     borderRadius: 12,
     borderWidth: 1,
-    borderColor: "#DC2626",
+    borderColor: signature.colors.danger,
     paddingVertical: 12,
     alignItems: "center",
     justifyContent: "center",
   },
   deleteButtonText: {
     fontWeight: "800",
-    color: "#DC2626",
+    color: signature.colors.danger,
   },
-});
+  });
+}

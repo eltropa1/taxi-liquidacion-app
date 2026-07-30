@@ -79,6 +79,7 @@ No recoge detalles de implementación, arquitectura ni persistencia. Su objetivo
 - El usuario puede cambiar la fecha con flechas día a día.
 - En `Resumen`, el usuario puede navegar entre jornadas, consultar el detalle de la jornada actual o histórica y abrir el selector de fecha.
 - `Metas` muestra la politica vigente, permite editarla como una nueva version y ofrece un historial solo lectura.
+- `Historial` reutiliza el mismo lenguaje económico que `Resumen` para mostrar totales, servicios, jornadas, plataformas, métodos de pago y drill-down sobre el dataset histórico del periodo seleccionado.
 
 ### 7. Exportación
 
@@ -119,7 +120,7 @@ No recoge detalles de implementación, arquitectura ni persistencia. Su objetivo
 | Alta manual de viaje | Activo | Abre un modal para registrar un viaje sin depender de un viaje activo previo. | Alta | Sí |
 | Edición de viaje | Activo | Permite corregir un viaje ya registrado. | Alta | Sí |
 | Borrado de viaje | Activo | El usuario puede borrar un viaje desde la pantalla de edición tras confirmación. | Alta | Sí |
-| Historial real | Activo | Muestra semana, quincena, mes, año o rango personalizado sobre el mismo universo histórico, con jornadas, resumen, desglose coherente, exportación CSV y acceso al detalle correspondiente. | Alta | Sí |
+| Historial real | Activo | Muestra semana, quincena, mes, año o rango personalizado sobre el mismo universo histórico, con jornadas, consolidado económico, desglose por plataforma y método de pago, exportación CSV y acceso al detalle correspondiente. | Alta | Sí |
 | Tocar viaje del historial | Activo | Solo los viajes cerrados abren la pantalla de edición. | Alta | Sí |
 | Resumen diario | Activo | Muestra totales por plataforma, por tipo de pago y propinas del día. | Alta | Sí |
 | Resumen semanal | Activo | Muestra total y desglose semanal cuando se despliega. | Media | Sí |
@@ -182,4 +183,5 @@ No recoge detalles de implementación, arquitectura ni persistencia. Su objetivo
 
 - Debe mantenerse exactamente igual todo lo que el usuario puede ver y hacer hoy en las pantallas activas.
 - `Resumen` debe seguir operando como revisión, conciliación y cierre de una jornada.
+- `Historial` debe seguir mostrando el consolidado económico del periodo seleccionado con la misma semántica que `Resumen`, sin reinterpretar el universo histórico ni recalcular periodos por su cuenta.
 - Las capacidades latentes o no expuestas no forman parte de la paridad visible, pero no deben introducirse como si ya fueran producto terminado.

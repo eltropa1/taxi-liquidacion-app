@@ -1,12 +1,22 @@
 import * as SQLite from "expo-sqlite";
 
-let database: SQLite.SQLiteDatabase | null = null;
+/**
+ * En Fast Refresh, Metro re-ejecuta este módulo y reiniciaría un `let`
+ * module-level, pero la conexión nativa SQLite previa sigue viva. Sin
+ * este anclaje a `globalThis` se abriría una segunda conexión al mismo
+ * fichero en cada recarga, y ambas competirían por el lock de escritura
+ * ("database is locked"). `globalThis` sobrevive a la recarga de JS.
+ */
+declare global {
+  // eslint-disable-next-line no-var
+  var __taxiLiquidacionDatabase: SQLite.SQLiteDatabase | undefined;
+}
 
 export function getDatabase(): SQLite.SQLiteDatabase {
-  if (database) {
-    return database;
+  if (!globalThis.__taxiLiquidacionDatabase) {
+    globalThis.__taxiLiquidacionDatabase =
+      SQLite.openDatabaseSync("taxi_liquidation.db");
   }
 
-  database = SQLite.openDatabaseSync("taxi_liquidation.db");
-  return database;
+  return globalThis.__taxiLiquidacionDatabase;
 }

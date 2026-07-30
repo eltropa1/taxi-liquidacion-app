@@ -1,16 +1,12 @@
-import { RecordEnrichmentService } from "../records";
 import { getApplicationPersistence } from "../ports/persistence";
 
 export type DeleteRegisteredServiceRecordResult = Readonly<{
-  deleted: true;
-  enrichmentCleanupPending: boolean;
-  pendingAttachmentIds: string[];
+  voided: true;
 }>;
 
 export class DeleteRegisteredServiceRecord {
   static async execute(id: number): Promise<DeleteRegisteredServiceRecordResult> {
-    const { tripRepository, tripGeoSnapshotRepository } =
-      getApplicationPersistence();
+    const { tripRepository } = getApplicationPersistence();
     const trip = await tripRepository.findTripById(id);
 
     if (!trip) {
@@ -18,23 +14,11 @@ export class DeleteRegisteredServiceRecord {
     }
 
     if (trip.serviceStatus !== "completed") {
-      throw new Error("Solo se puede eliminar un servicio registrado");
+      throw new Error("Solo se puede anular un servicio registrado");
     }
 
-    await tripRepository.runInTransaction(async () => {
-      await tripGeoSnapshotRepository.deleteSnapshotsForTrip(id);
-      await tripRepository.deleteTrip(id);
-    });
+    await tripRepository.voidTrip(id, new Date());
 
-    const enrichment = await RecordEnrichmentService.deleteEnrichmentForOwner({
-      ownerType: "registered_service",
-      ownerId: String(id),
-    });
-
-    return {
-      deleted: true,
-      enrichmentCleanupPending: enrichment.pendingFilesystemCleanup.length > 0,
-      pendingAttachmentIds: enrichment.pendingFilesystemCleanup,
-    };
+    return { voided: true };
   }
 }

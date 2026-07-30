@@ -2,6 +2,10 @@ import {
   configureApplicationPersistence,
   resetApplicationPersistence,
 } from "../../ports/persistence";
+import {
+  configureApplicationRuntime,
+  resetApplicationRuntime,
+} from "../../runtime";
 import { CloseWorkday } from "../CloseWorkday";
 import { OpenWorkday } from "../OpenWorkday";
 
@@ -23,12 +27,32 @@ describe("Workday actions characterization", () => {
     tripGeoSnapshotRepository: {} as any,
   };
 
+  const runtime = {
+    goalStorage: {
+      getGoals: jest.fn(),
+      getCurrentGoalPolicy: jest.fn(),
+      getGoalsAt: jest.fn(),
+      getGoalHistory: jest.fn(),
+      getGoalPolicyById: jest.fn(),
+      saveGoals: jest.fn(),
+    },
+    weekConfigurationStorage: {
+      getWeekConfiguration: jest.fn(),
+      saveWeekConfiguration: jest.fn(),
+    },
+    geoLocation: {} as any,
+    geoAdministrativeResolver: {} as any,
+    tripCsvExporter: {} as any,
+  };
+
   beforeEach(() => {
     configureApplicationPersistence(persistence as any);
+    configureApplicationRuntime(runtime as any);
   });
 
   afterEach(() => {
     resetApplicationPersistence();
+    resetApplicationRuntime();
     jest.clearAllMocks();
   });
 
@@ -69,6 +93,12 @@ describe("Workday actions characterization", () => {
   });
 
   it("closes the current workday with the optional odometer", async () => {
+    runtime.goalStorage.getCurrentGoalPolicy.mockResolvedValueOnce({
+      id: "goal-2",
+      effectiveAt: "2026-07-20T10:00:00.000Z",
+      goals: { daily: 350, weekly: 1300, monthly: 4200 },
+    });
+
     await CloseWorkday.execute(1300);
 
     expect(persistence.workdayRepository.closeCurrentWorkday).toHaveBeenCalledTimes(
@@ -76,6 +106,7 @@ describe("Workday actions characterization", () => {
     );
     expect(persistence.workdayRepository.closeCurrentWorkday).toHaveBeenCalledWith(
       1300,
+      "goal-2",
     );
   });
 });

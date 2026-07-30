@@ -25,4 +25,17 @@ describe("TripEditProjection", () => {
       geoDropoffZone: "014",
     });
   });
+
+  it("resolves a manual special zone id even though it is not a neighborhood", () => {
+    expect(resolveEffectiveNeighborhoodName("MAD_AIRPORT_T4", null)).toBe(
+      "Aeropuerto T4 / T4S",
+    );
+  });
+
+  it("falls back to the geo zone when there is no manual override, across catalogs", () => {
+    expect(resolveEffectiveNeighborhoodName(null, "MAD_CHAMARTIN")).toBe(
+      "Estación de Chamartín",
+    );
+    expect(resolveEffectiveNeighborhoodName(null, "unknown-id")).toBe("—");
+  });
 });

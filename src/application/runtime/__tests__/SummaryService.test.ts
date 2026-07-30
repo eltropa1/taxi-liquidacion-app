@@ -20,6 +20,10 @@ describe("SummaryService", () => {
     configureApplicationRuntime({
       goalStorage: {
         getGoals: jest.fn(),
+        getCurrentGoalPolicy: jest.fn(),
+        getGoalsAt: jest.fn(),
+        getGoalHistory: jest.fn(),
+        getGoalPolicyById: jest.fn(),
         saveGoals: jest.fn(),
       },
       weekConfigurationStorage: {
@@ -54,7 +58,7 @@ describe("SummaryService", () => {
     const [startDate, endDate] =
       persistence.workdayRepository.findWorkdayIdsBetweenDates.mock.calls[0];
 
-    expect(startDate).toEqual(new Date(2025, 11, 31, 0, 0, 0, 0));
+    expect(startDate).toEqual(new Date(2026, 0, 1, 0, 0, 0, 0));
     expect(endDate).toEqual(new Date(2026, 0, 6, 23, 59, 59, 999));
   });
 

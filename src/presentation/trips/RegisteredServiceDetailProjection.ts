@@ -3,8 +3,8 @@ import type { ServiceStatus } from "../../domain/services";
 import type { TripGeoSnapshotRecord } from "../../application/ports/persistence";
 import {
   resolveEffectiveNeighborhoodName,
+  resolveGeoZoneLabel,
   resolveTripEditClock,
-  resolveTripEditSnapshotZones,
 } from "./TripEditProjection";
 
 export type RegisteredServiceRecord = Readonly<{
@@ -109,9 +109,8 @@ export function buildRegisteredServiceDetailProjection(input: {
   trip: RegisteredServiceRecord;
   snapshots: TripGeoSnapshotRecord[];
 }): RegisteredServiceDetailProjection {
-  const { geoPickupZone, geoDropoffZone } = resolveTripEditSnapshotZones(
-    input.snapshots,
-  );
+  const geoPickupSnapshot = input.snapshots.find((s) => s.kind === "START")?.snapshot;
+  const geoDropoffSnapshot = input.snapshots.find((s) => s.kind === "END")?.snapshot;
   const cashTotal =
     input.trip.payment === PaymentType.CASH &&
     input.trip.amount !== null &&
@@ -147,8 +146,8 @@ export function buildRegisteredServiceDetailProjection(input: {
       input.trip.manualDropoffZone,
       null,
     ),
-    geoPickupZoneLabel: resolveEffectiveNeighborhoodName(null, geoPickupZone),
-    geoDropoffZoneLabel: resolveEffectiveNeighborhoodName(null, geoDropoffZone),
+    geoPickupZoneLabel: resolveGeoZoneLabel(geoPickupSnapshot),
+    geoDropoffZoneLabel: resolveGeoZoneLabel(geoDropoffSnapshot),
   };
 }
 

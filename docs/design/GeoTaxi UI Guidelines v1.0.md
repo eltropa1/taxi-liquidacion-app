@@ -155,7 +155,7 @@ La Home V2 aprobada queda congelada como baseline visual oficial del producto.
 
 La Home V2 es la referencia para el resto de pantallas y para cualquier evolución futura del Centro Operativo.
 
-Las acciones secundarias de gestión viven fuera de la Home, en la pantalla Más.
+Las acciones secundarias de gestión viven fuera de la Home, en la pantalla Ajustes (antes llamada "Más"; renombrada para que el título coincida con la etiqueta del tab — ver GeoTaxi Design Language v1.0).
 
 La jerarquía visual aprobada no debe romperse:
 

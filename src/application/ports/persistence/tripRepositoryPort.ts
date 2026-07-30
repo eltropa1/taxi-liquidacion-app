@@ -140,4 +140,6 @@ export interface TripRepositoryPort {
   updateEditedTrip(input: TripEditedInput): Promise<void>;
 
   deleteTrip(id: number): Promise<void>;
+
+  voidTrip(id: number, voidedAt: Date): Promise<void>;
 }

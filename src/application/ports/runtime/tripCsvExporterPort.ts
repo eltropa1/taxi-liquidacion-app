@@ -1,3 +1,3 @@
 export interface TripCsvExporterPort {
-  exportCsv(csv: string): Promise<void>;
+  exportCsv(csv: string, fileName?: string): Promise<void>;
 }

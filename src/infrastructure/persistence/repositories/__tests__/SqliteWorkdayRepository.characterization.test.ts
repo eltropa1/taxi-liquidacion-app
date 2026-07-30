@@ -18,17 +18,104 @@ describe("SqliteWorkdayRepository", () => {
     execAsync: jest.fn(),
   });
 
+  const createBoundaryDatabase = () => {
+    const rows = [
+      {
+        id: 101,
+        startTime: new Date(2026, 6, 19, 22, 0, 0, 0).toISOString(),
+        endTime: new Date(2026, 6, 20, 1, 25, 0, 0).toISOString(),
+        startOdometer: 1200,
+        endOdometer: 1250,
+        isClosed: 1,
+        createdAt: new Date(2026, 6, 19, 22, 0, 0, 0).toISOString(),
+      },
+      {
+        id: 102,
+        startTime: new Date(2026, 6, 20, 1, 25, 0, 0).toISOString(),
+        endTime: null,
+        startOdometer: 1250,
+        endOdometer: null,
+        isClosed: 0,
+        createdAt: new Date(2026, 6, 20, 1, 25, 0, 0).toISOString(),
+      },
+    ];
+
+    return {
+      runAsync: jest.fn().mockResolvedValue({ lastInsertRowId: 44 }),
+      getFirstAsync: jest.fn(),
+      getAllAsync: jest.fn((query: string, params?: string[]) => {
+        if (!params || params.length !== 2) {
+          return Promise.resolve([]);
+        }
+
+        const [start, end] = params;
+        const isDatePrefixQuery = query.includes("substr(startTime, 1, 10)");
+        const matches = rows.filter((row) => {
+          if (isDatePrefixQuery) {
+            const dateKey = row.startTime.substring(0, 10);
+            return dateKey >= start && dateKey <= end;
+          }
+
+          return row.startTime >= start && row.startTime <= end;
+        });
+
+        if (query.includes("SELECT id\n      FROM workdays")) {
+          return Promise.resolve(matches.map((row) => ({ id: row.id })));
+        }
+
+        return Promise.resolve(matches);
+      }),
+      execAsync: jest.fn(),
+    };
+  };
+
+  const createAttributionDatabase = () => {
+    const rows = [
+      {
+        id: 44,
+        startTime: new Date(2026, 6, 31, 12, 0, 0, 0).toISOString(),
+        endTime: new Date(2026, 7, 1, 2, 0, 0, 0).toISOString(),
+        startOdometer: 1200,
+        endOdometer: 1250,
+        isClosed: 1,
+        createdAt: new Date(2026, 6, 31, 12, 0, 0, 0).toISOString(),
+      },
+    ];
+
+    return {
+      runAsync: jest.fn().mockResolvedValue({ lastInsertRowId: 44 }),
+      getFirstAsync: jest.fn((query: string, params?: string[]) => {
+        if (!params || params.length !== 2) {
+          return Promise.resolve(rows[0]);
+        }
+
+        const [start, end] = params;
+        const match = rows.find(
+          (row) => row.startTime >= start && row.startTime <= end,
+        );
+
+        if (query.includes("SELECT id, startTime, endTime, startOdometer, endOdometer, isClosed, createdAt")) {
+          return Promise.resolve(match ?? null);
+        }
+
+        return Promise.resolve(match ?? null);
+      }),
+      getAllAsync: jest.fn().mockResolvedValue(rows),
+      execAsync: jest.fn(),
+    };
+  };
+
   it("closes the current workday using the official update shape", async () => {
     const db = createDatabase();
     const repository = new SqliteWorkdayRepository(db as any);
 
-    await repository.closeCurrentWorkday(1300);
+    await repository.closeCurrentWorkday(1300, "goal-2");
 
     expect(db.runAsync).toHaveBeenCalledWith(
       expect.stringContaining(
-        "UPDATE workdays\n        SET endTime = ?, endOdometer = ?, isClosed = 1\n        WHERE isClosed = 0",
+        "UPDATE workdays\n        SET endTime = ?, endOdometer = ?, goalPolicyId = ?, isClosed = 1\n        WHERE isClosed = 0",
       ),
-      [expect.any(String), 1300],
+      [expect.any(String), 1300, "goal-2"],
     );
   });
 
@@ -40,7 +127,7 @@ describe("SqliteWorkdayRepository", () => {
 
     expect(db.runAsync).toHaveBeenCalledWith(
       expect.stringContaining(
-        "INSERT INTO workdays (startTime, startOdometer, endOdometer, createdAt)",
+        "INSERT INTO workdays (startTime, startOdometer, endOdometer, createdAt, goalPolicyId)",
       ),
       [expect.any(String), 1200, expect.any(String)],
     );
@@ -77,8 +164,99 @@ describe("SqliteWorkdayRepository", () => {
 
     expect(db.getFirstAsync).toHaveBeenCalledWith(
       expect.stringContaining(
-        "SELECT id, startTime, endTime, startOdometer, endOdometer, isClosed, createdAt",
+        "SELECT id, startTime, endTime, startOdometer, endOdometer, isClosed, createdAt, goalPolicyId",
       ),
+    );
+  });
+
+  it("keeps a workday attributed to the opening day even when it closes after midnight in the next month", async () => {
+    const db = createAttributionDatabase();
+    const repository = new SqliteWorkdayRepository(db as any);
+
+    const july31 = new Date(2026, 6, 31, 12, 0, 0, 0);
+    const august1 = new Date(2026, 7, 1, 12, 0, 0, 0);
+    const expectedStartTime = july31.toISOString();
+    const expectedEndTime = new Date(2026, 7, 1, 2, 0, 0, 0).toISOString();
+
+    await expect(repository.getWorkdayInfoForDate(july31)).resolves.toEqual({
+      id: 44,
+      startTime: expectedStartTime,
+      endTime: expectedEndTime,
+      startOdometer: 1200,
+      endOdometer: 1250,
+      isClosed: true,
+      createdAt: expectedStartTime,
+    });
+    await expect(repository.getWorkdayInfoForDate(august1)).resolves.toBeNull();
+  });
+
+  it("returns full workday rows for a historical date range", async () => {
+    const db = createAttributionDatabase();
+    const repository = new SqliteWorkdayRepository(db as any);
+
+    await repository.findWorkdaysBetweenDates(
+      new Date(2026, 6, 1, 12, 0, 0, 0),
+      new Date(2026, 6, 31, 12, 0, 0, 0),
+    );
+
+    expect(db.getAllAsync).toHaveBeenCalledWith(
+      expect.stringContaining(
+        "SELECT id, startTime, endTime, startOdometer, endOdometer, isClosed, createdAt, goalPolicyId",
+      ),
+      [
+        new Date(2026, 6, 1, 0, 0, 0, 0).toISOString(),
+        new Date(2026, 6, 31, 23, 59, 59, 999).toISOString(),
+      ],
+    );
+  });
+
+  it("keeps a Monday opening at 01:25 in the following week instead of leaking it into the previous one", async () => {
+    const db = createBoundaryDatabase();
+    const repository = new SqliteWorkdayRepository(db as any);
+
+    const previousWeekStart = new Date(2026, 6, 13, 12, 0, 0, 0);
+    const previousWeekEnd = new Date(2026, 6, 19, 12, 0, 0, 0);
+    const nextWeekStart = new Date(2026, 6, 20, 12, 0, 0, 0);
+    const nextWeekEnd = new Date(2026, 6, 26, 12, 0, 0, 0);
+
+    await expect(
+      repository.findWorkdaysBetweenDates(previousWeekStart, previousWeekEnd),
+    ).resolves.toEqual([
+      {
+        id: 101,
+        startTime: new Date(2026, 6, 19, 22, 0, 0, 0).toISOString(),
+        endTime: new Date(2026, 6, 20, 1, 25, 0, 0).toISOString(),
+        startOdometer: 1200,
+        endOdometer: 1250,
+        isClosed: true,
+        createdAt: new Date(2026, 6, 19, 22, 0, 0, 0).toISOString(),
+      },
+    ]);
+
+    await expect(
+      repository.findWorkdayIdsBetweenDates(previousWeekStart, previousWeekEnd),
+    ).resolves.toEqual([{ id: 101 }]);
+
+    await expect(
+      repository.findWorkdaysBetweenDates(nextWeekStart, nextWeekEnd),
+    ).resolves.toEqual([
+      expect.objectContaining({
+        id: 102,
+        startTime: new Date(2026, 6, 20, 1, 25, 0, 0).toISOString(),
+        endTime: null,
+        startOdometer: 1250,
+        endOdometer: null,
+        isClosed: false,
+        createdAt: new Date(2026, 6, 20, 1, 25, 0, 0).toISOString(),
+      }),
+    ]);
+
+    expect(db.getAllAsync).toHaveBeenCalledWith(
+      expect.stringContaining("WHERE startTime BETWEEN ? AND ?"),
+      [
+        new Date(2026, 6, 13, 0, 0, 0, 0).toISOString(),
+        new Date(2026, 6, 19, 23, 59, 59, 999).toISOString(),
+      ],
     );
   });
 });

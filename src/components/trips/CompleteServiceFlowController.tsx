@@ -6,6 +6,7 @@ import {
   type Dispatch,
   type SetStateAction,
 } from "react";
+import { Alert } from "react-native";
 
 import { PaymentType, TripSource } from "../../constants/enums";
 import { useTripActions } from "../../hooks/useTripActions";
@@ -72,22 +73,39 @@ export const CompleteServiceFlowController = forwardRef<
     setChargedAmountInput("");
   }, []);
 
-  const handleSaveClosedTrip = useCallback(async () => {
+  const handleSaveClosedTrip = useCallback(() => {
     if (pendingTripId === null) return;
 
-    const saved = await handleCompleteClosedTrip({
+    const saveInput = {
       tripId: pendingTripId,
       amountInput,
       payment,
       collectedAmountInput: chargedAmountInput,
       source,
       customSource: "",
-    });
+    };
 
-    if (saved) {
-      resetSheetState();
-      onServiceSaved?.();
-    }
+    // Camino de respuesta instantánea: la hoja se cierra al toque y el guardado
+    // real en SQLite continúa en segundo plano.
+    resetSheetState();
+    onServiceSaved?.();
+
+    handleCompleteClosedTrip(saveInput)
+      .then((saved) => {
+        if (!saved) {
+          Alert.alert(
+            "Importe inválido",
+            "El servicio no se ha guardado: revisa el importe introducido e inténtalo de nuevo.",
+          );
+        }
+      })
+      .catch((error) => {
+        console.error("Error guardando servicio cerrado", error);
+        Alert.alert(
+          "No se ha podido guardar",
+          "Revisa los datos e inténtalo de nuevo.",
+        );
+      });
   }, [
     amountInput,
     chargedAmountInput,

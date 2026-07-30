@@ -1,14 +1,31 @@
+import { useCallback } from "react";
 import { FlatList, StyleSheet, View } from "react-native";
 
 import { TripHistoryEmptyState } from "./TripHistoryEmptyState";
 import { TripHistoryRow } from "./TripHistoryRow";
 import type { TripHistoryProps } from "./TripHistory.types";
+import type { TripVisualProjection } from "../../presentation";
+
+function renderSeparator() {
+  return <View style={styles.separator} />;
+}
 
 export function TripHistory({
   trips,
   onRegisteredTripPress,
   onPendingTripPress,
 }: TripHistoryProps) {
+  const renderItem = useCallback(
+    ({ item }: { item: TripVisualProjection }) => (
+      <TripHistoryRow
+        trip={item}
+        onRegisteredPress={onRegisteredTripPress}
+        onPendingPress={onPendingTripPress}
+      />
+    ),
+    [onRegisteredTripPress, onPendingTripPress],
+  );
+
   return (
     <View style={styles.container}>
       <FlatList
@@ -16,14 +33,8 @@ export function TripHistory({
         keyExtractor={(item) => String(item.id)}
         style={styles.list}
         contentContainerStyle={styles.listContent}
-        ItemSeparatorComponent={() => <View style={styles.separator} />}
-        renderItem={({ item }) => (
-          <TripHistoryRow
-            trip={item}
-            onRegisteredPress={onRegisteredTripPress}
-            onPendingPress={onPendingTripPress}
-          />
-        )}
+        ItemSeparatorComponent={renderSeparator}
+        renderItem={renderItem}
         ListEmptyComponent={<TripHistoryEmptyState />}
       />
     </View>

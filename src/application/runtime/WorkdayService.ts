@@ -15,9 +15,13 @@ export class WorkdayService {
     );
   }
 
-  static async closeCurrentWorkday(endOdometer?: number | null) {
+  static async closeCurrentWorkday(
+    endOdometer?: number | null,
+    goalPolicyId?: string | null,
+  ) {
     await getApplicationPersistence().workdayRepository.closeCurrentWorkday(
       endOdometer ?? null,
+      goalPolicyId ?? null,
     );
   }
 

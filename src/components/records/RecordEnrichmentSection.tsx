@@ -23,6 +23,8 @@ import {
   shareAttachmentUri,
   type PickedRecordAttachment,
 } from "../../infrastructure/device";
+import type { ThemeColors, RadiiTokens } from "../../presentation/theme/tokens";
+import { useAppTheme } from "../../presentation/theme/ThemeProvider";
 
 type EnrichmentOwner = Readonly<{
   ownerType: "registered_service";
@@ -36,6 +38,8 @@ export function RecordEnrichmentSection({
   owner: EnrichmentOwner;
   onDirtyChange?: (dirty: boolean) => void;
 }) {
+  const { colors: themeColors, radii: themeRadii } = useAppTheme();
+  const styles = useMemo(() => createStyles(themeColors, themeRadii), [themeColors, themeRadii]);
   const { ownerType, ownerId } = owner;
   const mountedRef = useRef(true);
   const [loading, setLoading] = useState(true);
@@ -321,7 +325,7 @@ export function RecordEnrichmentSection({
     <View style={styles.section}>
       <View style={styles.headerRow}>
         <View style={styles.sectionHeaderTitle}>
-          <MaterialIcons name="description" size={18} color="#0f766e" />
+          <MaterialIcons name="description" size={18} color={themeColors.primary} />
           <Text style={styles.sectionTitle}>Notas y adjuntos</Text>
         </View>
         <Text style={styles.counter}>{projection.attachmentCountLabel}</Text>
@@ -347,7 +351,7 @@ export function RecordEnrichmentSection({
                   autoFocus
                   multiline
                   placeholder="Escribe una nota para este servicio"
-                  placeholderTextColor="#8a9691"
+                  placeholderTextColor={themeColors.textSecondary}
                   style={styles.input}
                 />
                 {noteError ? <Text style={styles.error}>{noteError}</Text> : null}
@@ -445,6 +449,9 @@ function AttachmentSourceDialog({
   onGallery: () => void;
   onPdf: () => void;
 }) {
+  const { colors: themeColors, radii: themeRadii } = useAppTheme();
+  const styles = useMemo(() => createStyles(themeColors, themeRadii), [themeColors, themeRadii]);
+
   return (
     <Modal
       visible={visible}
@@ -477,6 +484,9 @@ function DialogOption({
   onPress: () => void;
   muted?: boolean;
 }) {
+  const { colors: themeColors, radii: themeRadii } = useAppTheme();
+  const styles = useMemo(() => createStyles(themeColors, themeRadii), [themeColors, themeRadii]);
+
   return (
     <Pressable
       onPress={onPress}
@@ -487,7 +497,7 @@ function DialogOption({
       <MaterialIcons
         name={icon}
         size={20}
-        color={muted ? "#66736f" : "#0f766e"}
+        color={muted ? themeColors.textSecondary : themeColors.primary}
       />
       <Text style={[styles.dialogOptionText, muted && styles.dialogOptionMuted]}>
         {label}
@@ -509,6 +519,9 @@ function AttachmentRow({
   onShare: () => void;
   onDelete: () => void;
 }) {
+  const { colors: themeColors, radii: themeRadii } = useAppTheme();
+  const styles = useMemo(() => createStyles(themeColors, themeRadii), [themeColors, themeRadii]);
+
   function showActions() {
     const actions = [];
     if (item.actions.includes("open")) actions.push({ text: "Abrir", onPress: onOpen });
@@ -538,7 +551,7 @@ function AttachmentRow({
         <MaterialIcons
           name={item.kindLabel === "Imagen" ? "image" : "picture-as-pdf"}
           size={21}
-          color="#0f766e"
+          color={themeColors.primary}
         />
       </View>
       <View style={styles.attachmentText}>
@@ -550,7 +563,7 @@ function AttachmentRow({
         </Text>
       </View>
       <View style={styles.statusAndActions}>
-        <Text style={[styles.statusText, statusTone(item.status)]}>
+        <Text style={[styles.statusText, statusTone(item.status, styles)]}>
           {busy ? "..." : item.statusLabel}
         </Text>
         {item.actions.length > 0 ? (
@@ -561,7 +574,7 @@ function AttachmentRow({
             accessibilityRole="button"
             accessibilityLabel={`Acciones de ${item.title}`}
           >
-            <MaterialIcons name="more-vert" size={22} color="#26302d" />
+            <MaterialIcons name="more-vert" size={22} color={themeColors.textPrimary} />
           </Pressable>
         ) : null}
       </View>
@@ -582,6 +595,9 @@ function ActionButton({
   variant: "primary" | "secondary";
   icon?: keyof typeof MaterialIcons.glyphMap;
 }) {
+  const { colors: themeColors, radii: themeRadii } = useAppTheme();
+  const styles = useMemo(() => createStyles(themeColors, themeRadii), [themeColors, themeRadii]);
+
   return (
     <Pressable
       onPress={onPress}
@@ -598,7 +614,7 @@ function ActionButton({
         <MaterialIcons
           name={icon}
           size={17}
-          color={variant === "primary" ? "#ffffff" : "#0f766e"}
+          color={variant === "primary" ? themeColors.surface : themeColors.primary}
         />
       ) : null}
       <Text
@@ -614,7 +630,7 @@ function ActionButton({
   );
 }
 
-function statusTone(status: string) {
+function statusTone(status: string, styles: ReturnType<typeof createStyles>) {
   if (status === "failed" || status === "missing") return styles.statusError;
   if (status === "pending" || status === "deleting") return styles.statusMuted;
   return styles.statusReady;
@@ -651,13 +667,14 @@ function mapResolveError(error: string): string {
   }
 }
 
-const styles = StyleSheet.create({
+function createStyles(themeColors: ThemeColors, themeRadii: RadiiTokens) {
+  return StyleSheet.create({
   section: {
-    backgroundColor: "#ffffff",
-    borderRadius: 8,
+    backgroundColor: themeColors.surface,
+    borderRadius: themeRadii.card,
     padding: 14,
     borderWidth: 1,
-    borderColor: "#dce3df",
+    borderColor: themeColors.border,
     gap: 12,
   },
   headerRow: {
@@ -673,18 +690,18 @@ const styles = StyleSheet.create({
   },
   sectionTitle: {
     fontSize: 16,
-    fontWeight: "900",
-    color: "#171c1a",
+    fontWeight: "600",
+    color: themeColors.textPrimary,
   },
   counter: {
     fontSize: 12,
-    color: "#66736f",
-    fontWeight: "900",
+    color: themeColors.textSecondary,
+    fontWeight: "700",
   },
   label: {
     fontSize: 13,
-    fontWeight: "900",
-    color: "#26302d",
+    fontWeight: "700",
+    color: themeColors.textPrimary,
   },
   noteBlock: {
     gap: 8,
@@ -692,7 +709,7 @@ const styles = StyleSheet.create({
   attachmentBlock: {
     gap: 8,
     borderTopWidth: 1,
-    borderTopColor: "#dce3df",
+    borderTopColor: themeColors.border,
     paddingTop: 12,
   },
   attachmentHeader: {
@@ -707,27 +724,27 @@ const styles = StyleSheet.create({
   input: {
     minHeight: 96,
     borderWidth: 1,
-    borderColor: "#dce3df",
-    borderRadius: 8,
+    borderColor: themeColors.border,
+    borderRadius: themeRadii.button,
     paddingHorizontal: 12,
     paddingVertical: 10,
-    backgroundColor: "#ffffff",
+    backgroundColor: themeColors.surface,
     fontSize: 15,
-    color: "#171c1a",
+    color: themeColors.textPrimary,
     textAlignVertical: "top",
   },
   noteText: {
-    color: "#26302d",
+    color: themeColors.textPrimary,
     fontSize: 14,
     lineHeight: 20,
   },
   helper: {
     fontSize: 12,
-    color: "#66736f",
+    color: themeColors.textSecondary,
     lineHeight: 17,
   },
   error: {
-    color: "#b42318",
+    color: themeColors.danger,
     fontSize: 12,
     fontWeight: "800",
   },
@@ -745,24 +762,24 @@ const styles = StyleSheet.create({
     alignItems: "center",
     justifyContent: "center",
     gap: 6,
-    borderRadius: 8,
+    borderRadius: themeRadii.button,
     paddingHorizontal: 12,
   },
   actionButtonPrimary: {
-    backgroundColor: "#0f766e",
+    backgroundColor: themeColors.primary,
   },
   actionButtonSecondary: {
-    backgroundColor: "#ffffff",
+    backgroundColor: themeColors.surface,
     borderWidth: 1,
-    borderColor: "#dce3df",
+    borderColor: themeColors.border,
   },
   actionButtonPrimaryText: {
-    color: "#ffffff",
-    fontWeight: "900",
+    color: themeColors.surface,
+    fontWeight: "700",
   },
   actionButtonSecondaryText: {
-    color: "#0f766e",
-    fontWeight: "900",
+    color: themeColors.primary,
+    fontWeight: "700",
   },
   disabled: {
     opacity: 0.55,
@@ -773,7 +790,7 @@ const styles = StyleSheet.create({
     alignItems: "center",
     gap: 10,
     borderTopWidth: 1,
-    borderTopColor: "#edf1ef",
+    borderTopColor: themeColors.border,
     paddingTop: 10,
   },
   attachmentIcon: {
@@ -781,8 +798,8 @@ const styles = StyleSheet.create({
     height: 38,
     alignItems: "center",
     justifyContent: "center",
-    borderRadius: 8,
-    backgroundColor: "#dff4ef",
+    borderRadius: themeRadii.button,
+    backgroundColor: themeColors.primarySubtle,
   },
   attachmentText: {
     flex: 1,
@@ -791,12 +808,12 @@ const styles = StyleSheet.create({
   },
   attachmentTitle: {
     fontSize: 14,
-    fontWeight: "900",
-    color: "#26302d",
+    fontWeight: "700",
+    color: themeColors.textPrimary,
   },
   attachmentMeta: {
     fontSize: 12,
-    color: "#66736f",
+    color: themeColors.textSecondary,
   },
   statusAndActions: {
     flexDirection: "row",
@@ -805,24 +822,24 @@ const styles = StyleSheet.create({
   },
   statusText: {
     fontSize: 11,
-    fontWeight: "900",
+    fontWeight: "700",
     maxWidth: 84,
   },
   statusReady: {
-    color: "#0f766e",
+    color: themeColors.primary,
   },
   statusMuted: {
-    color: "#66736f",
+    color: themeColors.textSecondary,
   },
   statusError: {
-    color: "#b42318",
+    color: themeColors.danger,
   },
   iconButton: {
-    width: 40,
-    height: 40,
+    width: 44,
+    height: 44,
     alignItems: "center",
     justifyContent: "center",
-    borderRadius: 20,
+    borderRadius: 22,
   },
   modalBackdrop: {
     flex: 1,
@@ -831,19 +848,19 @@ const styles = StyleSheet.create({
     padding: 16,
   },
   modalPanel: {
-    backgroundColor: "#ffffff",
-    borderRadius: 8,
+    backgroundColor: themeColors.surface,
+    borderRadius: themeRadii.card,
     padding: 16,
     gap: 8,
   },
   modalTitle: {
     fontSize: 20,
-    fontWeight: "900",
-    color: "#171c1a",
+    fontWeight: "600",
+    color: themeColors.textPrimary,
   },
   modalHelper: {
     fontSize: 13,
-    color: "#66736f",
+    color: themeColors.textSecondary,
     marginBottom: 4,
   },
   dialogOption: {
@@ -851,15 +868,16 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     alignItems: "center",
     gap: 12,
-    borderRadius: 8,
+    borderRadius: themeRadii.button,
     paddingHorizontal: 10,
   },
   dialogOptionText: {
-    color: "#0f766e",
-    fontWeight: "900",
+    color: themeColors.primary,
+    fontWeight: "700",
     fontSize: 15,
   },
   dialogOptionMuted: {
-    color: "#66736f",
+    color: themeColors.textSecondary,
   },
-});
+  });
+}

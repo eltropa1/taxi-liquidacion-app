@@ -12,8 +12,10 @@ import {
 
 import { router, useLocalSearchParams } from "expo-router";
 import { SafeAreaView } from "react-native-safe-area-context";
+import { MaterialIcons } from "@expo/vector-icons";
 
 import { ExportService } from "../../src/application/runtime";
+import { EconomicDrilldownRow } from "../../src/components/economic/EconomicDrilldownRow";
 import { CompleteServiceFlowController } from "../../src/components/trips/CompleteServiceFlowController";
 import { TripHistoryEmptyState } from "../../src/components/trip-history/TripHistoryEmptyState";
 import { TripHistoryRow } from "../../src/components/trip-history/TripHistoryRow";
@@ -31,6 +33,8 @@ import {
 } from "../../src/domain/workdays/workdayOdometer";
 import type { CompleteServiceFlowControllerHandle } from "../../src/components/trips/CompleteServiceFlowController";
 import { addCalendarDays } from "../../src/utils/dateUtils";
+import type { ThemeColors, RadiiTokens } from "../../src/presentation/theme/tokens";
+import { useAppTheme } from "../../src/presentation/theme/ThemeProvider";
 
 function formatMoney(value: number | null | undefined) {
   if (value === null || value === undefined) return "—";
@@ -101,12 +105,16 @@ function platformIdToTripSource(platformId: string) {
   }
 }
 
+type SummaryStyles = ReturnType<typeof createStyles>;
+
 function SectionTitle({
   title,
   subtitle,
+  styles,
 }: {
   title: string;
   subtitle?: string;
+  styles: SummaryStyles;
 }) {
   return (
     <View style={styles.sectionTitleBlock}>
@@ -120,10 +128,12 @@ function MetricRow({
   label,
   value,
   detail,
+  styles,
 }: {
   label: string;
   value: string;
   detail?: string;
+  styles: SummaryStyles;
 }) {
   return (
     <View style={styles.metricRow}>
@@ -136,33 +146,9 @@ function MetricRow({
   );
 }
 
-function DrilldownRow({
-  group,
-  onPress,
-}: {
-  group: SummaryDrilldownGroup;
-  onPress: () => void;
-}) {
-  return (
-    <Pressable
-      onPress={onPress}
-      style={({ pressed }) => [styles.drilldownRow, pressed && styles.pressed]}
-    >
-      <View style={styles.drilldownText}>
-        <Text style={styles.drilldownTitle}>{group.title}</Text>
-        <Text style={styles.drilldownSubtitle}>{group.subtitle}</Text>
-      </View>
-
-      <View style={styles.drilldownMeta}>
-        <Text style={styles.drilldownCount}>{group.count}</Text>
-        <Text style={styles.drilldownAmount}>{formatMoney(group.amount)}</Text>
-        <Text style={styles.drilldownChevron}>›</Text>
-      </View>
-    </Pressable>
-  );
-}
-
 export default function SummaryScreen() {
+  const { colors: themeColors, radii: themeRadii } = useAppTheme();
+  const styles = useMemo(() => createStyles(themeColors, themeRadii), [themeColors, themeRadii]);
   const params = useLocalSearchParams<{ date?: string }>();
   const [selectedDate, setSelectedDate] = useState(() => parseSelectedDate(params.date));
   const [currentTime, setCurrentTime] = useState(() => new Date());
@@ -310,7 +296,7 @@ export default function SummaryScreen() {
               accessibilityRole="button"
               accessibilityLabel="Abrir selector de fechas"
             >
-              <Text style={styles.contextCalendarIcon}>📅</Text>
+              <MaterialIcons name="calendar-today" size={16} color={themeColors.primary} />
             </Pressable>
 
             <Pressable
@@ -331,6 +317,21 @@ export default function SummaryScreen() {
                 ›
               </Text>
             </Pressable>
+
+            {!isLatestAvailableDate ? (
+              <Pressable
+                hitSlop={6}
+                onPress={() => setSelectedDate(new Date())}
+                accessibilityRole="button"
+                accessibilityLabel="Volver a hoy"
+                style={({ pressed }) => [
+                  styles.todayButton,
+                  pressed && styles.todayButtonPressed,
+                ]}
+              >
+                <Text style={styles.todayButtonText}>Hoy</Text>
+              </Pressable>
+            ) : null}
           </View>
         </View>
         <Text style={styles.heroValue}>{formatMoney(projection.totalAmount)}</Text>
@@ -341,40 +342,44 @@ export default function SummaryScreen() {
       </View>
 
       <View style={styles.section}>
-        <SectionTitle title="Estado y conciliación" />
+        <SectionTitle title="Estado y conciliación" styles={styles} />
         <MetricRow
           label="Horas trabajadas"
           value={projection.workedDurationLabel}
           detail={projection.workdayRangeLabel}
+          styles={styles}
         />
         {projection.workedKilometers !== null ? (
           <MetricRow
             label="Kilómetros trabajados"
             value={`${projection.workedKilometers} km`}
+            styles={styles}
           />
         ) : null}
         <MetricRow
           label="Servicios cerrados"
           value={String(projection.completedServices)}
+          styles={styles}
         />
         {projection.incidentServices > 0 ? (
           <MetricRow
             label="Incidencias visibles"
             value={String(projection.incidentServices)}
+            styles={styles}
           />
         ) : null}
       </View>
 
       <View style={styles.section}>
-        <SectionTitle title="Propinas" subtitle="Separadas de la recaudación principal" />
-        <MetricRow label="Tarjeta" value={formatMoney(projection.tipCardAmount)} />
-        <MetricRow label="Efectivo" value={formatMoney(projection.tipCashAmount)} />
+        <SectionTitle title="Propinas" subtitle="Separadas de la recaudación principal" styles={styles} />
+        <MetricRow label="Tarjeta" value={formatMoney(projection.tipCardAmount)} styles={styles} />
+        <MetricRow label="Efectivo" value={formatMoney(projection.tipCashAmount)} styles={styles} />
       </View>
 
       <View style={styles.section}>
-        <SectionTitle title="Por plataforma" subtitle="Pulsa para ver solo esos servicios" />
+        <SectionTitle title="Por plataforma" subtitle="Pulsa para ver solo esos servicios" styles={styles} />
         {projection.platformRows.map((group) => (
-          <DrilldownRow
+          <EconomicDrilldownRow
             key={group.id}
             group={group}
             onPress={() => openDrilldown(group)}
@@ -383,9 +388,9 @@ export default function SummaryScreen() {
       </View>
 
       <View style={styles.section}>
-        <SectionTitle title="Por método de cobro" subtitle="Pulsa para el mismo drill-down filtrado" />
+        <SectionTitle title="Por método de cobro" subtitle="Pulsa para el mismo drill-down filtrado" styles={styles} />
         {projection.paymentRows.map((group) => (
-          <DrilldownRow
+          <EconomicDrilldownRow
             key={group.id}
             group={group}
             onPress={() => openDrilldown(group)}
@@ -394,10 +399,10 @@ export default function SummaryScreen() {
       </View>
 
       <View style={styles.section}>
-        <SectionTitle title="Revisión" subtitle="Servicios pendientes o en curso" />
+        <SectionTitle title="Revisión" subtitle="Servicios pendientes o en curso" styles={styles} />
         {projection.incidentRows.length > 0 ? (
           projection.incidentRows.map((group) => (
-            <DrilldownRow
+            <EconomicDrilldownRow
               key={group.id}
               group={group}
               onPress={() => openDrilldown(group)}
@@ -409,7 +414,7 @@ export default function SummaryScreen() {
       </View>
 
       <View style={styles.section}>
-        <SectionTitle title="Servicios de la jornada" subtitle="Listado completo y cronológico" />
+        <SectionTitle title="Servicios de la jornada" subtitle="Listado completo y cronológico" styles={styles} />
       </View>
     </View>
   );
@@ -439,10 +444,6 @@ export default function SummaryScreen() {
           </Pressable>
         ) : null}
       </View>
-
-      <Pressable onPress={() => router.push("/")} style={styles.backLink}>
-        <Text style={styles.backLinkText}>Volver a la Home</Text>
-      </Pressable>
     </View>
   );
 
@@ -625,10 +626,11 @@ export default function SummaryScreen() {
   );
 }
 
-const styles = StyleSheet.create({
+function createStyles(themeColors: ThemeColors, themeRadii: RadiiTokens) {
+  return StyleSheet.create({
   screen: {
     flex: 1,
-    backgroundColor: "#f4f1eb",
+    backgroundColor: themeColors.bg,
   },
   content: {
     paddingHorizontal: 20,
@@ -647,7 +649,7 @@ const styles = StyleSheet.create({
     fontWeight: "700",
     textTransform: "uppercase",
     letterSpacing: 1.2,
-    color: "#6e6457",
+    color: themeColors.textSecondary,
   },
   heroTopRow: {
     flexDirection: "row",
@@ -659,7 +661,7 @@ const styles = StyleSheet.create({
     flex: 1,
     fontSize: 16,
     fontWeight: "800",
-    color: "#1f1a17",
+    color: themeColors.textPrimary,
     textTransform: "capitalize",
   },
   statusPill: {
@@ -671,16 +673,16 @@ const styles = StyleSheet.create({
     justifyContent: "center",
     textAlign: "center",
     fontSize: 12,
-    fontWeight: "900",
+    fontWeight: "700",
     letterSpacing: 0.4,
   },
   statusOpen: {
-    backgroundColor: "#dff4ef",
-    color: "#0f766e",
+    backgroundColor: themeColors.primarySubtle,
+    color: themeColors.primary,
   },
   statusClosed: {
-    backgroundColor: "#ece5da",
-    color: "#2b2521",
+    backgroundColor: themeColors.border,
+    color: themeColors.textSecondary,
   },
   contextBarBottomRow: {
     flexDirection: "row",
@@ -695,10 +697,10 @@ const styles = StyleSheet.create({
   dateNavigatorArrow: {
     fontSize: 22,
     fontWeight: "700",
-    color: "#2b2521",
+    color: themeColors.textPrimary,
   },
   dateNavigatorArrowDisabled: {
-    color: "#9f968a",
+    color: themeColors.textSecondary,
   },
   dateNavigatorDisabled: {
     opacity: 0.45,
@@ -707,33 +709,46 @@ const styles = StyleSheet.create({
     opacity: 0.7,
   },
   contextCalendarButton: {
-    width: 38,
-    height: 38,
-    borderRadius: 19,
-    backgroundColor: "#e9e2d8",
+    width: 44,
+    height: 44,
+    borderRadius: 22,
+    backgroundColor: themeColors.border,
     alignItems: "center",
     justifyContent: "center",
   },
   contextCalendarButtonPressed: {
     opacity: 0.82,
   },
-  contextCalendarIcon: {
-    fontSize: 16,
+  todayButton: {
+    paddingHorizontal: 12,
+    height: 32,
+    borderRadius: 16,
+    backgroundColor: themeColors.primarySubtle,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  todayButtonPressed: {
+    opacity: 0.75,
+  },
+  todayButtonText: {
+    fontSize: 13,
+    fontWeight: "600",
+    color: themeColors.primary,
   },
   heroValue: {
-    fontSize: 38,
-    lineHeight: 42,
-    fontWeight: "900",
-    color: "#181311",
+    fontSize: 32,
+    lineHeight: 36,
+    fontWeight: "600",
+    color: themeColors.textPrimary,
   },
   heroMeta: {
     fontSize: 14,
     fontWeight: "700",
-    color: "#4d463f",
+    color: themeColors.textSecondary,
   },
   heroNote: {
     fontSize: 13,
-    color: "#6e6457",
+    color: themeColors.textSecondary,
   },
   section: {
     paddingVertical: 14,
@@ -746,13 +761,13 @@ const styles = StyleSheet.create({
   },
   sectionTitle: {
     fontSize: 16,
-    fontWeight: "900",
-    color: "#1f1a17",
+    fontWeight: "600",
+    color: themeColors.textPrimary,
   },
   sectionSubtitle: {
     fontSize: 12,
     fontWeight: "600",
-    color: "#6e6457",
+    color: themeColors.textSecondary,
   },
   metricRow: {
     flexDirection: "row",
@@ -771,16 +786,16 @@ const styles = StyleSheet.create({
   metricLabel: {
     fontSize: 13,
     fontWeight: "700",
-    color: "#1f1a17",
+    color: themeColors.textPrimary,
   },
   metricDetail: {
     fontSize: 12,
-    color: "#6e6457",
+    color: themeColors.textSecondary,
   },
   metricValue: {
     fontSize: 13,
     fontWeight: "800",
-    color: "#231d1a",
+    color: themeColors.textPrimary,
     textAlign: "right",
   },
   drilldownRow: {
@@ -800,11 +815,11 @@ const styles = StyleSheet.create({
   drilldownTitle: {
     fontSize: 13,
     fontWeight: "800",
-    color: "#1f1a17",
+    color: themeColors.textPrimary,
   },
   drilldownSubtitle: {
     fontSize: 12,
-    color: "#6e6457",
+    color: themeColors.textSecondary,
   },
   drilldownMeta: {
     flexDirection: "row",
@@ -816,23 +831,23 @@ const styles = StyleSheet.create({
     textAlign: "right",
     fontSize: 13,
     fontWeight: "800",
-    color: "#231d1a",
+    color: themeColors.textPrimary,
   },
   drilldownAmount: {
     minWidth: 84,
     textAlign: "right",
     fontSize: 13,
     fontWeight: "800",
-    color: "#231d1a",
+    color: themeColors.textPrimary,
   },
   drilldownChevron: {
     fontSize: 18,
     fontWeight: "800",
-    color: "#6e6457",
+    color: themeColors.textSecondary,
   },
   sectionEmpty: {
     fontSize: 13,
-    color: "#6e6457",
+    color: themeColors.textSecondary,
     paddingVertical: 6,
   },
   itemSeparator: {
@@ -848,21 +863,23 @@ const styles = StyleSheet.create({
   },
   primaryAction: {
     minHeight: 52,
-    borderRadius: 16,
-    backgroundColor: "#1f1a17",
+    borderRadius: themeRadii.button,
+    backgroundColor: themeColors.textPrimary,
     alignItems: "center",
     justifyContent: "center",
     paddingHorizontal: 18,
   },
   primaryActionText: {
-    color: "#ffffff",
+    color: themeColors.surface,
     fontSize: 15,
     fontWeight: "800",
   },
   secondaryAction: {
     minHeight: 44,
-    borderRadius: 12,
-    backgroundColor: "#ece5da",
+    borderRadius: themeRadii.button,
+    backgroundColor: themeColors.bg,
+    borderWidth: 1,
+    borderColor: themeColors.border,
     alignItems: "center",
     justifyContent: "center",
     paddingHorizontal: 14,
@@ -870,17 +887,7 @@ const styles = StyleSheet.create({
   secondaryActionText: {
     fontSize: 13,
     fontWeight: "700",
-    color: "#2b2521",
-  },
-  backLink: {
-    alignSelf: "center",
-    paddingVertical: 8,
-    paddingHorizontal: 12,
-  },
-  backLinkText: {
-    fontSize: 13,
-    fontWeight: "700",
-    color: "#6e6457",
+    color: themeColors.textPrimary,
   },
   modalOverlay: {
     ...StyleSheet.absoluteFillObject,
@@ -889,25 +896,25 @@ const styles = StyleSheet.create({
     padding: 20,
   },
   modalCard: {
-    backgroundColor: "#fff",
-    borderRadius: 18,
+    backgroundColor: themeColors.surface,
+    borderRadius: themeRadii.card,
     padding: 18,
     gap: 10,
   },
   modalTitle: {
     fontSize: 18,
-    fontWeight: "800",
-    color: "#1f1a17",
+    fontWeight: "600",
+    color: themeColors.textPrimary,
   },
   input: {
     borderWidth: 1,
-    borderColor: "#d8d0c5",
-    borderRadius: 12,
+    borderColor: themeColors.border,
+    borderRadius: themeRadii.button,
     paddingHorizontal: 12,
     paddingVertical: 10,
     fontSize: 14,
-    color: "#1f1a17",
-    backgroundColor: "#fff",
+    color: themeColors.textPrimary,
+    backgroundColor: themeColors.surface,
   },
   modalButtons: {
     flexDirection: "row",
@@ -925,7 +932,7 @@ const styles = StyleSheet.create({
   calendarHeaderArrow: {
     fontSize: 22,
     fontWeight: "700",
-    color: "#2b2521",
+    color: themeColors.textPrimary,
   },
   calendarWeekdays: {
     flexDirection: "row",
@@ -937,7 +944,7 @@ const styles = StyleSheet.create({
     textAlign: "center",
     fontSize: 11,
     fontWeight: "800",
-    color: "#6e6457",
+    color: themeColors.textSecondary,
   },
   calendarGrid: {
     flexDirection: "row",
@@ -951,46 +958,49 @@ const styles = StyleSheet.create({
     borderRadius: 12,
   },
   calendarCellPressed: {
-    backgroundColor: "#f0e8dc",
+    backgroundColor: themeColors.bg,
   },
   calendarCellSelected: {
-    backgroundColor: "#d8ccb8",
+    backgroundColor: themeColors.border,
   },
   calendarCellText: {
     fontSize: 14,
     fontWeight: "700",
-    color: "#2b2521",
+    color: themeColors.textPrimary,
   },
   calendarCellTextSelected: {
-    color: "#1f1a17",
+    color: themeColors.textPrimary,
   },
   modalButton: {
     flex: 1,
     minHeight: 44,
-    borderRadius: 12,
-    backgroundColor: "#eee6da",
+    borderRadius: themeRadii.button,
+    backgroundColor: themeColors.bg,
+    borderWidth: 1,
+    borderColor: themeColors.border,
     alignItems: "center",
     justifyContent: "center",
   },
   modalButtonText: {
     fontSize: 13,
     fontWeight: "800",
-    color: "#2b2521",
+    color: themeColors.textPrimary,
   },
   modalButtonPrimary: {
     flex: 1,
     minHeight: 44,
-    borderRadius: 12,
-    backgroundColor: "#1f1a17",
+    borderRadius: themeRadii.button,
+    backgroundColor: themeColors.textPrimary,
     alignItems: "center",
     justifyContent: "center",
   },
   modalButtonPrimaryText: {
     fontSize: 13,
     fontWeight: "800",
-    color: "#fff",
+    color: themeColors.surface,
   },
   pressed: {
     opacity: 0.82,
   },
-});
+  });
+}

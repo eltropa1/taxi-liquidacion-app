@@ -9,7 +9,45 @@ type WorkdayRow = {
   endOdometer: number | null;
   isClosed: number;
   createdAt: string;
+  goalPolicyId: string | null;
 };
+
+function mapWorkdayRow(row: WorkdayRow) {
+  return {
+    id: row.id,
+    startTime: row.startTime,
+    endTime: row.endTime,
+    startOdometer: row.startOdometer,
+    endOdometer: row.endOdometer,
+    isClosed: row.isClosed === 1,
+    createdAt: row.createdAt,
+    ...(row.goalPolicyId ? { goalPolicyId: row.goalPolicyId } : {}),
+  };
+}
+
+function startOfLocalDay(date: Date): Date {
+  return new Date(
+    date.getFullYear(),
+    date.getMonth(),
+    date.getDate(),
+    0,
+    0,
+    0,
+    0,
+  );
+}
+
+function endOfLocalDay(date: Date): Date {
+  return new Date(
+    date.getFullYear(),
+    date.getMonth(),
+    date.getDate(),
+    23,
+    59,
+    59,
+    999,
+  );
+}
 
 export class SqliteWorkdayRepository implements WorkdayRepositoryPort {
   constructor(private readonly database: PersistenceDatabase) {}
@@ -46,6 +84,7 @@ export class SqliteWorkdayRepository implements WorkdayRepositoryPort {
     endOdometer: number | null;
     isClosed: boolean;
     createdAt: string;
+    goalPolicyId?: string | null;
   } | null> {
     return this.database.getFirstAsync<{
       id: number;
@@ -55,9 +94,10 @@ export class SqliteWorkdayRepository implements WorkdayRepositoryPort {
       endOdometer: number | null;
       isClosed: boolean;
       createdAt: string;
+      goalPolicyId?: string | null;
     }>(
       `
-      SELECT id, startTime, endTime, startOdometer, endOdometer, isClosed, createdAt
+      SELECT id, startTime, endTime, startOdometer, endOdometer, isClosed, createdAt, goalPolicyId
       FROM workdays
       ORDER BY startTime DESC
       LIMIT 1
@@ -73,13 +113,14 @@ export class SqliteWorkdayRepository implements WorkdayRepositoryPort {
     endOdometer: number | null;
     isClosed: boolean;
     createdAt: string;
+    goalPolicyId?: string | null;
   } | null> {
     const now = new Date().toISOString();
 
     const result = await this.database.runAsync(
       `
-      INSERT INTO workdays (startTime, startOdometer, endOdometer, createdAt)
-      VALUES (?, ?, NULL, ?)
+      INSERT INTO workdays (startTime, startOdometer, endOdometer, createdAt, goalPolicyId)
+      VALUES (?, ?, NULL, ?, NULL)
       `,
       [now, startOdometer, now],
     );
@@ -93,9 +134,10 @@ export class SqliteWorkdayRepository implements WorkdayRepositoryPort {
       endOdometer: number | null;
       isClosed: boolean;
       createdAt: string;
+      goalPolicyId?: string | null;
     }>(
       `
-      SELECT id, startTime, endTime, startOdometer, endOdometer, isClosed, createdAt
+      SELECT id, startTime, endTime, startOdometer, endOdometer, isClosed, createdAt, goalPolicyId
       FROM workdays
       WHERE id = ?
       `,
@@ -103,17 +145,21 @@ export class SqliteWorkdayRepository implements WorkdayRepositoryPort {
     );
   }
 
-  async closeCurrentWorkday(endOdometer?: number | null): Promise<void> {
+  async closeCurrentWorkday(
+    endOdometer?: number | null,
+    goalPolicyId?: string | null,
+  ): Promise<void> {
     const now = new Date().toISOString();
+    const resolvedGoalPolicyId = goalPolicyId ?? null;
 
     if (typeof endOdometer === "number") {
       await this.database.runAsync(
         `
         UPDATE workdays
-        SET endTime = ?, endOdometer = ?, isClosed = 1
+        SET endTime = ?, endOdometer = ?, goalPolicyId = ?, isClosed = 1
         WHERE isClosed = 0
         `,
-        [now, endOdometer],
+        [now, endOdometer, resolvedGoalPolicyId],
       );
       return;
     }
@@ -121,10 +167,10 @@ export class SqliteWorkdayRepository implements WorkdayRepositoryPort {
     await this.database.runAsync(
       `
       UPDATE workdays
-      SET endTime = ?, isClosed = 1
+      SET endTime = ?, goalPolicyId = ?, isClosed = 1
       WHERE isClosed = 0
       `,
-      [now],
+      [now, resolvedGoalPolicyId],
     );
   }
 
@@ -207,6 +253,7 @@ export class SqliteWorkdayRepository implements WorkdayRepositoryPort {
     startOdometer: number | null;
     endOdometer: number | null;
     isClosed: boolean;
+    goalPolicyId?: string | null;
   } | null> {
     const dayStart = new Date(
       date.getFullYear(),
@@ -228,7 +275,7 @@ export class SqliteWorkdayRepository implements WorkdayRepositoryPort {
 
     const row = await this.database.getFirstAsync<WorkdayRow>(
       `
-      SELECT id, startTime, endTime, startOdometer, endOdometer, isClosed, createdAt
+      SELECT id, startTime, endTime, startOdometer, endOdometer, isClosed, createdAt, goalPolicyId
       FROM workdays
       WHERE startTime BETWEEN ? AND ?
       ORDER BY startTime ASC
@@ -237,34 +284,54 @@ export class SqliteWorkdayRepository implements WorkdayRepositoryPort {
       [dayStart, dayEnd],
     );
 
-    return row
-      ? {
-          id: row.id,
-          startTime: row.startTime,
-          endTime: row.endTime,
-          startOdometer: row.startOdometer,
-          endOdometer: row.endOdometer,
-          isClosed: row.isClosed === 1,
-        }
-      : null;
+    return row ? mapWorkdayRow(row) : null;
   }
 
   async findWorkdayIdsBetweenDates(
     startDate: Date,
     endDate: Date,
-  ): Promise<Array<{ id: number }>> {
-    const format = (date: Date) =>
-      `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}-${String(date.getDate()).padStart(2, "0")}`;
+  ): Promise<{ id: number }[]> {
+    const startOfRange = startOfLocalDay(startDate).toISOString();
+    const endOfRange = endOfLocalDay(endDate).toISOString();
 
     return this.database.getAllAsync<{ id: number }>(
       `
       SELECT id
       FROM workdays
-      WHERE substr(startTime, 1, 10) BETWEEN ? AND ?
+      WHERE startTime BETWEEN ? AND ?
       ORDER BY startTime ASC
       `,
-      [format(startDate), format(endDate)],
+      [startOfRange, endOfRange],
     );
+  }
+
+  async findWorkdaysBetweenDates(
+    startDate: Date,
+    endDate: Date,
+  ): Promise<{
+    id: number;
+    startTime: string;
+    endTime: string | null;
+    startOdometer: number | null;
+    endOdometer: number | null;
+    isClosed: boolean;
+    createdAt: string;
+    goalPolicyId?: string | null;
+  }[]> {
+    const startOfRange = startOfLocalDay(startDate).toISOString();
+    const endOfRange = endOfLocalDay(endDate).toISOString();
+
+    const rows = await this.database.getAllAsync<WorkdayRow>(
+      `
+      SELECT id, startTime, endTime, startOdometer, endOdometer, isClosed, createdAt, goalPolicyId
+      FROM workdays
+      WHERE startTime BETWEEN ? AND ?
+      ORDER BY startTime ASC
+      `,
+      [startOfRange, endOfRange],
+    );
+
+    return rows.map(mapWorkdayRow);
   }
 
   async assignTripToCurrentWorkday(tripId: number): Promise<void> {

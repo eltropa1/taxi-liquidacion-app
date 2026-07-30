@@ -1,5 +1,20 @@
 import { getApplicationPersistence } from "../ports/persistence";
 import { getApplicationRuntime } from "./applicationRuntime";
+import type { HistoricalDataset } from "../history";
+import { buildHistoricalExportCsv } from "./historicalExportCsv";
+
+export type HistoricalDatasetExportOutcome = Readonly<
+  | {
+      status: "empty";
+      fileName: string;
+      recordCount: 0;
+    }
+  | {
+      status: "exported";
+      fileName: string;
+      recordCount: number;
+    }
+>;
 
 export class ExportService {
   static async exportTripsToCSV(): Promise<void> {
@@ -13,6 +28,29 @@ export class ExportService {
     );
 
     await this.exportTripsToCSVRecords(trips);
+  }
+
+  static async exportHistoricalDatasetToCSV(
+    dataset: HistoricalDataset,
+  ): Promise<HistoricalDatasetExportOutcome> {
+    if (dataset.records.length === 0) {
+      const { fileName } = buildHistoricalExportCsv(dataset);
+
+      return {
+        status: "empty",
+        fileName,
+        recordCount: 0,
+      };
+    }
+
+    const { csv, fileName, recordCount } = buildHistoricalExportCsv(dataset);
+    await getApplicationRuntime().tripCsvExporter.exportCsv(csv, fileName);
+
+    return {
+      status: "exported",
+      fileName,
+      recordCount,
+    };
   }
 
   private static async exportTripsToCSVRecords(

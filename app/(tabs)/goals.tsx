@@ -1,5 +1,6 @@
 import { useMemo, useState } from "react";
 import {
+  Alert,
   Modal,
   Pressable,
   ScrollView,
@@ -20,6 +21,14 @@ import {
 } from "../../src/presentation/goals/GoalsScreenProjection";
 import type { GoalPolicy } from "../../src/application/ports/runtime";
 import { useGoalsScreen } from "../../src/hooks/useGoalsScreen";
+import type {
+  ThemeColors,
+  RadiiTokens,
+  ShadowCardTokens,
+} from "../../src/presentation/theme/tokens";
+import { useAppTheme } from "../../src/presentation/theme/ThemeProvider";
+
+type GoalsStyles = ReturnType<typeof createStyles>;
 
 function formatCurrency(value: number | null | undefined) {
   if (value === null || value === undefined) {
@@ -32,9 +41,11 @@ function formatCurrency(value: number | null | undefined) {
 function GoalValueBlock({
   label,
   value,
+  styles,
 }: {
   label: string;
   value: number;
+  styles: GoalsStyles;
 }) {
   return (
     <View style={styles.goalBlock}>
@@ -47,9 +58,11 @@ function GoalValueBlock({
 function HistoryCard({
   policy,
   isCurrent,
+  styles,
 }: {
   policy: GoalPolicy;
   isCurrent: boolean;
+  styles: GoalsStyles;
 }) {
   return (
     <View style={styles.historyCard}>
@@ -66,6 +79,11 @@ function HistoryCard({
 }
 
 export default function GoalsScreen() {
+  const { colors: themeColors, radii: themeRadii, shadowCard } = useAppTheme();
+  const styles = useMemo(
+    () => createStyles(themeColors, themeRadii, shadowCard),
+    [themeColors, themeRadii, shadowCard],
+  );
   const { currentPolicy, goalHistory, isLoading, saveGoals } = useGoalsScreen();
   const [editorVisible, setEditorVisible] = useState(false);
   const [historyVisible, setHistoryVisible] = useState(false);
@@ -95,14 +113,24 @@ export default function GoalsScreen() {
     setEditorVisible(true);
   };
 
-  const handleSave = async () => {
-    await saveGoals({
+  const handleSave = () => {
+    const goalsInput = {
       daily: parseGoalValue(dailyDraft),
       weekly: parseGoalValue(weeklyDraft),
       monthly: parseGoalValue(monthlyDraft),
-    });
+    };
 
+    // Camino de respuesta instantánea: cerramos el editor al toque y el guardado
+    // en almacenamiento continúa en segundo plano.
     setEditorVisible(false);
+
+    saveGoals(goalsInput).catch((error) => {
+      console.error("Error guardando metas", error);
+      Alert.alert(
+        "No se han podido guardar las metas",
+        "Revisa los valores e inténtalo de nuevo.",
+      );
+    });
   };
 
   return (
@@ -126,9 +154,9 @@ export default function GoalsScreen() {
           </View>
 
           <View style={styles.goalsGrid}>
-            <GoalValueBlock label="Meta diaria" value={activeGoals.daily} />
-            <GoalValueBlock label="Meta semanal" value={activeGoals.weekly} />
-            <GoalValueBlock label="Meta mensual" value={activeGoals.monthly} />
+            <GoalValueBlock label="Meta diaria" value={activeGoals.daily} styles={styles} />
+            <GoalValueBlock label="Meta semanal" value={activeGoals.weekly} styles={styles} />
+            <GoalValueBlock label="Meta mensual" value={activeGoals.monthly} styles={styles} />
           </View>
 
           <Text style={styles.helper}>
@@ -257,6 +285,7 @@ export default function GoalsScreen() {
                     key={policy.id}
                     policy={policy}
                     isCurrent={index === 0}
+                    styles={styles}
                   />
                 ))
               ) : (
@@ -275,10 +304,11 @@ export default function GoalsScreen() {
   );
 }
 
-const styles = StyleSheet.create({
+function createStyles(themeColors: ThemeColors, themeRadii: RadiiTokens, shadowCard: ShadowCardTokens) {
+  return StyleSheet.create({
   screen: {
     flex: 1,
-    backgroundColor: "#f4f1eb",
+    backgroundColor: themeColors.bg,
   },
   content: {
     paddingHorizontal: 20,
@@ -294,31 +324,27 @@ const styles = StyleSheet.create({
     fontWeight: "700",
     textTransform: "uppercase",
     letterSpacing: 1.2,
-    color: "#6e6457",
+    color: themeColors.textSecondary,
   },
   title: {
-    fontSize: 28,
-    lineHeight: 34,
-    fontWeight: "900",
-    color: "#1f1a17",
+    fontSize: 24,
+    lineHeight: 30,
+    fontWeight: "700",
+    color: themeColors.textPrimary,
   },
   subtitle: {
     fontSize: 14,
     lineHeight: 20,
-    color: "#6e6457",
+    color: themeColors.textSecondary,
     fontWeight: "500",
   },
   currentCard: {
-    backgroundColor: "#ffffff",
-    borderRadius: 22,
+    backgroundColor: themeColors.surface,
+    borderRadius: themeRadii.card,
     padding: 16,
     borderWidth: 1,
-    borderColor: "#ece3d6",
-    shadowColor: "#000000",
-    shadowOpacity: 0.05,
-    shadowRadius: 12,
-    shadowOffset: { width: 0, height: 6 },
-    elevation: 3,
+    borderColor: themeColors.border,
+    ...shadowCard,
     gap: 14,
   },
   currentHeader: {
@@ -333,22 +359,22 @@ const styles = StyleSheet.create({
   },
   currentLabel: {
     fontSize: 15,
-    fontWeight: "900",
-    color: "#1f1a17",
+    fontWeight: "600",
+    color: themeColors.textPrimary,
   },
   currentVigency: {
     fontSize: 13,
-    color: "#6e6457",
+    color: themeColors.textSecondary,
     fontWeight: "600",
   },
   currentBadge: {
     paddingHorizontal: 10,
     paddingVertical: 6,
     borderRadius: 999,
-    backgroundColor: "#dff4ef",
-    color: "#0f766e",
+    backgroundColor: themeColors.primarySubtle,
+    color: themeColors.primary,
     fontSize: 11,
-    fontWeight: "900",
+    fontWeight: "700",
     textTransform: "uppercase",
   },
   goalsGrid: {
@@ -357,10 +383,10 @@ const styles = StyleSheet.create({
   goalBlock: {
     paddingVertical: 12,
     paddingHorizontal: 14,
-    borderRadius: 16,
-    backgroundColor: "#f7f3ec",
+    borderRadius: themeRadii.card,
+    backgroundColor: themeColors.bg,
     borderWidth: 1,
-    borderColor: "#e8ddd0",
+    borderColor: themeColors.border,
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "space-between",
@@ -368,33 +394,29 @@ const styles = StyleSheet.create({
   goalBlockLabel: {
     fontSize: 13,
     fontWeight: "800",
-    color: "#4d463f",
+    color: themeColors.textSecondary,
   },
   goalBlockValue: {
     fontSize: 18,
-    fontWeight: "900",
-    color: "#1f1a17",
+    fontWeight: "700",
+    color: themeColors.textPrimary,
   },
   helper: {
     fontSize: 12,
     lineHeight: 18,
-    color: "#6e6457",
+    color: themeColors.textSecondary,
   },
   actionsRow: {
     gap: 10,
   },
   primaryAction: {
     minHeight: 52,
-    borderRadius: 16,
-    backgroundColor: "#1c7c43",
+    borderRadius: themeRadii.button,
+    backgroundColor: themeColors.primary,
     alignItems: "center",
     justifyContent: "center",
     paddingHorizontal: 18,
-    shadowColor: "#1c7c43",
-    shadowOpacity: 0.18,
-    shadowRadius: 10,
-    shadowOffset: { width: 0, height: 4 },
-    elevation: 3,
+    ...shadowCard,
   },
   primaryActionPressed: {
     opacity: 0.92,
@@ -402,15 +424,15 @@ const styles = StyleSheet.create({
   },
   primaryActionText: {
     fontSize: 15,
-    fontWeight: "900",
-    color: "#ffffff",
+    fontWeight: "700",
+    color: themeColors.surface,
   },
   secondaryAction: {
     minHeight: 48,
-    borderRadius: 16,
-    backgroundColor: "#efe8dc",
+    borderRadius: themeRadii.button,
+    backgroundColor: themeColors.bg,
     borderWidth: 1,
-    borderColor: "#d9cbb8",
+    borderColor: themeColors.border,
     alignItems: "center",
     justifyContent: "center",
     paddingHorizontal: 16,
@@ -421,25 +443,25 @@ const styles = StyleSheet.create({
   secondaryActionText: {
     fontSize: 14,
     fontWeight: "800",
-    color: "#1f1a17",
+    color: themeColors.textPrimary,
   },
   infoCard: {
-    backgroundColor: "#ffffff",
-    borderRadius: 18,
+    backgroundColor: themeColors.surface,
+    borderRadius: themeRadii.card,
     padding: 16,
     borderWidth: 1,
-    borderColor: "#ece3d6",
+    borderColor: themeColors.border,
     gap: 6,
   },
   infoTitle: {
     fontSize: 14,
-    fontWeight: "900",
-    color: "#1f1a17",
+    fontWeight: "600",
+    color: themeColors.textPrimary,
   },
   infoText: {
     fontSize: 13,
     lineHeight: 19,
-    color: "#6e6457",
+    color: themeColors.textSecondary,
   },
   modalOverlay: {
     flex: 1,
@@ -448,12 +470,12 @@ const styles = StyleSheet.create({
     padding: 20,
   },
   modalCard: {
-    backgroundColor: "#ffffff",
-    borderRadius: 22,
+    backgroundColor: themeColors.surface,
+    borderRadius: themeRadii.card,
     padding: 18,
     maxHeight: "90%",
     borderWidth: 1,
-    borderColor: "#ece3d6",
+    borderColor: themeColors.border,
   },
   modalTopRow: {
     flexDirection: "row",
@@ -468,43 +490,43 @@ const styles = StyleSheet.create({
   },
   modalTitle: {
     fontSize: 18,
-    fontWeight: "900",
-    color: "#1f1a17",
+    fontWeight: "600",
+    color: themeColors.textPrimary,
   },
   modalSubtitle: {
     fontSize: 12,
     lineHeight: 17,
-    color: "#6e6457",
+    color: themeColors.textSecondary,
     fontWeight: "500",
   },
   closeChip: {
     paddingHorizontal: 10,
     paddingVertical: 6,
     borderRadius: 999,
-    backgroundColor: "#efe8dc",
+    backgroundColor: themeColors.bg,
   },
   closeChipText: {
     fontSize: 11,
-    fontWeight: "900",
-    color: "#1f1a17",
+    fontWeight: "700",
+    color: themeColors.textPrimary,
     textTransform: "uppercase",
   },
   fieldLabel: {
     fontSize: 13,
     fontWeight: "800",
-    color: "#4d463f",
+    color: themeColors.textSecondary,
     marginTop: 12,
     marginBottom: 6,
   },
   input: {
     borderWidth: 1,
-    borderColor: "#d8d0c5",
-    borderRadius: 14,
+    borderColor: themeColors.border,
+    borderRadius: themeRadii.button,
     paddingHorizontal: 14,
     paddingVertical: 12,
     fontSize: 15,
-    color: "#1f1a17",
-    backgroundColor: "#fff",
+    color: themeColors.textPrimary,
+    backgroundColor: themeColors.surface,
   },
   modalButtons: {
     flexDirection: "row",
@@ -514,8 +536,10 @@ const styles = StyleSheet.create({
   modalButton: {
     flex: 1,
     minHeight: 48,
-    borderRadius: 14,
-    backgroundColor: "#efe8dc",
+    borderRadius: themeRadii.button,
+    backgroundColor: themeColors.bg,
+    borderWidth: 1,
+    borderColor: themeColors.border,
     alignItems: "center",
     justifyContent: "center",
   },
@@ -525,13 +549,13 @@ const styles = StyleSheet.create({
   modalButtonText: {
     fontSize: 14,
     fontWeight: "800",
-    color: "#1f1a17",
+    color: themeColors.textPrimary,
   },
   modalButtonPrimary: {
     flex: 1,
     minHeight: 48,
-    borderRadius: 14,
-    backgroundColor: "#1c7c43",
+    borderRadius: themeRadii.button,
+    backgroundColor: themeColors.primary,
     alignItems: "center",
     justifyContent: "center",
   },
@@ -543,8 +567,8 @@ const styles = StyleSheet.create({
   },
   modalButtonPrimaryText: {
     fontSize: 14,
-    fontWeight: "900",
-    color: "#fff",
+    fontWeight: "700",
+    color: themeColors.surface,
   },
   historyScroll: {
     marginTop: 8,
@@ -554,11 +578,11 @@ const styles = StyleSheet.create({
     paddingBottom: 8,
   },
   historyCard: {
-    backgroundColor: "#f7f3ec",
-    borderRadius: 18,
+    backgroundColor: themeColors.bg,
+    borderRadius: themeRadii.card,
     padding: 14,
     borderWidth: 1,
-    borderColor: "#e8ddd0",
+    borderColor: themeColors.border,
     gap: 6,
   },
   historyCardTopRow: {
@@ -570,29 +594,29 @@ const styles = StyleSheet.create({
   historyDate: {
     flex: 1,
     fontSize: 14,
-    fontWeight: "900",
-    color: "#1f1a17",
+    fontWeight: "700",
+    color: themeColors.textPrimary,
   },
   historyBadge: {
     paddingHorizontal: 10,
     paddingVertical: 5,
     borderRadius: 999,
-    backgroundColor: "#dff4ef",
-    color: "#0f766e",
+    backgroundColor: themeColors.primarySubtle,
+    color: themeColors.primary,
     fontSize: 10,
-    fontWeight: "900",
+    fontWeight: "700",
     textTransform: "uppercase",
   },
   historySummary: {
     fontSize: 13,
     lineHeight: 19,
     fontWeight: "800",
-    color: "#1f1a17",
+    color: themeColors.textPrimary,
   },
   historyDetail: {
     fontSize: 12,
     lineHeight: 18,
-    color: "#6e6457",
+    color: themeColors.textSecondary,
   },
   emptyState: {
     paddingVertical: 22,
@@ -602,13 +626,14 @@ const styles = StyleSheet.create({
   },
   emptyStateTitle: {
     fontSize: 15,
-    fontWeight: "900",
-    color: "#1f1a17",
+    fontWeight: "700",
+    color: themeColors.textPrimary,
   },
   emptyStateText: {
     fontSize: 12,
-    color: "#6e6457",
+    color: themeColors.textSecondary,
     textAlign: "center",
     lineHeight: 18,
   },
-});
+  });
+}

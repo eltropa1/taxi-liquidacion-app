@@ -211,6 +211,7 @@ Debe contener toda la semántica del viaje y solo la semántica del viaje.
 Representa la jornada como unidad operativa de memoria.
 
 Debe mantener su identidad estable y sus reglas de apertura, cierre y continuidad.
+Una jornada no se reinterpreta por sus viajes individuales ni por el cruce de medianoche.
 
 #### `money/`
 
@@ -245,6 +246,19 @@ Solo define la identidad visual estable del negocio cuando esa identidad forma p
 #### `date-time/`
 
 Representa instantes, intervalos, zonas horarias y operaciones temporales puras.
+
+En TaxiGeo, este subdominio también fija la semana operativa oficial:
+
+- respeta el día configurable de inicio semanal;
+- no cruza el límite de un mes calendario;
+- puede devolver periodos menores de 7 días cuando la frontera mensual lo exige.
+Historial debe consumir esta autoridad temporal y no recalcular semanas de forma local.
+La vertical Historial Semana reutiliza esta autoridad temporal para la semana operativa certificada.
+La vertical Historial Quincena reutiliza esta autoridad temporal para la ventana calendario de 1-15 y 16-fin de mes.
+La vertical Historial Mes reutiliza la misma autoridad y agrupa el mes por semanas oficiales del dominio.
+La vertical Historial Año reutiliza la misma autoridad y agrupa el año por meses calendario.
+La vertical Historial con rango personalizado también debe consumir esta autoridad temporal y solo ajustar su ventana explícita, nunca reinterpretar jornadas ni semanas.
+La exportación histórica debe tomar el dataset ya resuelto por Historial y no volver a decidir periodos por su cuenta.
 
 #### `identity/`
 

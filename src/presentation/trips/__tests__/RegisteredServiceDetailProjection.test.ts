@@ -25,6 +25,45 @@ const completedTrip = {
 };
 
 describe("RegisteredServiceDetailProjection", () => {
+  it("prefers the special zone name over the neighborhood when both are detected", () => {
+    const projection = buildRegisteredServiceDetailProjection({
+      trip: completedTrip,
+      snapshots: [
+        {
+          tripId: completedTrip.id,
+          kind: "START",
+          createdAt: new Date(2026, 6, 1, 9, 0, 0, 0).toISOString(),
+          snapshot: {
+            resolvedAt: new Date(2026, 6, 1, 9, 0, 0, 0).toISOString(),
+            latitude: 40.4918,
+            longitude: -3.5936,
+            neighborhood: { id: "212", name: "Aeropuerto" },
+            district: { id: "21", name: "Barajas" },
+            specialZone: {
+              id: "MAD_AIRPORT_T4",
+              name: "Aeropuerto T4 / T4S",
+              type: "SPECIAL_ZONE",
+            },
+          },
+        },
+        {
+          tripId: completedTrip.id,
+          kind: "END",
+          createdAt: new Date(2026, 6, 1, 9, 20, 0, 0).toISOString(),
+          snapshot: {
+            resolvedAt: new Date(2026, 6, 1, 9, 20, 0, 0).toISOString(),
+            latitude: 40.42,
+            longitude: -3.7,
+            neighborhood: { id: "016", name: "Sol" },
+          },
+        },
+      ],
+    });
+
+    expect(projection.geoPickupZoneLabel).toBe("Aeropuerto T4 / T4S");
+    expect(projection.geoDropoffZoneLabel).toBe("Sol");
+  });
+
   it("projects product labels instead of raw enum values", () => {
     const projection = buildRegisteredServiceDetailProjection({
       trip: {

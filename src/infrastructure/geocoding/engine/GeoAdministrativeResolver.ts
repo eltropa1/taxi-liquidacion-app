@@ -1,8 +1,5 @@
-import {
-  GeoAddressSnapshot,
-  GeoAdministrativeType,
-  GeoAdministrativeUnit,
-} from "../models";
+import { GeoAdministrativeType, GeoAdministrativeUnit } from "../models";
+import type { GeoAddressSnapshot } from "../../../application/ports/runtime";
 
 import {
   NEIGHBORHOODS_GEO,
@@ -48,29 +45,20 @@ export class GeoAdministrativeResolver {
       resolvedAt,
       latitude,
       longitude,
+      ...(district ? { district: { id: district.id, name: district.name } } : {}),
+      ...(neighborhood
+        ? { neighborhood: { id: neighborhood.id, name: neighborhood.name } }
+        : {}),
+      ...(specialZone
+        ? {
+            specialZone: {
+              id: specialZone.id,
+              name: specialZone.name,
+              type: GeoAdministrativeType.SPECIAL_ZONE,
+            },
+          }
+        : {}),
     };
-
-    if (district) {
-      snapshot.district = {
-        id: district.id,
-        name: district.name,
-      };
-    }
-
-    if (neighborhood) {
-      snapshot.neighborhood = {
-        id: neighborhood.id,
-        name: neighborhood.name,
-      };
-    }
-
-    if (specialZone) {
-      snapshot.specialZone = {
-        id: specialZone.id,
-        name: specialZone.name,
-        type: GeoAdministrativeType.SPECIAL_ZONE,
-      };
-    }
 
     return snapshot;
   }
@@ -143,7 +131,20 @@ private static isPointInPolygon(
   lng: number,
   geometry: GeoPolygon | GeoMultiPolygon,
 ): boolean {
-  const multipolygon: GeoMultiPolygon = Array.isArray(geometry[0][0])
+  // GeoPolygon = anillo[] donde anillo = coordenada[] (coordenada = [lng, lat]).
+  // GeoMultiPolygon = polígono[] donde polígono = anillo[].
+  //
+  // geometry[0][0] es SIEMPRE un array en ambos casos (una coordenada
+  // [lng, lat] en un GeoPolygon, o un anillo completo en un
+  // GeoMultiPolygon), así que comprobar solo ese nivel nunca distingue
+  // los dos formatos. Hay que bajar un nivel más: geometry[0][0][0] es
+  // un número en un GeoPolygon (es la longitud de la coordenada) pero
+  // un array en un GeoMultiPolygon (es la coordenada dentro del anillo).
+  const isAlreadyMultiPolygon = Array.isArray(
+    (geometry[0]?.[0] as unknown[] | undefined)?.[0],
+  );
+
+  const multipolygon: GeoMultiPolygon = isAlreadyMultiPolygon
     ? (geometry as GeoMultiPolygon)
     : ([geometry] as GeoMultiPolygon);
 

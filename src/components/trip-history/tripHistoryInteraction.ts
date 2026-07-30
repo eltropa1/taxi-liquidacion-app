@@ -8,8 +8,7 @@ export type TripHistoryPressIntent =
 export function getTripHistoryPressIntent(
   trip: TripVisualProjection,
 ): TripHistoryPressIntent {
+  if (trip.isPendingCompletion) return "completePendingService";
   if (!trip.schedule.endTime) return "none";
-  return trip.isPendingCompletion
-    ? "completePendingService"
-    : "editRegisteredService";
+  return "editRegisteredService";
 }

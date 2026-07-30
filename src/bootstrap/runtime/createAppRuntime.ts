@@ -38,7 +38,7 @@ export async function createAppRuntime(): Promise<AppRuntime> {
   configureApplicationPersistence(persistence);
 
   const application: ApplicationRuntime = Object.freeze({
-    goalStorage: new AsyncStorageGoalStorage(),
+    goalStorage: new AsyncStorageGoalStorage(new SystemClock()),
     weekConfigurationStorage: new AsyncStorageWeekConfigurationStorage(),
     geoLocation: new ExpoGeoLocationPort(),
     geoAdministrativeResolver: new GeoAdministrativeResolverAdapter(),

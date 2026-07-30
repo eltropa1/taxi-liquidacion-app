@@ -218,7 +218,7 @@ El Registro Operativo ocupa automáticamente todo el espacio restante comprendid
 - La acción principal se sitúa debajo del bloque de progreso.
 - Solo la Acción Principal utiliza una tarjeta.
 - Solo el Registro Operativo ocupa el espacio desplazable.
-- Las acciones secundarias se trasladan a la pantalla Más.
+- Las acciones secundarias se trasladan a la pantalla Ajustes (antes llamada "Más"; renombrada para que el título coincida con la etiqueta del tab — ver GeoTaxi Design Language v1.0).
 - El Registro Operativo utiliza chips de plataforma en lugar de fondos de color.
 - Durante un servicio únicamente cambia la acción principal.
 - La barra superior pasa a denominarse Barra de Contexto Operativo.
