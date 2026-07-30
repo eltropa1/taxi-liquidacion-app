@@ -6,3 +6,4 @@ export * from "./TripQueryService";
 export * from "./WorkdayService";
 export * from "./SummaryService";
 export * from "./ExportService";
+export * from "./HistoricalImportService";

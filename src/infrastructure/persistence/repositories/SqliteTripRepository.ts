@@ -1,4 +1,5 @@
 import type {
+  HistoricalTripUpsertInput,
   TripEditedInput,
   TripExportRecord,
   TripManualInput,
@@ -69,7 +70,7 @@ export class SqliteTripRepository implements TripRepositoryPort {
         createdAt,
         workdayId
       )
-      VALUES (?, ?, ?, ?, ?, ?, ?)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?)
       `,
       [
         input.startTime.toISOString(),
@@ -323,6 +324,63 @@ export class SqliteTripRepository implements TripRepositoryPort {
       WHERE id = ?
       `,
       [voidedAt.toISOString(), id],
+    );
+  }
+
+  async upsertHistoricalTrip(input: HistoricalTripUpsertInput): Promise<void> {
+    await this.database.runAsync(
+      `
+      INSERT INTO trips (
+        id,
+        startTime,
+        endTime,
+        serviceStatus,
+        amount,
+        payment,
+        source,
+        createdAt,
+        chargedAmount,
+        cashTip,
+        customSource,
+        manualPickupZone,
+        manualDropoffZone,
+        workdayId,
+        voidedAt
+      )
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      ON CONFLICT(id) DO UPDATE SET
+        startTime = excluded.startTime,
+        endTime = excluded.endTime,
+        serviceStatus = excluded.serviceStatus,
+        amount = excluded.amount,
+        payment = excluded.payment,
+        source = excluded.source,
+        createdAt = excluded.createdAt,
+        chargedAmount = excluded.chargedAmount,
+        cashTip = excluded.cashTip,
+        customSource = excluded.customSource,
+        manualPickupZone = excluded.manualPickupZone,
+        manualDropoffZone = excluded.manualDropoffZone,
+        workdayId = excluded.workdayId,
+        voidedAt = excluded.voidedAt
+      `,
+      [
+        input.id,
+        input.startTime.toISOString(),
+        input.endTime ? input.endTime.toISOString() : null,
+        input.serviceStatus,
+        input.amount,
+        input.payment,
+        input.source,
+        input.createdAt.toISOString(),
+        input.chargedAmount,
+        input.cashTip,
+        input.customSource,
+        input.manualPickupZone,
+        input.manualDropoffZone,
+        input.workdayId,
+        input.voidedAt ? input.voidedAt.toISOString() : null,
+      ],
     );
   }
 }

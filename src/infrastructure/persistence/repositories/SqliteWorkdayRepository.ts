@@ -1,4 +1,7 @@
-import type { WorkdayRepositoryPort } from "../../../application/ports/persistence";
+import type {
+  HistoricalWorkdayUpsertInput,
+  WorkdayRepositoryPort,
+} from "../../../application/ports/persistence";
 import type { PersistenceDatabase } from "../database";
 
 type WorkdayRow = {
@@ -347,6 +350,44 @@ export class SqliteWorkdayRepository implements WorkdayRepositoryPort {
       WHERE id = ?
       `,
       [workday.id, tripId],
+    );
+  }
+
+  async upsertHistoricalWorkday(
+    input: HistoricalWorkdayUpsertInput,
+  ): Promise<void> {
+    await this.database.runAsync(
+      `
+      INSERT INTO workdays (
+        id,
+        startTime,
+        endTime,
+        startOdometer,
+        endOdometer,
+        isClosed,
+        createdAt,
+        goalPolicyId
+      )
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+      ON CONFLICT(id) DO UPDATE SET
+        startTime = excluded.startTime,
+        endTime = excluded.endTime,
+        startOdometer = excluded.startOdometer,
+        endOdometer = excluded.endOdometer,
+        isClosed = excluded.isClosed,
+        createdAt = excluded.createdAt,
+        goalPolicyId = excluded.goalPolicyId
+      `,
+      [
+        input.id,
+        input.startTime.toISOString(),
+        input.endTime ? input.endTime.toISOString() : null,
+        input.startOdometer,
+        input.endOdometer,
+        input.isClosed ? 1 : 0,
+        input.createdAt.toISOString(),
+        input.goalPolicyId,
+      ],
     );
   }
 }

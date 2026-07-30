@@ -25,6 +25,17 @@ export type WorkdayInfoRecord = Readonly<{
   goalPolicyId?: string | null;
 }>;
 
+export type HistoricalWorkdayUpsertInput = Readonly<{
+  id: number;
+  startTime: Date;
+  endTime: Date | null;
+  startOdometer: number | null;
+  endOdometer: number | null;
+  isClosed: boolean;
+  createdAt: Date;
+  goalPolicyId: string | null;
+}>;
+
 export interface WorkdayRepositoryPort {
   getOpenWorkday(): Promise<WorkdayLookupRecord | null>;
 
@@ -65,4 +76,6 @@ export interface WorkdayRepositoryPort {
   ): Promise<WorkdayRecord[]>;
 
   assignTripToCurrentWorkday(tripId: number): Promise<void>;
+
+  upsertHistoricalWorkday(input: HistoricalWorkdayUpsertInput): Promise<void>;
 }

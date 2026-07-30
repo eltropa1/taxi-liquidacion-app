@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import {
+  ActivityIndicator,
   Alert,
   Modal,
   Pressable,
@@ -10,9 +11,12 @@ import {
   View,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
+import * as DocumentPicker from "expo-document-picker";
+import * as FileSystem from "expo-file-system/legacy";
 
 import {
   ExportService,
+  HistoricalImportService,
   WeekConfigurationService,
 } from "../../src/application/runtime";
 import { UpdateWorkday } from "../../src/application/workdays/UpdateWorkday";
@@ -42,6 +46,7 @@ export default function MoreScreen() {
   const [editingOdometersVisible, setEditingOdometersVisible] = useState(false);
   const [workdayStartOdometerInput, setWorkdayStartOdometerInput] = useState("");
   const [workdayEndOdometerInput, setWorkdayEndOdometerInput] = useState("");
+  const [isImportingHistoricalCsv, setIsImportingHistoricalCsv] = useState(false);
 
   const { workdayInfo, refreshData } = useTodayScreen(todayDate);
 
@@ -95,6 +100,47 @@ export default function MoreScreen() {
   const handleSaveWeekConfiguration = async () => {
     await WeekConfigurationService.saveWeekConfiguration({ weekStartDay });
     alert("Configuración de semana guardada correctamente");
+  };
+
+  const handleImportHistoricalCsv = async () => {
+    if (isImportingHistoricalCsv) {
+      return;
+    }
+
+    try {
+      const result = await DocumentPicker.getDocumentAsync({
+        type: ["text/csv", "text/plain", "application/csv"],
+        copyToCacheDirectory: true,
+        multiple: false,
+      });
+
+      if (result.canceled) {
+        return;
+      }
+
+      const asset = result.assets?.[0];
+      if (!asset?.uri) {
+        Alert.alert("Importación cancelada", "No se pudo leer el archivo seleccionado.");
+        return;
+      }
+
+      setIsImportingHistoricalCsv(true);
+      const csv = await FileSystem.readAsStringAsync(asset.uri);
+      const importResult = await HistoricalImportService.importHistoricalDatasetFromCsv(csv);
+
+      Alert.alert(
+        "Historial recuperado",
+        `Se han importado ${importResult.tripCount} servicios y ${importResult.workdayCount} jornadas.`,
+      );
+      await refreshData();
+    } catch (error) {
+      Alert.alert(
+        "No se pudo importar",
+        error instanceof Error ? error.message : "Revisa el archivo CSV histórico e inténtalo de nuevo.",
+      );
+    } finally {
+      setIsImportingHistoricalCsv(false);
+    }
   };
 
   const handleSaveOdometers = async () => {
@@ -176,6 +222,25 @@ export default function MoreScreen() {
           >
             <Text style={styles.actionLabel}>Exportar CSV global</Text>
             <Text style={styles.actionChevron}>›</Text>
+          </Pressable>
+
+          <Pressable
+            onPress={handleImportHistoricalCsv}
+            style={({ pressed }) => [
+              styles.actionRow,
+              pressed && styles.actionRowPressed,
+            ]}
+          >
+            <Text style={styles.actionLabel}>
+              {isImportingHistoricalCsv
+                ? "Importando CSV histórico..."
+                : "Importar CSV histórico"}
+            </Text>
+            {isImportingHistoricalCsv ? (
+              <ActivityIndicator color={themeColors.textSecondary} />
+            ) : (
+              <Text style={styles.actionChevron}>›</Text>
+            )}
           </Pressable>
 
           <Pressable

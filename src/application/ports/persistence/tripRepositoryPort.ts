@@ -110,6 +110,24 @@ export type TripServiceUpdateInput = Readonly<{
   cashTip?: number | null;
 }>;
 
+export type HistoricalTripUpsertInput = Readonly<{
+  id: number;
+  workdayId: number;
+  startTime: Date;
+  endTime: Date | null;
+  serviceStatus: ServiceStatus | null;
+  amount: number | null;
+  payment: PaymentType | null;
+  source: TripSource;
+  createdAt: Date;
+  chargedAmount: number | null;
+  cashTip: number | null;
+  customSource: string | null;
+  manualPickupZone: string | null;
+  manualDropoffZone: string | null;
+  voidedAt: Date | null;
+}>;
+
 export interface TripRepositoryPort {
   runInTransaction<T>(operation: () => Promise<T>): Promise<T>;
 
@@ -142,4 +160,6 @@ export interface TripRepositoryPort {
   deleteTrip(id: number): Promise<void>;
 
   voidTrip(id: number, voidedAt: Date): Promise<void>;
+
+  upsertHistoricalTrip(input: HistoricalTripUpsertInput): Promise<void>;
 }
