@@ -6,6 +6,8 @@ import {
   NeighborhoodFeature,
   DISTRICTS_GEO,
   DistrictFeature,
+  MUNICIPALITIES_GEO,
+  MunicipalityFeature,
   GeoPolygon,
 } from "../base";
 
@@ -41,6 +43,16 @@ export class GeoAdministrativeResolver {
       ? this.resolveDistrictById(neighborhood.districtId)
       : this.resolveDistrict(latitude, longitude);
 
+    // 4️⃣ MUNICIPIO (respaldo fuera de la capital)
+    //
+    // Si ya hay barrio o distrito, el punto está en la capital y el
+    // municipio (Madrid) es redundante con esa información: no se
+    // resuelve para evitar recorrer 179 polígonos sin necesidad.
+    const municipality =
+      !neighborhood && !district
+        ? this.resolveMunicipality(latitude, longitude)
+        : null;
+
     const snapshot: GeoAddressSnapshot = {
       resolvedAt,
       latitude,
@@ -57,6 +69,9 @@ export class GeoAdministrativeResolver {
               type: GeoAdministrativeType.SPECIAL_ZONE,
             },
           }
+        : {}),
+      ...(municipality
+        ? { municipality: { id: municipality.id, name: municipality.name } }
         : {}),
     };
 
@@ -96,6 +111,18 @@ export class GeoAdministrativeResolver {
 
   private static resolveDistrictById(id: string): DistrictFeature | null {
     return DISTRICTS_GEO.find((d) => d.id === id) ?? null;
+  }
+
+  private static resolveMunicipality(
+    lat: number,
+    lng: number,
+  ): MunicipalityFeature | null {
+    for (const feature of MUNICIPALITIES_GEO) {
+      if (this.isPointInPolygon(lat, lng, feature.geometry)) {
+        return feature;
+      }
+    }
+    return null;
   }
 
   /**

@@ -6,6 +6,29 @@ y el versionado es semántico.
 
 
 ---
+## [1.0.7] - 2026-08-01
+### Added
+feat(geo): resolve municipality for the whole Comunidad de Madrid
+
+- El motor GEO solo resolvía barrio/distrito dentro del municipio de
+  Madrid; fuera de la capital (Torrejón de Ardoz, Getafe, Alcalá de
+  Henares...) un viaje quedaba sin ninguna zona resuelta.
+- Añadido un cuarto nivel de resolución — municipio — como respaldo
+  cuando no hay barrio ni distrito. Cubre los 179 municipios de la
+  Comunidad de Madrid con datos oficiales del IGN (vía es-atlas,
+  CC-BY 4.0), 56 KB añadidos al bundle.
+- La corrección manual de zona ahora también permite elegir cualquier
+  municipio de la Comunidad de Madrid, no solo barrios y zonas
+  especiales.
+- Sin impacto de rendimiento perceptible (~0,175ms de media en el peor
+  caso, ejecutado siempre en segundo plano).
+- Investigada la viabilidad de escalar a España entera sin cambiar de
+  modelo (offline + embebido): el mismo dataset nacional pesa ~2,7 MB.
+  Decisión registrada, no implementada aún por falta de necesidad
+  operativa actual.
+- Ver `docs/architecture/GEO Regional Coverage (Comunidad de Madrid) v1.0.md`.
+
+---
 ## [1.0.6] - 2026-07-30
 ### Fixed
 fix(geo): make special zone detection actually work

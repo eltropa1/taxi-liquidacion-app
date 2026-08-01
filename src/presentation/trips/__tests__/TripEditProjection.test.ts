@@ -1,5 +1,6 @@
 import {
   resolveEffectiveNeighborhoodName,
+  resolveGeoZoneLabel,
   resolveTripEditClock,
   resolveTripEditSnapshotZones,
 } from "../TripEditProjection";
@@ -37,5 +38,25 @@ describe("TripEditProjection", () => {
       "Estación de Chamartín",
     );
     expect(resolveEffectiveNeighborhoodName(null, "unknown-id")).toBe("—");
+  });
+
+  it("resolves a manual municipality id (outside the capital)", () => {
+    expect(resolveEffectiveNeighborhoodName("28148", null)).toBe(
+      "Torrejón de Ardoz",
+    );
+  });
+
+  it("prefers municipality over district-less/neighborhood-less geo snapshots", () => {
+    expect(
+      resolveGeoZoneLabel({
+        municipality: { id: "28148", name: "Torrejón de Ardoz" },
+      }),
+    ).toBe("Torrejón de Ardoz");
+    expect(
+      resolveGeoZoneLabel({
+        neighborhood: { id: "016", name: "Sol" },
+        municipality: { id: "28148", name: "Torrejón de Ardoz" },
+      }),
+    ).toBe("Sol");
   });
 });

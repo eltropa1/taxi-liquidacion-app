@@ -52,3 +52,28 @@ describe("GeoAdministrativeResolver - zonas especiales", () => {
     expect(insideT4.specialZone?.id).toBe("MAD_AIRPORT_T4");
   });
 });
+
+/**
+ * Coordenadas de referencia verificadas (Wikipedia / fuentes GPS) para
+ * municipios de la Comunidad de Madrid fuera de la capital.
+ */
+describe("GeoAdministrativeResolver - municipios (fuera de la capital)", () => {
+  it.each([
+    ["28148", "Torrejón de Ardoz", 40.459, -3.479],
+    ["28065", "Getafe", 40.3082504, -3.7323934],
+    ["28005", "Alcalá de Henares", 40.482513, -3.364262],
+    ["28092", "Móstoles", 40.32234, -3.86496],
+  ])("resuelve el municipio %s (%s) en su coordenada real", (id, _name, lat, lng) => {
+    const result = GeoAdministrativeResolver.resolve(lat, lng);
+    expect(result.municipality?.id).toBe(id);
+    // Fuera de la capital no hay barrio ni distrito.
+    expect(result.neighborhood).toBeUndefined();
+    expect(result.district).toBeUndefined();
+  });
+
+  it("no resuelve municipio dentro de la capital (barrio/distrito ya cubren ese punto)", () => {
+    const result = GeoAdministrativeResolver.resolve(40.4169, -3.7035); // Sol
+    expect(result.municipality).toBeUndefined();
+    expect(result.neighborhood?.name).toBe("Sol");
+  });
+});

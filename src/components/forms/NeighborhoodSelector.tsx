@@ -11,17 +11,26 @@ import {
 
 import { NEIGHBORHOODS_UI_LIST } from "../../infrastructure/geocoding/catalog/neighborhoods.catalog";
 import { SPECIAL_ZONES_CATALOG } from "../../infrastructure/geocoding/catalog/specialZones.catalog";
+import { MUNICIPALITIES_UI_LIST } from "../../infrastructure/geocoding/catalog/municipalities.catalog";
 import type { ThemeColors, RadiiTokens } from "../../presentation/theme/tokens";
 import { useAppTheme } from "../../presentation/theme/ThemeProvider";
 
+/** Municipio de Madrid capital: ya representado por sus 131 barrios. */
+const MADRID_CAPITAL_MUNICIPALITY_ID = "28079";
+
 /**
  * Zonas especiales primero (aeropuerto, estaciones...): son pocas y el
- * taxista las busca por nombre propio, no por orden alfabético de
- * barrio. Los barrios van detrás, ya ordenados alfabéticamente.
+ * taxista las busca por nombre propio, no por orden alfabético. Barrios
+ * de la capital después (detalle fino), y el resto de municipios de la
+ * Comunidad de Madrid al final (Madrid capital excluida: ya está
+ * representada por sus barrios).
  */
 const ZONE_UI_LIST = [
   ...SPECIAL_ZONES_CATALOG.map((zone) => ({ id: zone.id, label: zone.name })),
   ...NEIGHBORHOODS_UI_LIST,
+  ...MUNICIPALITIES_UI_LIST.filter(
+    (item) => item.id !== MADRID_CAPITAL_MUNICIPALITY_ID,
+  ),
 ];
 
 /**

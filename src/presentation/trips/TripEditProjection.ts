@@ -1,5 +1,6 @@
 import { NEIGHBORHOODS_CATALOG } from "../../infrastructure/geocoding/catalog/neighborhoods.catalog";
 import { SPECIAL_ZONES_CATALOG } from "../../infrastructure/geocoding/catalog/specialZones.catalog";
+import { MUNICIPALITIES_CATALOG } from "../../infrastructure/geocoding/catalog/municipalities.catalog";
 
 export type TripEditNeighborhoodSnapshot = Readonly<{
   neighborhood?: Readonly<{
@@ -12,13 +13,16 @@ export type TripEditGeoSnapshot = Readonly<{
   neighborhood?: Readonly<{ id: string; name: string }> | null;
   district?: Readonly<{ id: string; name: string }> | null;
   specialZone?: Readonly<{ id: string; name: string }> | null;
+  municipality?: Readonly<{ id: string; name: string }> | null;
 }>;
 
 /**
  * Etiqueta a mostrar para una ubicación GEO detectada.
  *
  * La zona especial (aeropuerto, estación...) es más útil para el
- * taxista que el barrio que la contiene, así que tiene prioridad.
+ * taxista que el barrio que la contiene, así que tiene prioridad. El
+ * municipio solo aparece cuando el punto cae fuera de la capital (el
+ * motor no resuelve barrio/distrito ahí).
  */
 export function resolveGeoZoneLabel(
   snapshot: TripEditGeoSnapshot | null | undefined,
@@ -28,15 +32,16 @@ export function resolveGeoZoneLabel(
     snapshot.specialZone?.name ??
     snapshot.neighborhood?.name ??
     snapshot.district?.name ??
+    snapshot.municipality?.name ??
     "—"
   );
 }
 
 /**
- * Nombre efectivo de una zona manual (barrio o zona especial) o, en su
- * defecto, de la zona GEO detectada automáticamente. La corrección
- * manual permite elegir tanto un barrio como una zona especial (p. ej.
- * "Aeropuerto T4 / T4S"), así que se busca en ambos catálogos.
+ * Nombre efectivo de una zona manual (barrio, zona especial o
+ * municipio) o, en su defecto, de la zona GEO detectada
+ * automáticamente. La corrección manual permite elegir cualquiera de
+ * los tres, así que se busca en los tres catálogos.
  */
 export function resolveEffectiveNeighborhoodName(
   manualId: string | null,
@@ -49,7 +54,10 @@ export function resolveEffectiveNeighborhoodName(
   if (neighborhood) return neighborhood.name;
 
   const specialZone = SPECIAL_ZONES_CATALOG.find((z) => z.id === id);
-  return specialZone ? specialZone.name : "—";
+  if (specialZone) return specialZone.name;
+
+  const municipality = MUNICIPALITIES_CATALOG.find((m) => m.id === id);
+  return municipality ? municipality.name : "—";
 }
 
 export function resolveTripEditClock(value: string) {
