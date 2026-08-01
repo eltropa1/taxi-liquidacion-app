@@ -14,7 +14,7 @@ import {
 import { MaterialIcons } from "@expo/vector-icons";
 
 import { router } from "expo-router";
-import { SafeAreaView } from "react-native-safe-area-context";
+import { SafeAreaView, useSafeAreaInsets } from "react-native-safe-area-context";
 
 import { TripHistory } from "../../src/components/trip-history";
 import {
@@ -211,6 +211,7 @@ function getMonthLabel(date: Date) {
 export default function TodayScreen() {
   const signature = useSignatureTokens();
   const { shadowCard } = useAppTheme();
+  const insets = useSafeAreaInsets();
   const styles = useMemo(() => createStyles(signature, shadowCard), [signature, shadowCard]);
   const [lastPayment, setLastPayment] = useState<PaymentType>(PaymentType.CASH);
   const [lastSource, setLastSource] = useState<TripSource>(TripSource.TAXI);
@@ -692,6 +693,7 @@ export default function TodayScreen() {
                 trips={tripHistoryProjections}
                 onPendingTripPress={handlePendingTripPress}
                 onRegisteredTripPress={handleRegisteredTripPress}
+                contentBottomPadding={Math.max(insets.bottom, 16) + 112}
               />
             </View>
         </View>

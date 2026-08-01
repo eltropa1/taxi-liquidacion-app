@@ -14,6 +14,7 @@ export function TripHistory({
   trips,
   onRegisteredTripPress,
   onPendingTripPress,
+  contentBottomPadding = 8,
 }: TripHistoryProps) {
   const renderItem = useCallback(
     ({ item }: { item: TripVisualProjection }) => (
@@ -32,7 +33,11 @@ export function TripHistory({
         data={trips}
         keyExtractor={(item) => String(item.id)}
         style={styles.list}
-        contentContainerStyle={styles.listContent}
+        contentInsetAdjustmentBehavior="automatic"
+        contentContainerStyle={[
+          styles.listContent,
+          { paddingBottom: contentBottomPadding },
+        ]}
         ItemSeparatorComponent={renderSeparator}
         renderItem={renderItem}
         ListEmptyComponent={<TripHistoryEmptyState />}

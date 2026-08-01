@@ -8,6 +8,7 @@ import {
   Text,
   View,
 } from "react-native";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { router, useLocalSearchParams, useNavigation } from "expo-router";
 
 import { TripService } from "../../src/application/runtime";
@@ -47,6 +48,7 @@ type ScreenMode = "view" | "correction";
 
 export default function RegisteredServiceDetailScreen() {
   const { styles: detailStyles } = useDetailTheme();
+  const insets = useSafeAreaInsets();
   const { tripId } = useLocalSearchParams<{ tripId: string }>();
   const navigation = useNavigation();
   const [loading, setLoading] = useState(true);
@@ -367,8 +369,11 @@ export default function RegisteredServiceDetailScreen() {
         <ScrollView
           contentContainerStyle={[
             detailStyles.content,
-            mode === "correction" && detailStyles.contentWithBar,
+            mode === "correction" && {
+              paddingBottom: 104 + Math.max(insets.bottom, 12),
+            },
           ]}
+          contentInsetAdjustmentBehavior="automatic"
           keyboardShouldPersistTaps="handled"
         >
           <RegisteredServiceDetailHeader

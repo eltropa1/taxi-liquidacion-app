@@ -9,6 +9,7 @@ import {
   View,
   type TextInputProps,
 } from "react-native";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import { radii as themeRadii } from "../../presentation/theme/tokens";
 import { useAppTheme } from "../../presentation/theme/ThemeProvider";
@@ -359,9 +360,15 @@ export function CorrectionActionBar({
   onCancel: () => void;
   onSave: () => void;
 }) {
+  const insets = useSafeAreaInsets();
   const { styles: detailStyles } = useDetailTheme();
   return (
-    <View style={detailStyles.actionBar}>
+    <View
+      style={[
+        detailStyles.actionBar,
+        { paddingBottom: Math.max(insets.bottom, 14) },
+      ]}
+    >
       <Pressable
         onPress={onCancel}
         disabled={saving}
