@@ -10,11 +10,13 @@
     ],
     "icon": "./assets/icon.png",
     "plugins": [
+      "expo-location",
       [
         "expo-image-picker",
         {
           "cameraPermission": "GeoTaxi usa la camara solo cuando eliges tomar una foto para adjuntarla a un registro.",
-          "photosPermission": "GeoTaxi accede a tus imagenes solo cuando eliges adjuntar una imagen a un registro."
+          "photosPermission": "GeoTaxi accede a tus imagenes solo cuando eliges adjuntar una imagen a un registro.",
+          "microphonePermission": false
         }
       ],
       "expo-document-picker",
