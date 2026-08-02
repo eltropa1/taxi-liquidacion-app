@@ -17,6 +17,7 @@ type TripRow = {
   manualPickupZone: string | null;
   manualDropoffZone: string | null;
   workdayId: number | null;
+  closedWorkdayEditedAt: string | null;
 };
 
 export class TripQueryService {

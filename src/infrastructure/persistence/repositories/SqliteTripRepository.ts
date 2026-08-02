@@ -14,6 +14,7 @@ import type {
 } from "../../../application/ports/persistence";
 import type { Trip } from "../../../domain/trips/canonical";
 import type { PersistenceDatabase } from "../database";
+import { isUniqueConstraintViolation } from "../database/sqliteErrors";
 import { TripRecordMapper } from "../mappers/TripRecordMapper";
 import type { TripRecordRow } from "../mappers/TripRecordMapper";
 
@@ -40,20 +41,30 @@ export class SqliteTripRepository implements TripRepositoryPort {
 
   async createStartedTrip(input: TripStartInput): Promise<{ id: number }> {
     const createdAt = input.createdAt ?? input.startedAt;
-    const result = await this.database.runAsync(
-      `
-      INSERT INTO trips (startTime, source, createdAt, workdayId)
-      VALUES (?, ?, ?, ?)
-      `,
-      [
-        input.startedAt.toISOString(),
-        input.source,
-        createdAt.toISOString(),
-        input.workdayId,
-      ],
-    );
 
-    return { id: Number(result.lastInsertRowId ?? 0) };
+    try {
+      const result = await this.database.runAsync(
+        `
+        INSERT INTO trips (startTime, source, createdAt, workdayId)
+        VALUES (?, ?, ?, ?)
+        `,
+        [
+          input.startedAt.toISOString(),
+          input.source,
+          createdAt.toISOString(),
+          input.workdayId,
+        ],
+      );
+
+      return { id: Number(result.lastInsertRowId ?? 0) };
+    } catch (error) {
+      if (isUniqueConstraintViolation(error)) {
+        throw new Error(
+          "Ya tienes un viaje en curso. Debes finalizarlo antes de iniciar otro.",
+        );
+      }
+      throw error;
+    }
   }
 
   async createManualTrip(input: TripManualInput): Promise<{ id: number }> {
@@ -115,7 +126,8 @@ export class SqliteTripRepository implements TripRepositoryPort {
         cashTip,
         manualPickupZone,
         manualDropoffZone,
-        workdayId
+        workdayId,
+        closedWorkdayEditedAt
       FROM trips
       WHERE id = ?
       `,
@@ -304,16 +316,6 @@ export class SqliteTripRepository implements TripRepositoryPort {
     });
   }
 
-  async deleteTrip(id: number): Promise<void> {
-    await this.database.runAsync(
-      `
-      DELETE FROM trips
-      WHERE id = ?
-      `,
-      [id],
-    );
-  }
-
   async voidTrip(id: number, voidedAt: Date): Promise<void> {
     await this.database.runAsync(
       `
@@ -322,6 +324,17 @@ export class SqliteTripRepository implements TripRepositoryPort {
       WHERE id = ?
       `,
       [voidedAt.toISOString(), id],
+    );
+  }
+
+  async stampClosedWorkdayEdit(id: number, editedAt: Date): Promise<void> {
+    await this.database.runAsync(
+      `
+      UPDATE trips
+      SET closedWorkdayEditedAt = ?
+      WHERE id = ?
+      `,
+      [editedAt.toISOString(), id],
     );
   }
 

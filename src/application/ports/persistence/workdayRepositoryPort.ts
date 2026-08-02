@@ -39,6 +39,8 @@ export type HistoricalWorkdayUpsertInput = Readonly<{
 export interface WorkdayRepositoryPort {
   getOpenWorkday(): Promise<WorkdayLookupRecord | null>;
 
+  getWorkdayById(id: number): Promise<WorkdayRecord | null>;
+
   openWorkdayIfNeeded(): Promise<WorkdayLookupRecord | null>;
 
   getMostRecentWorkday(): Promise<WorkdayRecord | null>;

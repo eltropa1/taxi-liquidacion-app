@@ -3,6 +3,7 @@ import {
   getApplicationPersistence,
   type TripPersistenceRecord,
 } from "../ports/persistence";
+import { ClosedWorkdayEditConfirmationRequiredError } from "./ClosedWorkdayEditConfirmationRequiredError";
 
 export type CorrectRegisteredServiceCommand = Readonly<{
   id: number;
@@ -18,6 +19,10 @@ export type CorrectRegisteredServiceCommand = Readonly<{
   manualDropoffZone: string | null;
 }>;
 
+export type CorrectRegisteredServiceOptions = Readonly<{
+  confirmedClosedWorkdayEdit?: boolean;
+}>;
+
 export type CorrectRegisteredServiceResult =
   | Readonly<{ status: "updated" }>
   | Readonly<{ status: "unchanged" }>;
@@ -25,8 +30,9 @@ export type CorrectRegisteredServiceResult =
 export class CorrectRegisteredService {
   static async execute(
     command: CorrectRegisteredServiceCommand,
+    options: CorrectRegisteredServiceOptions = {},
   ): Promise<CorrectRegisteredServiceResult> {
-    const { tripRepository } = getApplicationPersistence();
+    const { tripRepository, workdayRepository } = getApplicationPersistence();
     const current = await tripRepository.findTripById(command.id);
 
     if (!current) {
@@ -39,6 +45,18 @@ export class CorrectRegisteredService {
 
     if (isUnchanged(current, command)) {
       return { status: "unchanged" };
+    }
+
+    const workday = current.workdayId
+      ? await workdayRepository.getWorkdayById(current.workdayId)
+      : null;
+    const editingClosedWorkday = Boolean(workday?.isClosed);
+
+    if (editingClosedWorkday && !options.confirmedClosedWorkdayEdit && workday) {
+      throw new ClosedWorkdayEditConfirmationRequiredError({
+        workdayId: workday.id,
+        workdayStartTime: workday.startTime,
+      });
     }
 
     await tripRepository.runInTransaction(async () => {
@@ -56,6 +74,10 @@ export class CorrectRegisteredService {
         manualDropoffZone: command.manualDropoffZone,
         serviceStatus: "completed",
       });
+
+      if (editingClosedWorkday) {
+        await tripRepository.stampClosedWorkdayEdit(command.id, new Date());
+      }
     });
 
     return { status: "updated" };

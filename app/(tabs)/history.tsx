@@ -17,6 +17,7 @@ import { SafeAreaView } from "react-native-safe-area-context";
 import type { HistoricalPeriodSelection, HistoricalPeriodType } from "../../src/application/history";
 import { ExportService } from "../../src/application/runtime";
 import { CreateManualTrip } from "../../src/application/trips/CreateManualTrip";
+import { ClosedWorkdayEditConfirmationRequiredError } from "../../src/application/trips/ClosedWorkdayEditConfirmationRequiredError";
 import { PaymentType, TripSource } from "../../src/constants/enums";
 import { EconomicDrilldownRow } from "../../src/components/economic/EconomicDrilldownRow";
 import { HistoryCustomRangeModal } from "../../src/components/history/HistoryCustomRangeModal";
@@ -27,6 +28,7 @@ import type { EconomicDrilldownGroup } from "../../src/presentation/economics";
 import { useHistoryScreen } from "../../src/hooks/useHistoryScreen";
 import type { ThemeColors, RadiiTokens } from "../../src/presentation/theme/tokens";
 import { useAppTheme } from "../../src/presentation/theme/ThemeProvider";
+import { parseMoneyInput } from "../../src/utils/numberInput";
 
 type HistoryScale = Extract<HistoricalPeriodType, "week" | "fortnight" | "month" | "year" | "custom">;
 
@@ -451,8 +453,8 @@ export default function HistoryScreen() {
   const handleSaveAddedService = () => {
     if (!addServiceTarget) return;
 
-    const amount = Number(addServiceAmountInput.replace(",", "."));
-    if (!Number.isFinite(amount) || amount <= 0) {
+    const amount = parseMoneyInput(addServiceAmountInput);
+    if (amount === null || amount <= 0) {
       Alert.alert("Importe inválido", "Introduce un importe mayor que cero.");
       return;
     }
@@ -472,13 +474,19 @@ export default function HistoryScreen() {
       start.hours,
       start.minutes,
     );
-    const endTime = new Date(
+    let endTime = new Date(
       baseDate.getFullYear(),
       baseDate.getMonth(),
       baseDate.getDate(),
       end.hours,
       end.minutes,
     );
+
+    // Un servicio de taxi no dura más de 24h: si la hora de fin cae "antes"
+    // que la de inicio en el mismo día, es que el servicio cruza la medianoche.
+    if (endTime < startTime) {
+      endTime = new Date(endTime.getTime() + 24 * 60 * 60 * 1000);
+    }
 
     if (endTime <= startTime) {
       Alert.alert("Horario inválido", "La hora de fin debe ser posterior a la de inicio.");
@@ -488,22 +496,62 @@ export default function HistoryScreen() {
     // Camino de respuesta instantánea: cerramos el modal al toque y el guardado
     // en SQLite continúa en segundo plano.
     setAddServiceTarget(null);
-    CreateManualTrip.execute({
+    saveManualTripWithClosedWorkdayConfirmation({
       startTime,
       endTime,
       amount,
       payment: addServicePayment,
       source: addServiceSource,
-    })
+    });
+  };
+
+  function saveManualTripWithClosedWorkdayConfirmation(command: {
+    startTime: Date;
+    endTime: Date;
+    amount: number;
+    payment: PaymentType;
+    source: TripSource;
+  }) {
+    CreateManualTrip.execute(command)
       .then(() => refreshData())
-      .catch((saveError) => {
-        console.error("Error añadiendo servicio a jornada cerrada", saveError);
+      .catch((error) => {
+        if (error instanceof ClosedWorkdayEditConfirmationRequiredError) {
+          Alert.alert(
+            "Jornada ya cerrada",
+            `La jornada del ${new Date(
+              error.workdayStartTime,
+            ).toLocaleDateString()} ya está cerrada. Añadir este servicio alterará las cifras y estadísticas ya calculadas de esa jornada. ¿Confirmas el alta?`,
+            [
+              { text: "Cancelar", style: "cancel" },
+              {
+                text: "Confirmar alta",
+                style: "destructive",
+                onPress: () => {
+                  CreateManualTrip.execute(command, {
+                    confirmedClosedWorkdayEdit: true,
+                  })
+                    .then(() => refreshData())
+                    .catch((retryError) => {
+                      console.error("Error añadiendo servicio a jornada cerrada", retryError);
+                      Alert.alert(
+                        "No se ha podido guardar",
+                        "Revisa los datos e inténtalo de nuevo.",
+                      );
+                    });
+                },
+              },
+            ],
+          );
+          return;
+        }
+
+        console.error("Error añadiendo servicio", error);
         Alert.alert(
           "No se ha podido guardar",
           "Revisa los datos e inténtalo de nuevo.",
         );
       });
-  };
+  }
 
   const handleExportHistoricalDataset = async () => {
     if (!historyData) {

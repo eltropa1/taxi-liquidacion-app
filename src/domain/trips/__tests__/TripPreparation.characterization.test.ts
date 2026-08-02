@@ -108,6 +108,24 @@ describe("Trip preparation characterization", () => {
         }),
       );
     });
+
+    it("accepts cash amounts with spaces, commas, dots and currency symbols", () => {
+      expect(
+        prepareTripSaveData({
+          amountInput: "10 €",
+          payment: PaymentType.CASH,
+          chargedAmountInput: "",
+          cashTipInput: "30,25 €",
+          source: TripSource.TAXI,
+          customSource: "",
+        }),
+      ).toEqual(
+        expect.objectContaining({
+          amount: 10,
+          cashTip: 20.25,
+        }),
+      );
+    });
   });
 
   describe("prepareTripEditSaveData", () => {
@@ -161,6 +179,26 @@ describe("Trip preparation characterization", () => {
           existingCashTip: null,
         }),
       ).toEqual({ ok: false, error: "CHARGED_AMOUNT_TOO_LOW" });
+    });
+
+    it("accepts edit money fields with commas, dots and currency symbols", () => {
+      const result = prepareTripEditSaveData({
+        tripStartTime: "2026-07-01T08:00:00.000Z",
+        amountInput: "15 €",
+        payment: PaymentType.CASH,
+        chargedAmountInput: "",
+        cashTipInput: "30.25€",
+        startTimeInput: "08:15",
+        endTimeInput: "08:45",
+        existingChargedAmount: null,
+        existingCashTip: null,
+      });
+
+      expect(result.ok).toBe(true);
+      if (result.ok) {
+        expect(result.value.amount).toBe(15);
+        expect(result.value.cashTipValue).toBe(15.25);
+      }
     });
 
     it("rejects empty edit amounts instead of converting them to zero", () => {

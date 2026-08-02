@@ -56,7 +56,7 @@ describe("Workday actions characterization", () => {
     jest.clearAllMocks();
   });
 
-  it("opens a workday and backfills the previous one when needed", async () => {
+  it("refuses to open a new workday while the previous one is still open", async () => {
     persistence.workdayRepository.getMostRecentWorkday.mockResolvedValue({
       id: 12,
       startTime: "2026-07-01T07:00:00.000Z",
@@ -67,12 +67,12 @@ describe("Workday actions characterization", () => {
       createdAt: "2026-07-01T07:00:00.000Z",
     });
 
-    await OpenWorkday.execute(1234);
-
-    expect(persistence.workdayRepository.setEndOdometerIfMissing).toHaveBeenCalledWith(
-      { id: 12, endOdometer: 1234 },
+    await expect(OpenWorkday.execute(1234)).rejects.toThrow(
+      /ya tienes una jornada abierta/i,
     );
-    expect(persistence.workdayRepository.openWorkday).toHaveBeenCalledWith(1234);
+
+    expect(persistence.workdayRepository.setEndOdometerIfMissing).not.toHaveBeenCalled();
+    expect(persistence.workdayRepository.openWorkday).not.toHaveBeenCalled();
   });
 
   it("does not backfill a previous workday that already has an odometer", async () => {

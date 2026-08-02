@@ -1,4 +1,5 @@
 import { PaymentType } from "../../constants/enums";
+import { parseMoneyInput } from "../../utils/numberInput";
 
 export type TripEditPreparationError =
   | "INVALID_AMOUNT"
@@ -58,10 +59,7 @@ const buildTimeFromBaseDate = (
 };
 
 const parseAmountInput = (value: string) => {
-  if (value.trim() === "") return null;
-
-  const amount = Number(value.replace(",", "."));
-  return Number.isFinite(amount) ? amount : null;
+  return parseMoneyInput(value);
 };
 
 export function prepareTripEditSaveData(

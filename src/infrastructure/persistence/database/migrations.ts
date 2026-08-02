@@ -130,6 +130,11 @@ export async function runMigrations() {
       "voidedAt",
       `ALTER TABLE trips ADD COLUMN voidedAt TEXT;`,
     );
+    await ensureColumn(
+      tripColumns,
+      "closedWorkdayEditedAt",
+      `ALTER TABLE trips ADD COLUMN closedWorkdayEditedAt TEXT;`,
+    );
 
     await db.execAsync(`
       UPDATE trips
@@ -197,6 +202,54 @@ export async function runMigrations() {
         }
       }
     }
+
+    // Antes de forzar "como mucho una jornada abierta / un viaje activo" a
+    // nivel de base de datos, reconciliamos cualquier duplicado que ya
+    // existiera (de instalaciones previas a esta protección) para que el
+    // índice no falle al crearse.
+    const openWorkdays = await db.getAllAsync<{ id: number; startTime: string }>(`
+      SELECT id, startTime FROM workdays WHERE isClosed = 0 ORDER BY startTime DESC;
+    `);
+
+    if (openWorkdays.length > 1) {
+      const [, ...staleOpenWorkdays] = openWorkdays;
+      for (const stale of staleOpenWorkdays) {
+        await db.execAsync(`
+          UPDATE workdays
+          SET isClosed = 1, endTime = COALESCE(endTime, startTime)
+          WHERE id = ${stale.id};
+        `);
+      }
+    }
+
+    await db.execAsync(`
+      CREATE UNIQUE INDEX IF NOT EXISTS idx_workdays_single_open
+      ON workdays (isClosed)
+      WHERE isClosed = 0;
+    `);
+
+    const activeTrips = await db.getAllAsync<{ id: number; startTime: string }>(`
+      SELECT id, startTime FROM trips
+      WHERE endTime IS NULL AND voidedAt IS NULL
+      ORDER BY startTime DESC;
+    `);
+
+    if (activeTrips.length > 1) {
+      const [, ...staleActiveTrips] = activeTrips;
+      for (const stale of staleActiveTrips) {
+        await db.execAsync(`
+          UPDATE trips
+          SET endTime = startTime, serviceStatus = 'incomplete'
+          WHERE id = ${stale.id};
+        `);
+      }
+    }
+
+    await db.execAsync(`
+      CREATE UNIQUE INDEX IF NOT EXISTS idx_trips_single_active
+      ON trips ((1))
+      WHERE endTime IS NULL AND voidedAt IS NULL;
+    `);
 
     await db.execAsync("COMMIT;");
   } catch (error) {

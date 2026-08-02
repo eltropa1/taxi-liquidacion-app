@@ -20,6 +20,13 @@ export class StartTrip {
       throw new Error("No hay un día de trabajo abierto");
     }
 
+    const activeTrip = await tripRepository.findActiveTrip();
+    if (activeTrip) {
+      throw new Error(
+        "Ya tienes un viaje en curso. Debes finalizarlo antes de iniciar otro.",
+      );
+    }
+
     const startedAt = new Date();
     const classification = TripServiceClassification.create({
       platformId: TripSource.TAXI,

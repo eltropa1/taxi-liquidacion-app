@@ -125,7 +125,7 @@ export function CompleteServiceBottomSheet({
                 <TextInput
                   value={amountInput}
                   onChangeText={onAmountInputChange}
-                  keyboardType="default"
+                  keyboardType="decimal-pad"
                   placeholder="0,00"
                   placeholderTextColor="#9CA3AF"
                   autoFocus
@@ -135,7 +135,7 @@ export function CompleteServiceBottomSheet({
                 <TextInput
                   value={chargedAmountInput}
                   onChangeText={onChargedAmountInputChange}
-                  keyboardType="default"
+                  keyboardType="decimal-pad"
                   placeholder="Importe cobrado (opcional)"
                   placeholderTextColor="#9CA3AF"
                   style={styles.chargedInput}

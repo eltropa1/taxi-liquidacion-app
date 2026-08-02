@@ -57,7 +57,7 @@ describe("createPersistenceDependencies", () => {
 
     expect(db.runAsync).toHaveBeenCalledWith(
       expect.stringContaining("UPDATE workdays"),
-      [expect.any(String), null],
+      [expect.any(String), null, 11],
     );
 
     expect(db.runAsync).toHaveBeenCalledWith(

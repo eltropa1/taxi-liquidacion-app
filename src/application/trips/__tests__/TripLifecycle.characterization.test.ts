@@ -10,8 +10,7 @@ import {
 } from "../../ports/persistence";
 import { CloseTrip } from "../CloseTrip";
 import { CreateManualTrip } from "../CreateManualTrip";
-import { DeleteTrip } from "../DeleteTrip";
-import { FinishTrip } from "../FinishTrip";
+import { ClosedWorkdayEditConfirmationRequiredError } from "../ClosedWorkdayEditConfirmationRequiredError";
 import { StartTrip } from "../StartTrip";
 import { UpdateTrip } from "../UpdateTrip";
 
@@ -24,16 +23,18 @@ describe("Trip lifecycle characterization", () => {
       createStartedTrip: jest.fn(),
       createManualTrip: jest.fn(),
       findActiveTrip: jest.fn(),
+      findTripById: jest.fn(),
       findCanonicalTripById: jest.fn(),
       updateTrip: jest.fn(),
       updateTripService: jest.fn(),
       updateTripTimes: jest.fn(),
       updateTripManualZones: jest.fn(),
       updateEditedTrip: jest.fn(),
-      deleteTrip: jest.fn(),
+      stampClosedWorkdayEdit: jest.fn(),
     },
     workdayRepository: {
       getOpenWorkday: jest.fn(),
+      getWorkdayById: jest.fn(),
       openWorkdayIfNeeded: jest.fn(),
       openWorkday: jest.fn(),
       closeCurrentWorkday: jest.fn(),
@@ -120,11 +121,28 @@ describe("Trip lifecycle characterization", () => {
       );
     });
 
+    it("throws when a trip is already in progress", async () => {
+      persistence.workdayRepository.getOpenWorkday.mockResolvedValue({
+        id: 7,
+        startTime: "2026-07-01T08:00:00.000Z",
+      });
+      persistence.tripRepository.findActiveTrip.mockResolvedValue({
+        id: 41,
+        startTime: "2026-07-01T09:00:00.000Z",
+      });
+
+      await expect(StartTrip.execute()).rejects.toThrow(
+        "Ya tienes un viaje en curso",
+      );
+      expect(persistence.tripRepository.createStartedTrip).not.toHaveBeenCalled();
+    });
+
     it("creates an in-progress trip and captures the START geo snapshot in the background", async () => {
       persistence.workdayRepository.getOpenWorkday.mockResolvedValue({
         id: 7,
         startTime: "2026-07-01T08:00:00.000Z",
       });
+      persistence.tripRepository.findActiveTrip.mockResolvedValue(null);
       persistence.tripRepository.createStartedTrip.mockResolvedValue({
         id: 42,
       });
@@ -149,132 +167,6 @@ describe("Trip lifecycle characterization", () => {
           createdAt: expect.any(String),
         }),
       );
-    });
-  });
-
-  describe("FinishTrip", () => {
-    it("returns without writing when there is no active trip", async () => {
-      persistence.tripRepository.findActiveTrip.mockResolvedValue(null);
-
-      await FinishTrip.execute(12.5, PaymentType.CASH, TripSource.TAXI);
-
-      expect(persistence.tripRepository.updateTripTimes).not.toHaveBeenCalled();
-      expect(persistence.tripGeoSnapshotRepository.insert).not.toHaveBeenCalled();
-    });
-
-    it("completes the active trip, persists it and captures the END geo snapshot", async () => {
-      const trip = Trip.start({
-        id: "99",
-        startedAt: new Date("2026-07-01T10:00:00.000Z"),
-        workdayId: "7",
-        classification: TripServiceClassification.create({
-          platformId: TripSource.TAXI,
-          serviceLabel: TripSource.TAXI,
-        }),
-      });
-
-      persistence.tripRepository.findActiveTrip.mockResolvedValue({
-        id: 99,
-        startTime: "2026-07-01T10:00:00.000Z",
-      });
-      persistence.tripRepository.findCanonicalTripById.mockResolvedValue(trip);
-
-      await FinishTrip.execute(12.5, PaymentType.CASH, TripSource.TAXI);
-      await flushPromises();
-
-      expect(persistence.tripRepository.runInTransaction).toHaveBeenCalledTimes(1);
-      expect(persistence.tripRepository.updateTripTimes).toHaveBeenCalledWith(
-        expect.objectContaining({
-          id: 99,
-          startTime: expect.any(Date),
-          endTime: expect.any(Date),
-        }),
-      );
-      expect(persistence.tripRepository.updateTrip).toHaveBeenCalledWith(
-        expect.objectContaining({
-          id: 99,
-          amount: 12.5,
-          payment: PaymentType.CASH,
-          source: TripSource.TAXI,
-          customSource: null,
-        }),
-      );
-      expect(geoLocationService.getCurrentLocation).toHaveBeenCalledTimes(1);
-      expect(mockedGeoResolve).toHaveBeenCalledWith(40.4168, -3.7038);
-      expect(persistence.tripGeoSnapshotRepository.insert).toHaveBeenCalledWith(
-        expect.objectContaining({
-          tripId: 99,
-          kind: "END",
-        }),
-      );
-    });
-
-    it("finalizes the trip even when GPS capture fails", async () => {
-      const trip = Trip.start({
-        id: "99",
-        startedAt: new Date("2026-07-01T10:00:00.000Z"),
-        workdayId: "7",
-        classification: TripServiceClassification.create({
-          platformId: TripSource.TAXI,
-          serviceLabel: TripSource.TAXI,
-        }),
-      });
-
-      persistence.tripRepository.findActiveTrip.mockResolvedValue({
-        id: 99,
-        startTime: "2026-07-01T10:00:00.000Z",
-      });
-      persistence.tripRepository.findCanonicalTripById.mockResolvedValue(trip);
-      geoLocationService.getCurrentLocation.mockRejectedValueOnce(
-        new Error("gps unavailable"),
-      );
-
-      await expect(
-        FinishTrip.execute(12.5, PaymentType.CASH, TripSource.TAXI),
-      ).resolves.toEqual({
-        finalized: true,
-        enrichmentSaved: true,
-      });
-      await flushPromises();
-
-      expect(persistence.tripRepository.runInTransaction).toHaveBeenCalledTimes(1);
-      expect(persistence.tripRepository.updateTripTimes).toHaveBeenCalledTimes(1);
-      expect(persistence.tripRepository.updateTrip).toHaveBeenCalledTimes(1);
-      expect(persistence.tripGeoSnapshotRepository.insert).not.toHaveBeenCalled();
-    });
-
-    it("finalizes the trip even when snapshot persistence fails", async () => {
-      const trip = Trip.start({
-        id: "99",
-        startedAt: new Date("2026-07-01T10:00:00.000Z"),
-        workdayId: "7",
-        classification: TripServiceClassification.create({
-          platformId: TripSource.TAXI,
-          serviceLabel: TripSource.TAXI,
-        }),
-      });
-
-      persistence.tripRepository.findActiveTrip.mockResolvedValue({
-        id: 99,
-        startTime: "2026-07-01T10:00:00.000Z",
-      });
-      persistence.tripRepository.findCanonicalTripById.mockResolvedValue(trip);
-      persistence.tripGeoSnapshotRepository.insert.mockRejectedValueOnce(
-        new Error("snapshot unavailable"),
-      );
-
-      await expect(
-        FinishTrip.execute(12.5, PaymentType.CASH, TripSource.TAXI),
-      ).resolves.toEqual({
-        finalized: true,
-        enrichmentSaved: true,
-      });
-      await flushPromises();
-
-      expect(persistence.tripRepository.runInTransaction).toHaveBeenCalledTimes(1);
-      expect(persistence.tripRepository.updateTripTimes).toHaveBeenCalledTimes(1);
-      expect(persistence.tripRepository.updateTrip).toHaveBeenCalledTimes(1);
-      expect(persistence.tripGeoSnapshotRepository.insert).toHaveBeenCalledTimes(1);
     });
   });
 
@@ -333,6 +225,15 @@ describe("Trip lifecycle characterization", () => {
         id: 15,
         startTime: "2026-07-01T00:00:00.000Z",
       });
+      persistence.workdayRepository.getWorkdayById.mockResolvedValue({
+        id: 15,
+        startTime: "2026-07-01T00:00:00.000Z",
+        endTime: null,
+        startOdometer: null,
+        endOdometer: null,
+        isClosed: false,
+        createdAt: "2026-07-01T00:00:00.000Z",
+      });
 
       await CreateManualTrip.execute({
         startTime: new Date("2026-07-01T12:30:00.000Z"),
@@ -352,6 +253,51 @@ describe("Trip lifecycle characterization", () => {
           workdayId: 15,
           createdAt: expect.any(Date),
         }),
+      );
+      expect(
+        persistence.tripRepository.stampClosedWorkdayEdit,
+      ).not.toHaveBeenCalled();
+    });
+
+    it("requires explicit confirmation before adding a manual trip to a closed workday", async () => {
+      persistence.workdayRepository.getWorkdayForDate.mockResolvedValue({
+        id: 15,
+        startTime: "2026-07-01T00:00:00.000Z",
+      });
+      persistence.workdayRepository.getWorkdayById.mockResolvedValue({
+        id: 15,
+        startTime: "2026-07-01T00:00:00.000Z",
+        endTime: "2026-07-01T20:00:00.000Z",
+        startOdometer: 1000,
+        endOdometer: 1100,
+        isClosed: true,
+        createdAt: "2026-07-01T00:00:00.000Z",
+      });
+      persistence.tripRepository.createManualTrip.mockResolvedValue({ id: 88 });
+
+      const command = {
+        startTime: new Date("2026-07-01T12:30:00.000Z"),
+        endTime: new Date("2026-07-01T12:45:00.000Z"),
+        amount: 18,
+        payment: PaymentType.CARD,
+        source: TripSource.UBER,
+      };
+
+      await expect(CreateManualTrip.execute(command)).rejects.toThrow(
+        ClosedWorkdayEditConfirmationRequiredError,
+      );
+      expect(persistence.tripRepository.createManualTrip).not.toHaveBeenCalled();
+
+      await CreateManualTrip.execute(command, {
+        confirmedClosedWorkdayEdit: true,
+      });
+
+      expect(persistence.tripRepository.createManualTrip).toHaveBeenCalledWith(
+        expect.objectContaining({ workdayId: 15 }),
+      );
+      expect(persistence.tripRepository.stampClosedWorkdayEdit).toHaveBeenCalledWith(
+        88,
+        expect.any(Date),
       );
     });
 
@@ -416,6 +362,57 @@ describe("Trip lifecycle characterization", () => {
       );
     });
 
+    it("requires explicit confirmation before completing a pending trip in a closed workday", async () => {
+      persistence.tripRepository.findTripById.mockResolvedValue({
+        id: 33,
+        workdayId: 15,
+        serviceStatus: "incomplete",
+      });
+      persistence.workdayRepository.getWorkdayById.mockResolvedValue({
+        id: 15,
+        startTime: "2026-07-01T00:00:00.000Z",
+        endTime: "2026-07-01T20:00:00.000Z",
+        startOdometer: 1000,
+        endOdometer: 1100,
+        isClosed: true,
+        createdAt: "2026-07-01T00:00:00.000Z",
+      });
+
+      await expect(
+        UpdateTrip.execute(
+          33,
+          21,
+          PaymentType.CASH,
+          TripSource.CABIFY,
+          undefined,
+          undefined,
+          undefined,
+          "completed",
+        ),
+      ).rejects.toThrow(ClosedWorkdayEditConfirmationRequiredError);
+      expect(persistence.tripRepository.updateTrip).not.toHaveBeenCalled();
+
+      await UpdateTrip.execute(
+        33,
+        21,
+        PaymentType.CASH,
+        TripSource.CABIFY,
+        undefined,
+        undefined,
+        undefined,
+        "completed",
+        { confirmedClosedWorkdayEdit: true },
+      );
+
+      expect(persistence.tripRepository.updateTrip).toHaveBeenCalledWith(
+        expect.objectContaining({ id: 33, serviceStatus: "completed" }),
+      );
+      expect(persistence.tripRepository.stampClosedWorkdayEdit).toHaveBeenCalledWith(
+        33,
+        expect.any(Date),
+      );
+    });
+
     it("updates an edited trip inside a single transaction", async () => {
       await UpdateTrip.updateEditedTrip({
         id: 33,
@@ -439,14 +436,6 @@ describe("Trip lifecycle characterization", () => {
           manualDropoffZone: "014",
         }),
       );
-    });
-  });
-
-  describe("DeleteTrip", () => {
-    it("deletes the selected trip by id", async () => {
-      await DeleteTrip.execute(77);
-
-      expect(persistence.tripRepository.deleteTrip).toHaveBeenCalledWith(77);
     });
   });
 });

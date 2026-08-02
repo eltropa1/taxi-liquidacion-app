@@ -113,9 +113,33 @@ describe("SqliteWorkdayRepository", () => {
 
     expect(db.runAsync).toHaveBeenCalledWith(
       expect.stringContaining(
-        "UPDATE workdays\n        SET endTime = ?, endOdometer = ?, goalPolicyId = ?, isClosed = 1\n        WHERE isClosed = 0",
+        "UPDATE workdays\n        SET endTime = ?, endOdometer = ?, goalPolicyId = ?, isClosed = 1\n        WHERE id = ?",
       ),
-      [expect.any(String), 1300, "goal-2"],
+      [expect.any(String), 1300, "goal-2", 44],
+    );
+  });
+
+  it("does nothing when there is no open workday to close", async () => {
+    const db = createDatabase();
+    db.getFirstAsync.mockResolvedValueOnce(null);
+    const repository = new SqliteWorkdayRepository(db as any);
+
+    await repository.closeCurrentWorkday(1300, "goal-2");
+
+    expect(db.runAsync).not.toHaveBeenCalled();
+  });
+
+  it("closes only the open workday by id, never every open row at once", async () => {
+    const db = createDatabase();
+    const repository = new SqliteWorkdayRepository(db as any);
+
+    await repository.closeCurrentWorkday(null, null);
+
+    expect(db.runAsync).toHaveBeenCalledWith(
+      expect.stringContaining(
+        "UPDATE workdays\n      SET endTime = ?, goalPolicyId = ?, isClosed = 1\n      WHERE id = ?",
+      ),
+      [expect.any(String), null, 44],
     );
   });
 
@@ -140,6 +164,26 @@ describe("SqliteWorkdayRepository", () => {
       isClosed: 0,
       createdAt: "2026-07-01T08:00:00.000Z",
     });
+  });
+
+  it("translates a unique-constraint violation into a friendly already-open error", async () => {
+    const db = createDatabase();
+    db.runAsync.mockRejectedValueOnce(
+      new Error("UNIQUE constraint failed: index 'idx_workdays_single_open'"),
+    );
+    const repository = new SqliteWorkdayRepository(db as any);
+
+    await expect(repository.openWorkday(1200)).rejects.toThrow(
+      /ya tienes una jornada abierta/i,
+    );
+  });
+
+  it("rethrows unrelated database errors from openWorkday untouched", async () => {
+    const db = createDatabase();
+    db.runAsync.mockRejectedValueOnce(new Error("disk I/O error"));
+    const repository = new SqliteWorkdayRepository(db as any);
+
+    await expect(repository.openWorkday(1200)).rejects.toThrow("disk I/O error");
   });
 
   it("updates the end odometer only when it is missing", async () => {

@@ -16,6 +16,7 @@ export type TripPersistenceRecord = Readonly<{
   manualPickupZone: string | null;
   manualDropoffZone: string | null;
   workdayId: number | null;
+  closedWorkdayEditedAt: string | null;
 }>;
 
 export type TripActiveRecord = Readonly<{
@@ -157,9 +158,9 @@ export interface TripRepositoryPort {
 
   updateEditedTrip(input: TripEditedInput): Promise<void>;
 
-  deleteTrip(id: number): Promise<void>;
-
   voidTrip(id: number, voidedAt: Date): Promise<void>;
+
+  stampClosedWorkdayEdit(id: number, editedAt: Date): Promise<void>;
 
   upsertHistoricalTrip(input: HistoricalTripUpsertInput): Promise<void>;
 }

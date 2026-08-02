@@ -1,5 +1,10 @@
 import { PaymentType, TripSource } from "../../constants/enums";
 import { getApplicationPersistence } from "../ports/persistence";
+import { ClosedWorkdayEditConfirmationRequiredError } from "./ClosedWorkdayEditConfirmationRequiredError";
+
+export type UpdateTripOptions = Readonly<{
+  confirmedClosedWorkdayEdit?: boolean;
+}>;
 
 export class UpdateTrip {
   static async execute(
@@ -11,18 +16,38 @@ export class UpdateTrip {
     chargedAmount?: number,
     cashTip?: number,
     serviceStatus?: "incomplete" | "completed",
+    options: UpdateTripOptions = {},
   ): Promise<void> {
-    const { tripRepository } = getApplicationPersistence();
+    const { tripRepository, workdayRepository } = getApplicationPersistence();
 
-    await tripRepository.updateTrip({
-      id,
-      amount,
-      payment,
-      source,
-      customSource: customSource ?? null,
-      chargedAmount: chargedAmount ?? null,
-      cashTip: cashTip ?? null,
-      serviceStatus,
+    const current = await tripRepository.findTripById(id);
+    const workday = current?.workdayId
+      ? await workdayRepository.getWorkdayById(current.workdayId)
+      : null;
+    const editingClosedWorkday = Boolean(workday?.isClosed);
+
+    if (editingClosedWorkday && !options.confirmedClosedWorkdayEdit && workday) {
+      throw new ClosedWorkdayEditConfirmationRequiredError({
+        workdayId: workday.id,
+        workdayStartTime: workday.startTime,
+      });
+    }
+
+    await tripRepository.runInTransaction(async () => {
+      await tripRepository.updateTrip({
+        id,
+        amount,
+        payment,
+        source,
+        customSource: customSource ?? null,
+        chargedAmount: chargedAmount ?? null,
+        cashTip: cashTip ?? null,
+        serviceStatus,
+      });
+
+      if (editingClosedWorkday) {
+        await tripRepository.stampClosedWorkdayEdit(id, new Date());
+      }
     });
   }
 

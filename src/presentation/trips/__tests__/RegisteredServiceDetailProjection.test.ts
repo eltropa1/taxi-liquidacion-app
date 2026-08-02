@@ -22,6 +22,7 @@ const completedTrip = {
   manualPickupZone: "016",
   manualDropoffZone: null,
   workdayId: 7,
+  closedWorkdayEditedAt: null,
 };
 
 describe("RegisteredServiceDetailProjection", () => {
@@ -107,6 +108,19 @@ describe("RegisteredServiceDetailProjection", () => {
     }
   });
 
+  it("accepts cash totals with currency symbols and decimal separators", () => {
+    const form = {
+      ...createRegisteredServiceCorrectionForm(completedTrip),
+      cashTotalReceivedInput: "30.25 €",
+    };
+
+    const prepared = prepareRegisteredServiceCorrection(completedTrip, form);
+    expect(prepared.ok).toBe(true);
+    if (prepared.ok) {
+      expect(prepared.command.cashTip).toBe(20.25);
+    }
+  });
+
   it("normalizes incompatible payment fields and keeps card chargedAmount only for card", () => {
     const form = {
       ...createRegisteredServiceCorrectionForm(completedTrip),
@@ -162,7 +176,7 @@ describe("RegisteredServiceDetailProjection", () => {
     );
   });
 
-  it("rejects empty amount, invalid numbers and end time before start", () => {
+  it("rejects empty amount and invalid numbers", () => {
     expect(
       prepareRegisteredServiceCorrection(completedTrip, {
         ...createRegisteredServiceCorrectionForm(completedTrip),
@@ -186,19 +200,43 @@ describe("RegisteredServiceDetailProjection", () => {
         errors: expect.objectContaining({ amount: expect.any(String) }),
       }),
     );
+  });
 
-    expect(
-      prepareRegisteredServiceCorrection(completedTrip, {
-        ...createRegisteredServiceCorrectionForm(completedTrip),
-        startTimeInput: "10:00",
-        endTimeInput: "09:00",
-      }),
-    ).toEqual(
-      expect.objectContaining({
-        ok: false,
-        errors: expect.objectContaining({ endTime: expect.any(String) }),
-      }),
+  it("treats an end time earlier than the start time as crossing midnight", () => {
+    const prepared = prepareRegisteredServiceCorrection(completedTrip, {
+      ...createRegisteredServiceCorrectionForm(completedTrip),
+      startTimeInput: "23:54",
+      endTimeInput: "00:10",
+    });
+
+    expect(prepared.ok).toBe(true);
+    if (!prepared.ok) return;
+
+    expect(prepared.command.startTime.toISOString()).toBe(
+      new Date(2026, 6, 1, 23, 54, 0, 0).toISOString(),
     );
+    expect(prepared.command.endTime.toISOString()).toBe(
+      new Date(2026, 6, 2, 0, 10, 0, 0).toISOString(),
+    );
+  });
+
+  it("keeps the overnight correction marked as unchanged when it matches the stored trip", () => {
+    const overnightTrip = {
+      ...completedTrip,
+      startTime: new Date(2026, 6, 1, 23, 54, 0, 0).toISOString(),
+      endTime: new Date(2026, 6, 2, 0, 10, 0, 0).toISOString(),
+    };
+
+    const form = createRegisteredServiceCorrectionForm(overnightTrip);
+    expect(isRegisteredServiceCorrectionFormDirty(overnightTrip, form)).toBe(
+      false,
+    );
+
+    const prepared = prepareRegisteredServiceCorrection(overnightTrip, form);
+    expect(prepared.ok).toBe(true);
+    if (prepared.ok) {
+      expect(prepared.dirty).toBe(false);
+    }
   });
 
   it("accepts zero and negative service amounts", () => {

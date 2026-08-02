@@ -27,6 +27,7 @@ import { useHomeDateTracking } from "../../src/hooks/useHomeDateTracking";
 import { useTripActions } from "../../src/hooks/useTripActions";
 import {
   buildTodayScreenProjection,
+  resolveStaleOperationalState,
   toTripVisualProjection,
   type TripVisualProjection,
 } from "../../src/presentation";
@@ -236,6 +237,7 @@ export default function TodayScreen() {
 
   const {
     activeTripId,
+    activeTripStartTime,
     trips,
     weeklySummary,
     monthlySummary,
@@ -312,8 +314,24 @@ export default function TodayScreen() {
       ? handleOpenFinish
       : handleStartTrip;
 
+  const [isActionPending, setIsActionPending] = useState(false);
+
   const handleActionPress = () => {
-    actionHandler();
+    if (isActionPending) return;
+    setIsActionPending(true);
+    Promise.resolve(actionHandler())
+      .catch((error) => {
+        console.error("Error ejecutando la acción principal", error);
+        Alert.alert(
+          "No se ha podido completar la acción",
+          error instanceof Error
+            ? error.message
+            : "Inténtalo de nuevo.",
+        );
+      })
+      .finally(() => {
+        setIsActionPending(false);
+      });
   };
 
   const handlePendingTripPress = useCallback(
@@ -341,6 +359,42 @@ export default function TodayScreen() {
   const workedTimeLabel = isWorkedTimeLive
     ? formatElapsedDuration(contextStartTime, elapsedClockNow)
     : null;
+
+  const warnedStaleTripIdRef = useRef<number | null>(null);
+  const warnedStaleWorkdayIdRef = useRef<number | null>(null);
+
+  useEffect(() => {
+    const { staleTrip, staleWorkday } = resolveStaleOperationalState({
+      activeTrip:
+        activeTripId !== null && activeTripStartTime
+          ? { id: activeTripId, startTime: activeTripStartTime }
+          : null,
+      activeWorkday: activeWorkday
+        ? { id: activeWorkday.id, startTime: activeWorkday.startTime }
+        : null,
+      now: new Date(),
+    });
+
+    if (staleTrip && warnedStaleTripIdRef.current !== staleTrip.id) {
+      warnedStaleTripIdRef.current = staleTrip.id;
+      Alert.alert(
+        "Viaje en curso desde otro día",
+        `Tienes un viaje sin finalizar iniciado el ${new Date(
+          staleTrip.startTime,
+        ).toLocaleString()}. Finalízalo para que las cifras de hoy sean correctas.`,
+      );
+    }
+
+    if (staleWorkday && warnedStaleWorkdayIdRef.current !== staleWorkday.id) {
+      warnedStaleWorkdayIdRef.current = staleWorkday.id;
+      Alert.alert(
+        "Jornada abierta desde otro día",
+        `Tienes una jornada sin cerrar abierta el ${new Date(
+          staleWorkday.startTime,
+        ).toLocaleDateString()}. Ciérrala para poder llevar bien la cuenta de hoy.`,
+      );
+    }
+  }, [activeTripId, activeTripStartTime, activeWorkday]);
 
   function openDatePickerModal() {
     setCalendarMonth(startOfMonth(selectedDate));
@@ -414,7 +468,10 @@ export default function TodayScreen() {
       closeWorkdayModal();
       handleOpenWorkday(startOdometer).catch((error) => {
         console.error("Error abriendo jornada", error);
-        Alert.alert("No se ha podido abrir la jornada", "Inténtalo de nuevo.");
+        Alert.alert(
+          "No se ha podido abrir la jornada",
+          error instanceof Error ? error.message : "Inténtalo de nuevo.",
+        );
       });
       return;
     }
@@ -676,9 +733,11 @@ export default function TodayScreen() {
 
             <Pressable
               onPress={handleActionPress}
+              disabled={isActionPending}
               style={({ pressed }) => [
                 styles.actionCard,
                 pressed && styles.actionCardPressed,
+                isActionPending && styles.actionCardDisabled,
               ]}
             >
               <View style={styles.actionCardLeftIcon}>
@@ -689,12 +748,15 @@ export default function TodayScreen() {
             </Pressable>
 
             <View style={styles.registerArea}>
-              <TripHistory
-                trips={tripHistoryProjections}
-                onPendingTripPress={handlePendingTripPress}
-                onRegisteredTripPress={handleRegisteredTripPress}
-                contentBottomPadding={Math.max(insets.bottom, 16) + 112}
-              />
+              <Text style={styles.registerAreaTitle}>Historial operativo</Text>
+              <View style={styles.registerAreaPanel}>
+                <TripHistory
+                  trips={tripHistoryProjections}
+                  onPendingTripPress={handlePendingTripPress}
+                  onRegisteredTripPress={handleRegisteredTripPress}
+                  contentBottomPadding={Math.max(insets.bottom, 16) + 112}
+                />
+              </View>
             </View>
         </View>
       </View>
@@ -1122,6 +1184,9 @@ function createStyles(signature: SignatureTokens, shadowCard: ReturnType<typeof 
     transform: [{ scale: 0.995 }],
     opacity: 0.95,
   },
+  actionCardDisabled: {
+    opacity: 0.6,
+  },
   actionCardLabel: {
     flex: 1,
     fontSize: 22,
@@ -1180,6 +1245,23 @@ function createStyles(signature: SignatureTokens, shadowCard: ReturnType<typeof 
     flex: 1,
     minHeight: 0,
     marginBottom: 10,
+  },
+  registerAreaTitle: {
+    fontSize: 13,
+    fontWeight: "700",
+    color: signature.colors.inkSoft,
+    marginBottom: 8,
+  },
+  registerAreaPanel: {
+    flex: 1,
+    minHeight: 0,
+    backgroundColor: signature.colors.surface,
+    borderRadius: signature.radii.card,
+    borderWidth: 1,
+    borderColor: signature.colors.border,
+    paddingHorizontal: 12,
+    paddingTop: 8,
+    overflow: "hidden",
   },
   row: {
     flexDirection: "row",

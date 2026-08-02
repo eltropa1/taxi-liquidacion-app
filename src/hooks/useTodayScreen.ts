@@ -61,6 +61,7 @@ type TodayDailySummary = {
 
 type TodayScreenState = {
   activeTripId: number | null;
+  activeTripStartTime: string | null;
   trips: TodayTripRow[];
   weeklySummary: any;
   monthlySummary: any;
@@ -93,6 +94,7 @@ export async function loadTodayScreenData(selectedDate: Date) {
 
   return {
     activeTripId: criticalState.activeTripId,
+    activeTripStartTime: criticalState.activeTripStartTime,
     trips: enrichmentWithWorkday.trips as TodayTripRow[],
     weeklySummary,
     monthlySummary,
@@ -104,6 +106,9 @@ export async function loadTodayScreenData(selectedDate: Date) {
 
 export function useTodayScreen(selectedDate: Date): TodayScreenState {
   const [activeTripId, setActiveTripId] = useState<number | null>(null);
+  const [activeTripStartTime, setActiveTripStartTime] = useState<string | null>(
+    null,
+  );
   const [trips, setTrips] = useState<TodayTripRow[]>([]);
   const [weeklySummary, setWeeklySummary] = useState<any>(null);
   const [monthlySummary, setMonthlySummary] = useState<any>(null);
@@ -127,6 +132,7 @@ export function useTodayScreen(selectedDate: Date): TodayScreenState {
     }
 
     setActiveTripId(data.activeTripId);
+    setActiveTripStartTime(data.activeTripStartTime);
     setTrips(data.trips);
     setWeeklySummary(data.weeklySummary);
     setMonthlySummary(data.monthlySummary);
@@ -137,6 +143,7 @@ export function useTodayScreen(selectedDate: Date): TodayScreenState {
 
   useEffect(() => {
     setActiveTripId(null);
+    setActiveTripStartTime(null);
     setTrips([]);
     setWeeklySummary(null);
     setMonthlySummary(null);
@@ -174,6 +181,7 @@ export function useTodayScreen(selectedDate: Date): TodayScreenState {
 
   return {
     activeTripId,
+    activeTripStartTime,
     trips,
     weeklySummary,
     monthlySummary,

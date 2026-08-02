@@ -9,6 +9,7 @@ import {
 } from "../../runtime";
 import { CorrectRegisteredService } from "../CorrectRegisteredService";
 import { DeleteRegisteredServiceRecord } from "../DeleteRegisteredServiceRecord";
+import { ClosedWorkdayEditConfirmationRequiredError } from "../ClosedWorkdayEditConfirmationRequiredError";
 
 const completedTrip = {
   id: 12,
@@ -34,10 +35,20 @@ function createPersistence() {
       ),
       findTripById: jest.fn().mockResolvedValue(completedTrip),
       updateEditedTrip: jest.fn(),
-      deleteTrip: jest.fn(),
       voidTrip: jest.fn(),
+      stampClosedWorkdayEdit: jest.fn(),
     },
-    workdayRepository: {},
+    workdayRepository: {
+      getWorkdayById: jest.fn().mockResolvedValue({
+        id: 7,
+        startTime: "2026-07-01T07:00:00.000Z",
+        endTime: null,
+        startOdometer: 1000,
+        endOdometer: null,
+        isClosed: false,
+        createdAt: "2026-07-01T07:00:00.000Z",
+      }),
+    },
     tripGeoSnapshotRepository: {
       deleteSnapshotsForTrip: jest.fn(),
     },
@@ -154,13 +165,86 @@ describe("registered service use cases", () => {
       12,
       expect.any(Date),
     );
-    expect(persistence.tripRepository.deleteTrip).not.toHaveBeenCalled();
     expect(
       persistence.tripGeoSnapshotRepository.deleteSnapshotsForTrip,
     ).not.toHaveBeenCalled();
     expect(
       persistence.recordAttachmentRepository.markOwnerAttachmentsDeleting,
     ).not.toHaveBeenCalled();
+  });
+
+  it("requires explicit confirmation before editing a trip in a closed workday", async () => {
+    const persistence = createPersistence();
+    persistence.workdayRepository.getWorkdayById.mockResolvedValue({
+      id: 7,
+      startTime: "2026-07-01T07:00:00.000Z",
+      endTime: "2026-07-01T20:00:00.000Z",
+      startOdometer: 1000,
+      endOdometer: 1100,
+      isClosed: true,
+      createdAt: "2026-07-01T07:00:00.000Z",
+    });
+    configureApplicationPersistence(persistence as any);
+
+    const command = {
+      id: 12,
+      amount: 11,
+      payment: PaymentType.CARD,
+      chargedAmount: 11,
+      cashTip: null,
+      source: TripSource.CABIFY,
+      customSource: null,
+      startTime: new Date("2026-07-01T08:05:00.000Z"),
+      endTime: new Date("2026-07-01T08:25:00.000Z"),
+      manualPickupZone: "016",
+      manualDropoffZone: null,
+    };
+
+    await expect(CorrectRegisteredService.execute(command)).rejects.toThrow(
+      ClosedWorkdayEditConfirmationRequiredError,
+    );
+    expect(persistence.tripRepository.updateEditedTrip).not.toHaveBeenCalled();
+
+    await expect(
+      CorrectRegisteredService.execute(command, {
+        confirmedClosedWorkdayEdit: true,
+      }),
+    ).resolves.toEqual({ status: "updated" });
+
+    expect(persistence.tripRepository.stampClosedWorkdayEdit).toHaveBeenCalledWith(
+      12,
+      expect.any(Date),
+    );
+  });
+
+  it("requires explicit confirmation before voiding a trip in a closed workday", async () => {
+    const persistence = createPersistence();
+    persistence.workdayRepository.getWorkdayById.mockResolvedValue({
+      id: 7,
+      startTime: "2026-07-01T07:00:00.000Z",
+      endTime: "2026-07-01T20:00:00.000Z",
+      startOdometer: 1000,
+      endOdometer: 1100,
+      isClosed: true,
+      createdAt: "2026-07-01T07:00:00.000Z",
+    });
+    configureApplicationPersistence(persistence as any);
+
+    await expect(DeleteRegisteredServiceRecord.execute(12)).rejects.toThrow(
+      ClosedWorkdayEditConfirmationRequiredError,
+    );
+    expect(persistence.tripRepository.voidTrip).not.toHaveBeenCalled();
+
+    await expect(
+      DeleteRegisteredServiceRecord.execute(12, {
+        confirmedClosedWorkdayEdit: true,
+      }),
+    ).resolves.toEqual({ voided: true });
+
+    expect(persistence.tripRepository.stampClosedWorkdayEdit).toHaveBeenCalledWith(
+      12,
+      expect.any(Date),
+    );
   });
 
   it("rejects voiding a service that is not completed", async () => {

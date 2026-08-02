@@ -14,6 +14,7 @@ import { router, useLocalSearchParams, useNavigation } from "expo-router";
 import { TripService } from "../../src/application/runtime";
 import { CorrectRegisteredService } from "../../src/application/trips/CorrectRegisteredService";
 import { DeleteRegisteredServiceRecord } from "../../src/application/trips/DeleteRegisteredServiceRecord";
+import { ClosedWorkdayEditConfirmationRequiredError } from "../../src/application/trips/ClosedWorkdayEditConfirmationRequiredError";
 import { PaymentType, TripSource } from "../../src/constants/enums";
 import { NeighborhoodSelector } from "../../src/components/forms/NeighborhoodSelector";
 import { RecordEnrichmentSection } from "../../src/components/records/RecordEnrichmentSection";
@@ -279,7 +280,11 @@ export default function RegisteredServiceDetailScreen() {
     setSaving(true);
     setSaveError(null);
     try {
-      const result = await CorrectRegisteredService.execute(prepared.command);
+      const result = await executeCorrectionWithClosedWorkdayConfirmation();
+      if (!result) {
+        return;
+      }
+
       if (result.status === "unchanged") {
         setMode("view");
         return;
@@ -295,6 +300,42 @@ export default function RegisteredServiceDetailScreen() {
     } finally {
       setSaving(false);
     }
+  }
+
+  async function executeCorrectionWithClosedWorkdayConfirmation() {
+    if (!prepared || !prepared.ok) return null;
+
+    try {
+      return await CorrectRegisteredService.execute(prepared.command);
+    } catch (error) {
+      if (!(error instanceof ClosedWorkdayEditConfirmationRequiredError)) {
+        throw error;
+      }
+
+      const confirmed = await confirmClosedWorkdayEdit(error.workdayStartTime);
+      if (!confirmed) return null;
+
+      return CorrectRegisteredService.execute(prepared.command, {
+        confirmedClosedWorkdayEdit: true,
+      });
+    }
+  }
+
+  function confirmClosedWorkdayEdit(workdayStartTime: string): Promise<boolean> {
+    return new Promise((resolve) => {
+      Alert.alert(
+        "Jornada ya cerrada",
+        `La jornada del ${new Date(workdayStartTime).toLocaleDateString()} ya está cerrada. Este cambio alterará las cifras y estadísticas ya calculadas de esa jornada. ¿Confirmas el cambio?`,
+        [
+          { text: "Cancelar", style: "cancel", onPress: () => resolve(false) },
+          {
+            text: "Confirmar cambio",
+            style: "destructive",
+            onPress: () => resolve(true),
+          },
+        ],
+      );
+    });
   }
 
   function confirmDelete() {
@@ -319,7 +360,8 @@ export default function RegisteredServiceDetailScreen() {
     if (!trip || deleting) return;
     setDeleting(true);
     try {
-      await DeleteRegisteredServiceRecord.execute(trip.id);
+      const voided = await executeDeleteWithClosedWorkdayConfirmation();
+      if (!voided) return;
       navigateBack();
     } catch (error) {
       console.error("Error voiding registered service", error);
@@ -329,6 +371,27 @@ export default function RegisteredServiceDetailScreen() {
       );
     } finally {
       setDeleting(false);
+    }
+  }
+
+  async function executeDeleteWithClosedWorkdayConfirmation() {
+    if (!trip) return false;
+
+    try {
+      await DeleteRegisteredServiceRecord.execute(trip.id);
+      return true;
+    } catch (error) {
+      if (!(error instanceof ClosedWorkdayEditConfirmationRequiredError)) {
+        throw error;
+      }
+
+      const confirmed = await confirmClosedWorkdayEdit(error.workdayStartTime);
+      if (!confirmed) return false;
+
+      await DeleteRegisteredServiceRecord.execute(trip.id, {
+        confirmedClosedWorkdayEdit: true,
+      });
+      return true;
     }
   }
 
@@ -369,9 +432,9 @@ export default function RegisteredServiceDetailScreen() {
         <ScrollView
           contentContainerStyle={[
             detailStyles.content,
-            mode === "correction" && {
-              paddingBottom: 104 + Math.max(insets.bottom, 12),
-            },
+            mode === "correction"
+              ? { paddingBottom: 104 + Math.max(insets.bottom, 12) }
+              : { paddingBottom: 28 + Math.max(insets.bottom, 12) },
           ]}
           contentInsetAdjustmentBehavior="automatic"
           keyboardShouldPersistTaps="handled"
@@ -394,6 +457,12 @@ export default function RegisteredServiceDetailScreen() {
             cashTotal={projection.cashTotalReceivedLabel}
             cashTip={projection.cashTipLabel}
           />
+
+          {projection.editedAfterCloseWarning ? (
+            <Text style={detailStyles.error}>
+              {projection.editedAfterCloseWarning}
+            </Text>
+          ) : null}
 
           {mode === "view" ? (
             <>
@@ -460,7 +529,7 @@ export default function RegisteredServiceDetailScreen() {
                         amountInput: value,
                       }))
                     }
-                    keyboardType="default"
+                    keyboardType="decimal-pad"
                   />
                 </Field>
 
@@ -501,7 +570,7 @@ export default function RegisteredServiceDetailScreen() {
                         chargedAmountInput: value,
                       }))
                     }
-                    keyboardType="default"
+                    keyboardType="decimal-pad"
                   />
                 </Field>
               )}
@@ -519,7 +588,7 @@ export default function RegisteredServiceDetailScreen() {
                         cashTotalReceivedInput: value,
                       }))
                     }
-                    keyboardType="default"
+                    keyboardType="decimal-pad"
                   />
                 </Field>
               )}

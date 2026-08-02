@@ -2,6 +2,7 @@ import { SummaryService, TripQueryService, WorkdayService } from "../application
 
 export type TodayScreenCriticalState = Readonly<{
   activeTripId: number | null;
+  activeTripStartTime: string | null;
   workdayInfo: Awaited<ReturnType<typeof WorkdayService.getWorkdayInfoForDate>>;
   activeWorkday: Awaited<ReturnType<typeof WorkdayService.getOpenWorkday>>;
 }>;
@@ -39,6 +40,7 @@ export async function loadTodayScreenCriticalState(selectedDate: Date): Promise<
 
   return {
     activeTripId: active ? active.id : null,
+    activeTripStartTime: active ? active.startTime : null,
     activeWorkday,
     workdayInfo,
   };

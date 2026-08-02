@@ -10,6 +10,7 @@ import { Alert } from "react-native";
 
 import { PaymentType, TripSource } from "../../constants/enums";
 import { useTripActions } from "../../hooks/useTripActions";
+import { ClosedWorkdayEditConfirmationRequiredError } from "../../application/trips/ClosedWorkdayEditConfirmationRequiredError";
 import { CompleteServiceBottomSheet } from "./CompleteServiceBottomSheet";
 
 export type OpenCompleteServiceFlowParams = Readonly<{
@@ -73,6 +74,56 @@ export const CompleteServiceFlowController = forwardRef<
     setChargedAmountInput("");
   }, []);
 
+  const saveClosedTripWithClosedWorkdayConfirmation = useCallback(
+    (saveInput: Parameters<typeof handleCompleteClosedTrip>[0]) => {
+      handleCompleteClosedTrip(saveInput)
+        .then((saved) => {
+          if (!saved) {
+            Alert.alert(
+              "Importe inválido",
+              "El servicio no se ha guardado: revisa el importe introducido e inténtalo de nuevo.",
+            );
+          }
+        })
+        .catch((error) => {
+          if (error instanceof ClosedWorkdayEditConfirmationRequiredError) {
+            Alert.alert(
+              "Jornada ya cerrada",
+              `La jornada del ${new Date(
+                error.workdayStartTime,
+              ).toLocaleDateString()} ya está cerrada. Completar este servicio alterará las cifras y estadísticas ya calculadas de esa jornada. ¿Confirmas el cambio?`,
+              [
+                { text: "Cancelar", style: "cancel" },
+                {
+                  text: "Confirmar cambio",
+                  style: "destructive",
+                  onPress: () => {
+                    handleCompleteClosedTrip(saveInput, {
+                      confirmedClosedWorkdayEdit: true,
+                    }).catch((retryError) => {
+                      console.error("Error guardando servicio cerrado", retryError);
+                      Alert.alert(
+                        "No se ha podido guardar",
+                        "Revisa los datos e inténtalo de nuevo.",
+                      );
+                    });
+                  },
+                },
+              ],
+            );
+            return;
+          }
+
+          console.error("Error guardando servicio cerrado", error);
+          Alert.alert(
+            "No se ha podido guardar",
+            "Revisa los datos e inténtalo de nuevo.",
+          );
+        });
+    },
+    [handleCompleteClosedTrip],
+  );
+
   const handleSaveClosedTrip = useCallback(() => {
     if (pendingTripId === null) return;
 
@@ -90,30 +141,15 @@ export const CompleteServiceFlowController = forwardRef<
     resetSheetState();
     onServiceSaved?.();
 
-    handleCompleteClosedTrip(saveInput)
-      .then((saved) => {
-        if (!saved) {
-          Alert.alert(
-            "Importe inválido",
-            "El servicio no se ha guardado: revisa el importe introducido e inténtalo de nuevo.",
-          );
-        }
-      })
-      .catch((error) => {
-        console.error("Error guardando servicio cerrado", error);
-        Alert.alert(
-          "No se ha podido guardar",
-          "Revisa los datos e inténtalo de nuevo.",
-        );
-      });
+    saveClosedTripWithClosedWorkdayConfirmation(saveInput);
   }, [
     amountInput,
     chargedAmountInput,
-    handleCompleteClosedTrip,
     onServiceSaved,
     payment,
     pendingTripId,
     resetSheetState,
+    saveClosedTripWithClosedWorkdayConfirmation,
     source,
   ]);
 

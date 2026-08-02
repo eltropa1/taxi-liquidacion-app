@@ -1,6 +1,7 @@
 import { PaymentType, TripSource } from "../../constants/enums";
 import type { ServiceStatus } from "../../domain/services";
 import type { TripGeoSnapshotRecord } from "../../application/ports/persistence";
+import { parseMoneyInput } from "../../utils/numberInput";
 import {
   resolveEffectiveNeighborhoodName,
   resolveGeoZoneLabel,
@@ -21,6 +22,7 @@ export type RegisteredServiceRecord = Readonly<{
   manualPickupZone: string | null;
   manualDropoffZone: string | null;
   workdayId: number | null;
+  closedWorkdayEditedAt: string | null;
 }>;
 
 export type RegisteredServiceCorrectionForm = Readonly<{
@@ -89,6 +91,7 @@ export type RegisteredServiceDetailProjection = Readonly<{
   manualDropoffZoneLabel: string;
   geoPickupZoneLabel: string;
   geoDropoffZoneLabel: string;
+  editedAfterCloseWarning: string | null;
 }>;
 
 const paymentLabels: Record<PaymentType, string> = {
@@ -148,6 +151,9 @@ export function buildRegisteredServiceDetailProjection(input: {
     ),
     geoPickupZoneLabel: resolveGeoZoneLabel(geoPickupSnapshot),
     geoDropoffZoneLabel: resolveGeoZoneLabel(geoDropoffSnapshot),
+    editedAfterCloseWarning: input.trip.closedWorkdayEditedAt
+      ? `Editado el ${new Date(input.trip.closedWorkdayEditedAt).toLocaleString()} tras cerrar la jornada. Las cifras de esa jornada ya cerrada han cambiado.`
+      : null,
   };
 }
 
@@ -198,7 +204,7 @@ export function prepareRegisteredServiceCorrection(
   }
 
   const startTime = parseTimeOnBaseDate(trip.startTime, form.startTimeInput);
-  const endTime = parseTimeOnBaseDate(trip.startTime, form.endTimeInput);
+  const endTime = resolveOvernightAwareEndTime(startTime, trip.startTime, form.endTimeInput);
 
   if (!startTime) {
     errors.startTime = "Introduce la hora de inicio en formato HH:mm.";
@@ -206,10 +212,6 @@ export function prepareRegisteredServiceCorrection(
 
   if (!endTime) {
     errors.endTime = "Introduce la hora de fin en formato HH:mm.";
-  }
-
-  if (startTime && endTime && endTime < startTime) {
-    errors.endTime = "La hora de fin no puede ser anterior a la de inicio.";
   }
 
   if (form.source === TripSource.CUSTOM && form.customSourceInput.trim() === "") {
@@ -358,7 +360,11 @@ function normalizeFormForComparison(
         ? normalizeOptionalText(form.customSourceInput)
         : null,
     startTime: normalizeComparableTime(trip.startTime, form.startTimeInput),
-    endTime: normalizeComparableTime(trip.startTime, form.endTimeInput),
+    endTime: normalizeComparableEndTime(
+      trip.startTime,
+      form.startTimeInput,
+      form.endTimeInput,
+    ),
     manualPickupZone: normalizeOptionalText(form.manualPickupZone),
     manualDropoffZone: normalizeOptionalText(form.manualDropoffZone),
   };
@@ -371,6 +377,18 @@ function parseComparableDecimalInput(value: string): number | string | null {
   return parsed === null ? `invalid:${trimmed}` : parsed;
 }
 
+function normalizeComparableEndTime(
+  baseValue: string,
+  startTimeInput: string,
+  endTimeInput: string,
+): string | null {
+  const startTime = parseTimeOnBaseDate(baseValue, startTimeInput);
+  const parsed = resolveOvernightAwareEndTime(startTime, baseValue, endTimeInput);
+  if (parsed) return parsed.toISOString();
+  const trimmed = endTimeInput.trim();
+  return trimmed === "" ? null : `invalid:${trimmed}`;
+}
+
 function normalizeComparableTime(baseValue: string, input: string): string | null {
   const parsed = parseTimeOnBaseDate(baseValue, input);
   if (parsed) return parsed.toISOString();
@@ -379,10 +397,24 @@ function normalizeComparableTime(baseValue: string, input: string): string | nul
 }
 
 function parseDecimalInput(value: string): number | null {
-  const trimmed = value.trim();
-  if (trimmed === "") return null;
-  const parsed = Number(trimmed.replace(",", "."));
-  return Number.isFinite(parsed) ? parsed : null;
+  return parseMoneyInput(value);
+}
+
+function resolveOvernightAwareEndTime(
+  startTime: Date | null,
+  baseValue: string,
+  endTimeInput: string,
+): Date | null {
+  const endTime = parseTimeOnBaseDate(baseValue, endTimeInput);
+  if (!startTime || !endTime) return endTime;
+
+  // Un servicio de taxi no dura más de 24h: si la hora de fin cae "antes"
+  // que la de inicio en el mismo día, es que cruza la medianoche.
+  if (endTime < startTime) {
+    return new Date(endTime.getTime() + 24 * 60 * 60 * 1000);
+  }
+
+  return endTime;
 }
 
 function parseTimeOnBaseDate(baseValue: string, input: string): Date | null {

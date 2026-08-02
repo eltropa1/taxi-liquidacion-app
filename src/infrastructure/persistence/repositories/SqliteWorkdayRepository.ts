@@ -3,6 +3,7 @@ import type {
   WorkdayRepositoryPort,
 } from "../../../application/ports/persistence";
 import type { PersistenceDatabase } from "../database";
+import { isUniqueConstraintViolation } from "../database/sqliteErrors";
 
 type WorkdayRow = {
   id: number;
@@ -71,6 +72,28 @@ export class SqliteWorkdayRepository implements WorkdayRepositoryPort {
     );
   }
 
+  async getWorkdayById(id: number): Promise<{
+    id: number;
+    startTime: string;
+    endTime: string | null;
+    startOdometer: number | null;
+    endOdometer: number | null;
+    isClosed: boolean;
+    createdAt: string;
+    goalPolicyId?: string | null;
+  } | null> {
+    const row = await this.database.getFirstAsync<WorkdayRow>(
+      `
+      SELECT id, startTime, endTime, startOdometer, endOdometer, isClosed, createdAt, goalPolicyId
+      FROM workdays
+      WHERE id = ?
+      `,
+      [id],
+    );
+
+    return row ? mapWorkdayRow(row) : null;
+  }
+
   async openWorkdayIfNeeded(): Promise<{
     id: number;
     startTime: string;
@@ -120,13 +143,23 @@ export class SqliteWorkdayRepository implements WorkdayRepositoryPort {
   } | null> {
     const now = new Date().toISOString();
 
-    const result = await this.database.runAsync(
-      `
-      INSERT INTO workdays (startTime, startOdometer, endOdometer, createdAt, goalPolicyId)
-      VALUES (?, ?, NULL, ?, NULL)
-      `,
-      [now, startOdometer, now],
-    );
+    let result;
+    try {
+      result = await this.database.runAsync(
+        `
+        INSERT INTO workdays (startTime, startOdometer, endOdometer, createdAt, goalPolicyId)
+        VALUES (?, ?, NULL, ?, NULL)
+        `,
+        [now, startOdometer, now],
+      );
+    } catch (error) {
+      if (isUniqueConstraintViolation(error)) {
+        throw new Error(
+          "Ya tienes una jornada abierta. Debes cerrarla antes de abrir una nueva.",
+        );
+      }
+      throw error;
+    }
 
     const insertedId = Number(result.lastInsertRowId ?? 0);
     return this.database.getFirstAsync<{
@@ -152,6 +185,11 @@ export class SqliteWorkdayRepository implements WorkdayRepositoryPort {
     endOdometer?: number | null,
     goalPolicyId?: string | null,
   ): Promise<void> {
+    const openWorkday = await this.getOpenWorkday();
+    if (!openWorkday) {
+      return;
+    }
+
     const now = new Date().toISOString();
     const resolvedGoalPolicyId = goalPolicyId ?? null;
 
@@ -160,9 +198,9 @@ export class SqliteWorkdayRepository implements WorkdayRepositoryPort {
         `
         UPDATE workdays
         SET endTime = ?, endOdometer = ?, goalPolicyId = ?, isClosed = 1
-        WHERE isClosed = 0
+        WHERE id = ?
         `,
-        [now, endOdometer, resolvedGoalPolicyId],
+        [now, endOdometer, resolvedGoalPolicyId, openWorkday.id],
       );
       return;
     }
@@ -171,9 +209,9 @@ export class SqliteWorkdayRepository implements WorkdayRepositoryPort {
       `
       UPDATE workdays
       SET endTime = ?, goalPolicyId = ?, isClosed = 1
-      WHERE isClosed = 0
+      WHERE id = ?
       `,
-      [now, resolvedGoalPolicyId],
+      [now, resolvedGoalPolicyId, openWorkday.id],
     );
   }
 

@@ -1,4 +1,5 @@
 import { PaymentType, TripSource } from "../../constants/enums";
+import { parseMoneyInput, parseOptionalMoneyInput } from "../../utils/numberInput";
 
 export type TripSavePreparationInput = {
   amountInput: string;
@@ -17,17 +18,11 @@ export type TripSavePreparationResult = {
 };
 
 function parseAmountInput(input: string) {
-  if (input.trim() === "") return null;
-
-  const amount = Number(input.replace(",", "."));
-  return Number.isFinite(amount) ? amount : null;
+  return parseMoneyInput(input);
 }
 
 function parseOptionalAmountInput(input: string) {
-  if (input.trim() === "") return undefined;
-
-  const amount = Number(input.replace(",", "."));
-  return Number.isFinite(amount) ? amount : null;
+  return parseOptionalMoneyInput(input);
 }
 
 function resolveFinalSource(source: TripSource, customSource: string) {

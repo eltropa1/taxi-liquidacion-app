@@ -28,6 +28,36 @@ describe("SqliteTripRepository", () => {
     );
   });
 
+  it("translates a unique-constraint violation into a friendly already-active error", async () => {
+    const db = createDatabase();
+    db.runAsync.mockRejectedValueOnce(
+      new Error("UNIQUE constraint failed: index 'idx_trips_single_active'"),
+    );
+    const repository = new SqliteTripRepository(db as any);
+
+    await expect(
+      repository.createStartedTrip({
+        startedAt: new Date("2026-07-01T08:00:00.000Z"),
+        workdayId: 12,
+        source: TripSource.TAXI,
+      }),
+    ).rejects.toThrow(/ya tienes un viaje en curso/i);
+  });
+
+  it("rethrows unrelated database errors from createStartedTrip untouched", async () => {
+    const db = createDatabase();
+    db.runAsync.mockRejectedValueOnce(new Error("disk I/O error"));
+    const repository = new SqliteTripRepository(db as any);
+
+    await expect(
+      repository.createStartedTrip({
+        startedAt: new Date("2026-07-01T08:00:00.000Z"),
+        workdayId: 12,
+        source: TripSource.TAXI,
+      }),
+    ).rejects.toThrow("disk I/O error");
+  });
+
   it("persists a manual trip with a completed service state by default", async () => {
     const db = createDatabase();
     const repository = new SqliteTripRepository(db as any);
